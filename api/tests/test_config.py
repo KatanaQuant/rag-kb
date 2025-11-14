@@ -117,14 +117,19 @@ class TestConfig:
         assert config.chunks.size == 1000
         assert config.chunks.overlap == 200
 
-        # Database config
-        assert config.database.embedding_dim == 384
+        # Database config (embedding_dim depends on model)
+        assert config.database.embedding_dim in [384, 768, 1024]
 
         # Model config
-        assert "sentence-transformers" in config.model.name
+        assert config.model.name is not None
 
         # Path config
         assert "knowledge_base" in str(config.paths.knowledge_base)
+
+        # Watcher config
+        assert config.watcher is not None
+        assert isinstance(config.watcher.enabled, bool)
+        assert config.watcher.debounce_seconds > 0
 
     def test_config_dynamic_dimensions(self):
         """Test config with Arctic Embed model sets correct dimensions"""

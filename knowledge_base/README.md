@@ -35,7 +35,7 @@ knowledge_base/
 ## Example Content
 
 ### Books
-- Technical books (POODR, Clean Code, etc.)
+- Technical books
 - Business books
 - Domain-specific references
 

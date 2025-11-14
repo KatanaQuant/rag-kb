@@ -13,6 +13,7 @@ from models import (
 )
 from ingestion import DocumentProcessor, VectorStore
 from config import default_config
+from watcher import FileWatcherService
 
 
 class AppState:
@@ -22,6 +23,7 @@ class AppState:
         self.model = None
         self.vector_store = None
         self.processor = None
+        self.watcher = None
 
 
 # Global state
@@ -184,7 +186,7 @@ class IndexOrchestrator:
         try:
             return self.indexer.index_file(path, force)
         except Exception as e:
-            print(f"Error: {path.name}: {e}")
+            print(f"Error: {path.name}: indexing failed")
             return 0
 
 
@@ -257,6 +259,7 @@ class StartupManager:
         self._init_store()
         self._init_processor()
         self._index_docs()
+        self._start_watcher()
         print("RAG system ready!")
 
     def _load_model(self):
@@ -280,7 +283,7 @@ class StartupManager:
         try:
             self._run_indexing()
         except Exception as e:
-            print(f"Indexing error: {e}")
+            print("Indexing error occurred")
 
     def _run_indexing(self):
         """Run indexing process"""
@@ -302,6 +305,21 @@ class StartupManager:
             self.state.vector_store
         )
 
+    def _start_watcher(self):
+        """Start file watcher if enabled"""
+        if not default_config.watcher.enabled:
+            print("File watcher disabled")
+            return
+
+        indexer = self._create_indexer()
+        self.state.watcher = FileWatcherService(
+            watch_path=default_config.paths.knowledge_base,
+            indexer=indexer,
+            debounce_seconds=default_config.watcher.debounce_seconds,
+            batch_size=default_config.watcher.batch_size
+        )
+        self.state.watcher.start()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -314,6 +332,8 @@ async def lifespan(app: FastAPI):
 
 def _cleanup():
     """Cleanup resources"""
+    if state.watcher:
+        state.watcher.stop()
     if state.vector_store:
         state.vector_store.close()
 

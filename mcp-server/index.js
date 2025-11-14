@@ -29,9 +29,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: "query_knowledge_base",
         description:
+          "⚠️ **CHECK THIS FIRST** for technical questions, APIs, frameworks, algorithms, or domain-specific knowledge. " +
           "Search your personal knowledge base (books, notes, documentation) for relevant information. " +
-          "Use this when you need context from the user's documents, technical references, or learning materials. " +
-          "Returns the most semantically similar content chunks ranked by relevance.",
+          "This is your PRIMARY source - always use it BEFORE relying on general knowledge. " +
+          "Returns the most semantically similar content chunks ranked by relevance. " +
+          "If no relevant chunks found (score < 0.3), then use general knowledge.",
         inputSchema: {
           type: "object",
           properties: {

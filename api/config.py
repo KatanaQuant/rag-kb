@@ -52,12 +52,21 @@ class PathConfig:
 
 
 @dataclass
+class WatcherConfig:
+    """File watcher configuration"""
+    enabled: bool = True
+    debounce_seconds: float = 10.0
+    batch_size: int = 50
+
+
+@dataclass
 class Config:
     """Main configuration container"""
     chunks: ChunkConfig
     database: DatabaseConfig
     model: ModelConfig
     paths: PathConfig
+    watcher: WatcherConfig
 
     @classmethod
     def from_env(cls) -> 'Config':
@@ -65,13 +74,19 @@ class Config:
         model = ModelConfig(
             name=os.getenv("MODEL_NAME", ModelConfig.name)
         )
+        watcher = WatcherConfig(
+            enabled=os.getenv("WATCH_ENABLED", "true").lower() == "true",
+            debounce_seconds=float(os.getenv("WATCH_DEBOUNCE_SECONDS", "10.0")),
+            batch_size=int(os.getenv("WATCH_BATCH_SIZE", "50"))
+        )
         return cls(
             chunks=ChunkConfig(),
             database=DatabaseConfig(
                 embedding_dim=model.get_embedding_dim()
             ),
             model=model,
-            paths=PathConfig()
+            paths=PathConfig(),
+            watcher=watcher
         )
 
 

@@ -1,8 +1,14 @@
 # RAG-KB
 
+[![Latest Release](https://img.shields.io/github/v/release/KatanaQuant/rag-kb?include_prereleases)](https://github.com/KatanaQuant/rag-kb/releases)
+[![Docker](https://img.shields.io/badge/docker-ready-blue)](https://github.com/KatanaQuant/rag-kb)
+[![License](https://img.shields.io/badge/license-Public%20Domain-green)](https://github.com/KatanaQuant/rag-kb)
+
 **Token-efficient semantic search for your personal knowledge base.** Query books, code, notes, and documents using natural language—runs 100% locally with no external APIs.
 
 Built with FastAPI, sqlite-vec, and sentence-transformers.
+
+**Current Version**: v0.2.0-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
 
 ---
 
@@ -25,6 +31,7 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 
 - **Semantic Search**: Natural language queries across all your documents
 - **100% Local**: No external APIs, complete privacy
+- **Auto-Sync**: Automatically detects and indexes new/modified files in real-time
 - **Multiple Formats**: PDF, Markdown, TXT, DOCX, Obsidian vaults, code repositories
 - **Token Efficient**: Returns only relevant chunks (~3-5K tokens vs 100K+ for full files)
 - **Docker-Based**: Runs anywhere Docker runs
@@ -89,9 +96,20 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 git clone https://github.com/KatanaQuant/rag-kb.git
 cd rag-kb
 
+# Checkout latest stable release (recommended)
+git checkout v0.2.0-alpha
+
+# Or stay on main for latest features (may have bugs)
+# git checkout main
+
 # Optional: Change port if 8000 is in use
 echo "RAG_PORT=8001" > .env
+
+# Optional: Use advanced embedding model (requires re-indexing, see below)
+# echo "MODEL_NAME=Snowflake/snowflake-arctic-embed-l-v2.0" >> .env
 ```
+
+> **Upgrading from v0.1.0?** See [docs/MIGRATION_v0.1_to_v0.2.md](docs/MIGRATION_v0.1_to_v0.2.md)
 
 ### Step 1: Add Content
 
@@ -470,6 +488,35 @@ sudo apt install -y nodejs
 
 ## Advanced Configuration
 
+### Auto-Sync Configuration
+
+The system automatically watches for new and modified files in `knowledge_base/` and indexes them without requiring a restart. This happens in real-time with smart debouncing to handle bulk operations efficiently.
+
+**How it works**:
+- File watcher monitors `knowledge_base/` directory recursively
+- Changes are collected for 10 seconds (debounce period) to batch operations
+- After quiet period, all changes are indexed together
+- Handles text editor save patterns, git operations, and bulk file copies gracefully
+
+**Configuration** (via `.env`):
+```bash
+WATCH_ENABLED=true                  # Enable/disable auto-sync (default: true)
+WATCH_DEBOUNCE_SECONDS=10.0         # Wait time after last change (default: 10.0)
+WATCH_BATCH_SIZE=50                 # Max files per batch (default: 50)
+```
+
+**Use cases**:
+- **Real-time**: Drop PDFs into `knowledge_base/books/` → indexed automatically
+- **Git operations**: `git pull` new code → changes detected and indexed
+- **Obsidian sync**: Notes update → immediately searchable
+- **Bulk imports**: Copy 100 files → batched into efficient indexing
+
+**To disable auto-sync** (e.g., for manual control):
+```bash
+echo "WATCH_ENABLED=false" >> .env
+docker-compose restart rag-api
+```
+
 ### Migration Between Machines
 
 **Transfer database and files** (no re-indexing needed):
@@ -487,30 +534,40 @@ docker-compose up -d
 curl http://localhost:8000/health
 ```
 
-### Custom Embedding Model
+### Embedding Models
 
-Edit `docker-compose.yml`:
-```yaml
-environment:
-  - MODEL_NAME=all-mpnet-base-v2  # More accurate
-  # Or:
-  - MODEL_NAME=multi-qa-MiniLM-L6-cos-v1  # Optimized for Q&A
-```
+v0.2.0+ supports multiple embedding models for different quality/speed trade-offs.
 
-**Trade-offs:**
+**Available Models:**
 
-| Model | Dimensions | Speed | Accuracy | Storage/Chunk |
-|-------|-----------|-------|----------|---------------|
-| all-MiniLM-L6-v2 (default) | 384 | Fast | Good | 4KB |
-| all-mpnet-base-v2 | 768 | Slow | Better | 8KB |
-| multi-qa-MiniLM-L6-cos-v1 | 384 | Fast | Good (Q&A) | 4KB |
+| Model | Dimensions | Quality | Speed | Use Case |
+|-------|-----------|---------|-------|----------|
+| all-MiniLM-L6-v2 (default) | 384 | Good | Fastest | Quick indexing, simple queries |
+| **Arctic Embed 2.0-L** | 1024 | **Best** | Slower | Multi-domain KB, best retrieval |
+| Arctic Embed 2.0-M | 768 | Excellent | Moderate | Balanced quality/speed |
+| BGE-large-en-v1.5 | 1024 | Excellent | Moderate | Alternative high-quality option |
+| BGE-base-en-v1.5 | 768 | Very Good | Fast | Lightweight high-quality |
 
-After changing:
+**To use Arctic Embed 2.0-L (recommended for multi-domain knowledge bases):**
+
 ```bash
+# Create/edit .env file
+echo "MODEL_NAME=Snowflake/snowflake-arctic-embed-l-v2.0" > .env
+
+# Rebuild with new model (requires re-indexing)
 docker-compose down
-rm data/knowledge_base.db  # Force re-index with new model
+rm data/knowledge_base.db
 docker-compose up --build -d
 ```
+
+**Performance Notes:**
+
+- **Arctic Embed 2.0-L**: +45% better retrieval on MTEB benchmarks, ideal for diverse content (code + books + notes)
+- **MiniLM-L6-v2**: Fastest option, good for single-domain or quick prototyping
+- **Model download**: Arctic models are ~1.2GB (one-time download, cached thereafter)
+- **Re-indexing required**: Different dimensions = incompatible database format
+
+See [Migration Guide](docs/MIGRATION_v0.1_to_v0.2.md) for detailed model comparison and upgrade instructions.
 
 ### Chunking Configuration
 

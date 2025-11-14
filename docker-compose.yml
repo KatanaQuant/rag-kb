@@ -11,7 +11,7 @@ services:
       - ./data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
-      - MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+      - MODEL_NAME=${MODEL_NAME:-sentence-transformers/all-MiniLM-L6-v2}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

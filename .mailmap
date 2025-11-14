@@ -1,0 +1,4 @@
+# Git mailmap - ensures correct attribution
+# Format: Proper Name <proper@email.com> <commit@email.com>
+
+KatanaQuant <horoshi@katanaquant.com>

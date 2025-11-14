@@ -1,8 +1,19 @@
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
 pydantic==2.5.3
-sentence-transformers==2.3.1
+
+# CPU-only PyTorch (avoid 700MB+ CUDA downloads)
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1+cpu
+torchvision==0.20.1+cpu
+
+# Sentence transformers (will use CPU torch above)
+sentence-transformers>=3.0.0
+
+# Vector database
 sqlite-vec==0.1.1
+
+# Document processing
 pypdf==4.0.1
 python-docx==1.1.0
 markdown==3.5.2
