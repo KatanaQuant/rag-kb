@@ -60,6 +60,13 @@ class WatcherConfig:
 
 
 @dataclass
+class CacheConfig:
+    """Query cache configuration"""
+    enabled: bool = True
+    max_size: int = 100
+
+
+@dataclass
 class Config:
     """Main configuration container"""
     chunks: ChunkConfig
@@ -67,6 +74,7 @@ class Config:
     model: ModelConfig
     paths: PathConfig
     watcher: WatcherConfig
+    cache: CacheConfig
 
     @classmethod
     def from_env(cls) -> 'Config':
@@ -79,6 +87,10 @@ class Config:
             debounce_seconds=float(os.getenv("WATCH_DEBOUNCE_SECONDS", "10.0")),
             batch_size=int(os.getenv("WATCH_BATCH_SIZE", "50"))
         )
+        cache = CacheConfig(
+            enabled=os.getenv("CACHE_ENABLED", "true").lower() == "true",
+            max_size=int(os.getenv("CACHE_MAX_SIZE", "100"))
+        )
         return cls(
             chunks=ChunkConfig(),
             database=DatabaseConfig(
@@ -86,7 +98,8 @@ class Config:
             ),
             model=model,
             paths=PathConfig(),
-            watcher=watcher
+            watcher=watcher,
+            cache=cache
         )
 
 

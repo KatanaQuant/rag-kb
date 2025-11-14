@@ -1,6 +1,6 @@
 import sqlite3
 from pathlib import Path
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 import hashlib
 import re
 
@@ -10,6 +10,7 @@ import markdown
 import numpy as np
 
 from config import default_config
+from hybrid_search import HybridSearcher
 
 
 class FileHasher:
@@ -202,7 +203,7 @@ class DocumentProcessor:
         try:
             return self._do_process(path)
         except Exception as e:
-            print(f"Error: {path}: {e}")
+            print(f"Error processing: {path.name}")
             return []
 
     def _do_process(self, path: Path) -> List[Dict]:
@@ -294,6 +295,7 @@ class SchemaManager:
         self._create_documents_table()
         self._create_chunks_table()
         self._create_vector_table()
+        self._create_fts_table()
         self.conn.commit()
 
     def _create_documents_table(self):
@@ -338,6 +340,21 @@ class SchemaManager:
                 embedding FLOAT[{self.config.embedding_dim}]
             )
         """)
+
+    def _create_fts_table(self):
+        """Create FTS5 full-text search table"""
+        try:
+            self.conn.execute("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS fts_chunks
+                USING fts5(
+                    chunk_id UNINDEXED,
+                    content,
+                    content='',
+                    contentless_delete=1
+                )
+            """)
+        except Exception as e:
+            print(f"Note: fts_chunks exists: {e}")
 
 
 class VectorRepository:
@@ -393,6 +410,7 @@ class VectorRepository:
         """Insert chunk and its vector"""
         chunk_id = self._insert_chunk(doc_id, chunk, idx)
         self._insert_vector(chunk_id, emb)
+        self._insert_fts(chunk_id, chunk['content'])
 
     def _insert_chunk(self, doc_id: int, chunk: Dict, idx: int) -> int:
         """Insert single chunk"""
@@ -411,6 +429,16 @@ class VectorRepository:
             "INSERT INTO vec_chunks (chunk_id, embedding) VALUES (?, ?)",
             (chunk_id, blob)
         )
+
+    def _insert_fts(self, chunk_id: int, content: str):
+        """Insert into FTS5 index"""
+        try:
+            self.conn.execute(
+                "INSERT INTO fts_chunks (chunk_id, content) VALUES (?, ?)",
+                (chunk_id, content)
+            )
+        except Exception:
+            pass
 
     @staticmethod
     def _to_blob(embedding: List) -> bytes:
@@ -487,6 +515,7 @@ class VectorStore:
         self.conn = self.db_conn.connect()
         self._init_schema()
         self.repo = VectorRepository(self.conn)
+        self.hybrid = HybridSearcher(self.conn)
 
     def _init_schema(self):
         """Initialize database schema"""
@@ -503,9 +532,14 @@ class VectorStore:
         self.repo.add_document(file_path, file_hash, chunks, embeddings)
 
     def search(self, query_embedding: List, top_k: int = 5,
-              threshold: float = None) -> List[Dict]:
+              threshold: float = None, query_text: Optional[str] = None,
+              use_hybrid: bool = True) -> List[Dict]:
         """Search for similar chunks"""
-        return self.repo.search(query_embedding, top_k, threshold)
+        vector_results = self.repo.search(query_embedding, top_k, threshold)
+
+        if use_hybrid and query_text:
+            return self.hybrid.search(query_text, vector_results, top_k)
+        return vector_results
 
     def get_stats(self) -> Dict:
         """Get statistics"""

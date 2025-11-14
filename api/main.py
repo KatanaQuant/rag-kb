@@ -14,6 +14,7 @@ from models import (
 from ingestion import DocumentProcessor, VectorStore
 from config import default_config
 from watcher import FileWatcherService
+from query_cache import QueryCache
 
 
 class AppState:
@@ -24,6 +25,7 @@ class AppState:
         self.vector_store = None
         self.processor = None
         self.watcher = None
+        self.cache = None
 
 
 # Global state
@@ -193,15 +195,26 @@ class IndexOrchestrator:
 class QueryExecutor:
     """Executes semantic search queries"""
 
-    def __init__(self, model, vector_store):
+    def __init__(self, model, vector_store, cache=None):
         self.model = model
         self.store = vector_store
+        self.cache = cache
 
     def execute(self, request: QueryRequest) -> QueryResponse:
         """Execute search query"""
         self._validate(request.text)
+
+        if self.cache:
+            cached = self.cache.get(request.text, request.top_k, request.threshold)
+            if cached:
+                return self._format(cached, request.text)
+
         embedding = self._gen_embedding(request.text)
         results = self._search(embedding, request)
+
+        if self.cache:
+            self.cache.put(request.text, request.top_k, request.threshold, results)
+
         return self._format(results, request.text)
 
     @staticmethod
@@ -219,7 +232,9 @@ class QueryExecutor:
         return self.store.search(
             query_embedding=embedding.tolist(),
             top_k=request.top_k,
-            threshold=request.threshold
+            threshold=request.threshold,
+            query_text=request.text,
+            use_hybrid=True
         )
 
     @staticmethod
@@ -258,6 +273,7 @@ class StartupManager:
         self._load_model()
         self._init_store()
         self._init_processor()
+        self._init_cache()
         self._index_docs()
         self._start_watcher()
         print("RAG system ready!")
@@ -276,6 +292,14 @@ class StartupManager:
     def _init_processor(self):
         """Initialize processor"""
         self.state.processor = DocumentProcessor()
+
+    def _init_cache(self):
+        """Initialize query cache"""
+        if default_config.cache.enabled:
+            self.state.cache = QueryCache(default_config.cache.max_size)
+            print(f"Query cache enabled (size: {default_config.cache.max_size})")
+        else:
+            print("Query cache disabled")
 
     def _index_docs(self):
         """Index documents"""
@@ -380,12 +404,12 @@ async def health():
 async def query(request: QueryRequest):
     """Query the knowledge base"""
     try:
-        executor = QueryExecutor(state.model, state.vector_store)
+        executor = QueryExecutor(state.model, state.vector_store, state.cache)
         return executor.execute(request)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Query failed")
 
 
 @app.post("/index", response_model=IndexResponse)
@@ -395,7 +419,7 @@ async def index(request: IndexRequest, background_tasks: BackgroundTasks):
         result = _do_reindex(request.force_reindex)
         return result
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Indexing failed")
 
 
 def _do_reindex(force: bool) -> IndexResponse:
@@ -488,7 +512,7 @@ async def list_documents():
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to list documents: {str(e)}"
+            detail="Failed to list documents"
         )
 
 

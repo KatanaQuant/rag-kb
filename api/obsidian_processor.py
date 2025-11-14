@@ -324,7 +324,7 @@ class VaultScanner:
         try:
             return self.processor.process(file_path)
         except Exception as e:
-            print(f"Error: {file_path}: {e}")
+            print(f"Error processing file: {file_path.name}")
             return None
 
 
