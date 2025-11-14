@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+package-lock.json
+
+# Data
+data/
+*.db
+*.db-journal
+
+# Knowledge base (contains personal/copyrighted content)
+knowledge_base/
+!knowledge_base/.gitkeep
+!knowledge_base/README.md
+
+# Agent session files
+.agent/session.md
+.agent/next.md
+.agent/
+.claude/
+
+# Docker
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

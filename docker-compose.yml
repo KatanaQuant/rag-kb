@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  rag-api:
+    build: ./api
+    container_name: rag-api
+    ports:
+      - "${RAG_PORT:-8000}:8000"
+    volumes:
+      - ./knowledge_base:/app/knowledge_base:ro
+      - ./data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

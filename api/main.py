@@ -1,0 +1,477 @@
+import os
+from pathlib import Path
+from contextlib import asynccontextmanager
+from typing import List
+
+from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from sentence_transformers import SentenceTransformer
+
+from models import (
+    QueryRequest, QueryResponse, SearchResult,
+    HealthResponse, IndexRequest, IndexResponse
+)
+from ingestion import DocumentProcessor, VectorStore
+from config import default_config
+
+
+class AppState:
+    """Application state container"""
+
+    def __init__(self):
+        self.model = None
+        self.vector_store = None
+        self.processor = None
+
+
+# Global state
+state = AppState()
+
+
+class ModelLoader:
+    """Loads embedding models"""
+
+    @staticmethod
+    def load(model_name: str) -> SentenceTransformer:
+        """Load embedding model"""
+        print(f"Loading model: {model_name}")
+        return SentenceTransformer(model_name)
+
+
+class FileWalker:
+    """Walks knowledge base directory"""
+
+    def __init__(self, base_path: Path, extensions: set):
+        self.base_path = base_path
+        self.extensions = extensions
+
+    def walk(self):
+        """Yield supported files"""
+        if not self.base_path.exists():
+            return
+        yield from self._walk_files()
+
+    def _walk_files(self):
+        """Walk all files"""
+        for file_path in self.base_path.rglob("*"):
+            if self._is_supported(file_path):
+                yield file_path
+
+    def _is_supported(self, path: Path) -> bool:
+        """Check if file is supported"""
+        if not path.is_file():
+            return False
+        return path.suffix.lower() in self.extensions
+
+
+class DocumentIndexer:
+    """Handles document indexing operations"""
+
+    def __init__(self, processor, model, vector_store):
+        self.processor = processor
+        self.model = model
+        self.store = vector_store
+
+    def index_file(self, file_path: Path, force: bool = False) -> int:
+        """Index single file"""
+        if not self._should_index(file_path, force):
+            return self._skip_file(file_path)
+        return self._do_index(file_path)
+
+    def _should_index(self, path: Path, force: bool) -> bool:
+        """Check if should index"""
+        if force:
+            return True
+        return self._needs_indexing(path)
+
+    def _needs_indexing(self, path: Path) -> bool:
+        """Check if file needs indexing"""
+        file_hash = self.processor.get_file_hash(path)
+        indexed = self.store.is_document_indexed(str(path), file_hash)
+        return not indexed
+
+    @staticmethod
+    def _skip_file(path: Path) -> int:
+        """Skip file logging"""
+        print(f"Skipping: {path.name}")
+        return 0
+
+    def _do_index(self, path: Path) -> int:
+        """Perform indexing"""
+        print(f"Processing: {path.name}")
+        chunks = self._get_chunks(path)
+        return self._store_if_valid(path, chunks)
+
+    def _get_chunks(self, path: Path) -> List:
+        """Extract chunks from file"""
+        chunks = self.processor.process_file(path)
+        if not chunks:
+            print(f"No chunks: {path.name}")
+        return chunks
+
+    def _store_if_valid(self, path: Path, chunks: List) -> int:
+        """Store chunks if valid"""
+        if not chunks:
+            return 0
+        self._store_chunks(path, chunks)
+        return len(chunks)
+
+    def _store_chunks(self, path: Path, chunks: List):
+        """Store chunks with embeddings"""
+        embeddings = self._gen_embeddings(chunks)
+        hash_val = self.processor.get_file_hash(path)
+        self._add_to_store(path, hash_val, chunks, embeddings)
+        print(f"Indexed {path.name}: {len(chunks)} chunks")
+
+    def _gen_embeddings(self, chunks: List) -> List:
+        """Generate embeddings"""
+        texts = [c['content'] for c in chunks]
+        embeddings = self.model.encode(texts, show_progress_bar=False)
+        return [emb.tolist() for emb in embeddings]
+
+    def _add_to_store(self, path, hash_val, chunks, embeddings):
+        """Add to vector store"""
+        self.store.add_document(
+            file_path=str(path),
+            file_hash=hash_val,
+            chunks=chunks,
+            embeddings=embeddings
+        )
+
+
+class IndexOrchestrator:
+    """Orchestrates full indexing process"""
+
+    def __init__(self, base_path: Path, indexer, processor):
+        self.base_path = base_path
+        self.indexer = indexer
+        self.walker = self._create_walker(base_path, processor)
+
+    @staticmethod
+    def _create_walker(base_path, processor):
+        """Create file walker"""
+        return FileWalker(base_path, processor.SUPPORTED_EXTENSIONS)
+
+    def index_all(self, force: bool = False) -> tuple[int, int]:
+        """Index all documents"""
+        if not self.base_path.exists():
+            return self._handle_missing()
+        return self._index_files(force)
+
+    def _handle_missing(self) -> tuple[int, int]:
+        """Handle missing path"""
+        print(f"Path missing: {self.base_path}")
+        return 0, 0
+
+    def _index_files(self, force: bool) -> tuple[int, int]:
+        """Index all files"""
+        indexed_files = 0
+        total_chunks = 0
+        for file_path in self.walker.walk():
+            files, chunks = self._index_one(file_path, force, indexed_files, total_chunks)
+            indexed_files, total_chunks = files, chunks
+        return indexed_files, total_chunks
+
+    def _index_one(self, path, force, files, chunks):
+        """Index one file"""
+        new_chunks = self._try_index(path, force)
+        if new_chunks > 0:
+            return files + 1, chunks + new_chunks
+        return files, chunks
+
+    def _try_index(self, path: Path, force: bool) -> int:
+        """Try indexing with error handling"""
+        try:
+            return self.indexer.index_file(path, force)
+        except Exception as e:
+            print(f"Error: {path.name}: {e}")
+            return 0
+
+
+class QueryExecutor:
+    """Executes semantic search queries"""
+
+    def __init__(self, model, vector_store):
+        self.model = model
+        self.store = vector_store
+
+    def execute(self, request: QueryRequest) -> QueryResponse:
+        """Execute search query"""
+        self._validate(request.text)
+        embedding = self._gen_embedding(request.text)
+        results = self._search(embedding, request)
+        return self._format(results, request.text)
+
+    @staticmethod
+    def _validate(text: str):
+        """Validate query text"""
+        if not text.strip():
+            raise ValueError("Query cannot be empty")
+
+    def _gen_embedding(self, text: str):
+        """Generate query embedding"""
+        return self.model.encode(text, show_progress_bar=False)
+
+    def _search(self, embedding, request):
+        """Search vector store"""
+        return self.store.search(
+            query_embedding=embedding.tolist(),
+            top_k=request.top_k,
+            threshold=request.threshold
+        )
+
+    @staticmethod
+    def _format(results: List, query: str) -> QueryResponse:
+        """Format response"""
+        search_results = QueryExecutor._to_models(results)
+        return QueryResponse(
+            results=search_results,
+            query=query,
+            total_results=len(search_results)
+        )
+
+    @staticmethod
+    def _to_models(results: List) -> List[SearchResult]:
+        """Convert to models"""
+        return [
+            SearchResult(
+                content=r['content'],
+                source=r['source'],
+                page=r['page'],
+                score=r['score']
+            )
+            for r in results
+        ]
+
+
+class StartupManager:
+    """Manages application startup"""
+
+    def __init__(self, app_state: AppState):
+        self.state = app_state
+
+    def initialize(self):
+        """Initialize all components"""
+        print("Initializing RAG system...")
+        self._load_model()
+        self._init_store()
+        self._init_processor()
+        self._index_docs()
+        print("RAG system ready!")
+
+    def _load_model(self):
+        """Load embedding model"""
+        loader = ModelLoader()
+        model_name = default_config.model.name
+        self.state.model = loader.load(model_name)
+
+    def _init_store(self):
+        """Initialize vector store"""
+        print("Initializing vector store...")
+        self.state.vector_store = VectorStore()
+
+    def _init_processor(self):
+        """Initialize processor"""
+        self.state.processor = DocumentProcessor()
+
+    def _index_docs(self):
+        """Index documents"""
+        print("Indexing documents...")
+        try:
+            self._run_indexing()
+        except Exception as e:
+            print(f"Indexing error: {e}")
+
+    def _run_indexing(self):
+        """Run indexing process"""
+        orchestrator = self._create_orchestrator()
+        files, chunks = orchestrator.index_all()
+        print(f"Indexed {files} docs, {chunks} chunks")
+
+    def _create_orchestrator(self):
+        """Create orchestrator"""
+        indexer = self._create_indexer()
+        kb_path = default_config.paths.knowledge_base
+        return IndexOrchestrator(kb_path, indexer, self.state.processor)
+
+    def _create_indexer(self):
+        """Create indexer"""
+        return DocumentIndexer(
+            self.state.processor,
+            self.state.model,
+            self.state.vector_store
+        )
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan"""
+    manager = StartupManager(state)
+    manager.initialize()
+    yield
+    _cleanup()
+
+
+def _cleanup():
+    """Cleanup resources"""
+    if state.vector_store:
+        state.vector_store.close()
+
+
+app = FastAPI(
+    title="RAG Knowledge Base API",
+    description="Local RAG system for querying your knowledge base",
+    version="0.1.0",
+    lifespan=lifespan
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """Root endpoint"""
+    return {
+        "message": "RAG Knowledge Base API",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
+
+@app.get("/health", response_model=HealthResponse)
+async def health():
+    """Health check"""
+    stats = state.vector_store.get_stats()
+    return HealthResponse(
+        status="healthy",
+        indexed_documents=stats['indexed_documents'],
+        total_chunks=stats['total_chunks'],
+        model=default_config.model.name
+    )
+
+
+@app.post("/query", response_model=QueryResponse)
+async def query(request: QueryRequest):
+    """Query the knowledge base"""
+    try:
+        executor = QueryExecutor(state.model, state.vector_store)
+        return executor.execute(request)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
+
+
+@app.post("/index", response_model=IndexResponse)
+async def index(request: IndexRequest, background_tasks: BackgroundTasks):
+    """Trigger reindexing"""
+    try:
+        result = _do_reindex(request.force_reindex)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
+
+
+def _do_reindex(force: bool) -> IndexResponse:
+    """Perform reindexing"""
+    indexer = _build_indexer()
+    orchestrator = _build_orchestrator(indexer)
+    files, chunks = orchestrator.index_all(force)
+    return _build_response(files, chunks)
+
+
+def _build_indexer():
+    """Build document indexer"""
+    return DocumentIndexer(
+        state.processor,
+        state.model,
+        state.vector_store
+    )
+
+
+def _build_orchestrator(indexer):
+    """Build orchestrator"""
+    kb_path = default_config.paths.knowledge_base
+    return IndexOrchestrator(kb_path, indexer, state.processor)
+
+
+def _build_response(files: int, chunks: int) -> IndexResponse:
+    """Build index response"""
+    return IndexResponse(
+        status="success",
+        indexed_files=files,
+        total_chunks=chunks,
+        message=f"Indexed {files} files, {chunks} chunks"
+    )
+
+
+class DocumentLister:
+    """Lists indexed documents"""
+
+    def __init__(self, vector_store):
+        self.store = vector_store
+
+    def list_all(self) -> dict:
+        """List all documents"""
+        cursor = self._query()
+        documents = self._format(cursor)
+        return self._build_response(documents)
+
+    def _query(self):
+        """Query documents"""
+        return self.store.conn.execute("""
+            SELECT d.file_path, d.indexed_at, COUNT(c.id)
+            FROM documents d
+            LEFT JOIN chunks c ON d.id = c.document_id
+            GROUP BY d.id
+            ORDER BY d.indexed_at DESC
+        """)
+
+    @staticmethod
+    def _format(cursor) -> List[dict]:
+        """Format results"""
+        documents = []
+        for row in cursor:
+            DocumentLister._add_doc(documents, row)
+        return documents
+
+    @staticmethod
+    def _add_doc(documents: List, row):
+        """Add document to list"""
+        documents.append({
+            'file_path': row[0],
+            'indexed_at': row[1],
+            'chunk_count': row[2]
+        })
+
+    @staticmethod
+    def _build_response(documents: List) -> dict:
+        """Build response dict"""
+        return {
+            'total_documents': len(documents),
+            'documents': documents
+        }
+
+
+@app.get("/documents")
+async def list_documents():
+    """List all documents"""
+    try:
+        lister = DocumentLister(state.vector_store)
+        return lister.list_all()
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to list documents: {str(e)}"
+        )
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
