@@ -2,12 +2,14 @@
 Unit tests for config module
 """
 import pytest
+import os
 from config import (
     ChunkConfig,
     DatabaseConfig,
     ModelConfig,
     PathConfig,
-    Config
+    Config,
+    MODEL_DIMENSIONS
 )
 
 
@@ -60,6 +62,31 @@ class TestModelConfig:
         assert config.name == "custom-model"
         assert config.show_progress is True
 
+    def test_get_embedding_dim_default(self):
+        """Test getting embedding dimension for default model"""
+        config = ModelConfig()
+        assert config.get_embedding_dim() == 384
+
+    def test_get_embedding_dim_arctic_large(self):
+        """Test Arctic Embed L dimensions"""
+        config = ModelConfig(name="Snowflake/snowflake-arctic-embed-l-v2.0")
+        assert config.get_embedding_dim() == 1024
+
+    def test_get_embedding_dim_arctic_medium(self):
+        """Test Arctic Embed M dimensions"""
+        config = ModelConfig(name="Snowflake/snowflake-arctic-embed-m-v2.0")
+        assert config.get_embedding_dim() == 768
+
+    def test_get_embedding_dim_bge_large(self):
+        """Test BGE large dimensions"""
+        config = ModelConfig(name="BAAI/bge-large-en-v1.5")
+        assert config.get_embedding_dim() == 1024
+
+    def test_get_embedding_dim_unknown_model(self):
+        """Test unknown model defaults to 384"""
+        config = ModelConfig(name="unknown/model")
+        assert config.get_embedding_dim() == 384
+
 
 class TestPathConfig:
     """Tests for PathConfig"""
@@ -98,3 +125,27 @@ class TestConfig:
 
         # Path config
         assert "knowledge_base" in str(config.paths.knowledge_base)
+
+    def test_config_dynamic_dimensions(self):
+        """Test config with Arctic Embed model sets correct dimensions"""
+        # Set environment variable
+        os.environ["MODEL_NAME"] = "Snowflake/snowflake-arctic-embed-l-v2.0"
+
+        # Create config from env
+        config = Config.from_env()
+
+        # Verify dimensions match model
+        assert config.model.name == "Snowflake/snowflake-arctic-embed-l-v2.0"
+        assert config.database.embedding_dim == 1024
+        assert config.model.get_embedding_dim() == 1024
+
+        # Clean up
+        del os.environ["MODEL_NAME"]
+
+    def test_model_dimensions_mapping(self):
+        """Test MODEL_DIMENSIONS mapping is complete"""
+        assert "sentence-transformers/all-MiniLM-L6-v2" in MODEL_DIMENSIONS
+        assert "Snowflake/snowflake-arctic-embed-l-v2.0" in MODEL_DIMENSIONS
+        assert "Snowflake/snowflake-arctic-embed-m-v2.0" in MODEL_DIMENSIONS
+        assert MODEL_DIMENSIONS["Snowflake/snowflake-arctic-embed-l-v2.0"] == 1024
+        assert MODEL_DIMENSIONS["Snowflake/snowflake-arctic-embed-m-v2.0"] == 768
