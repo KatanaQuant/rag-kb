@@ -247,7 +247,7 @@ RESULT=$(curl -s -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d "{\"text\": \"$QUERY\", \"top_k\": 3}")
 
-echo "$RESULT" | jq -r '.results[] | "📝 \(.source)\n\(.content)\n"'
+echo "$RESULT" | jq -r '.results[] | "\(.source)\n\(.content)\n"'
 ```
 
 ## Troubleshooting

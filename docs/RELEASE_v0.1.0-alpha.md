@@ -4,13 +4,13 @@ This is the initial public release of **rag-kb** (RAG Knowledge Base) - a local-
 
 ## Features
 
-- ✨ **Semantic Search**: Natural language queries across your documents
+- **Semantic Search**: Natural language queries across your documents
 - 🔒 **Privacy First**: 100% local operation, no cloud dependencies
 - 📚 **Multi-Format Support**: PDF, Markdown, TXT, DOCX, Obsidian vaults, code
 - 🐳 **Docker Deployment**: Consistent environment, easy setup
 - 🔌 **Claude Code Integration**: MCP server for seamless workflow
 - ⚡ **Fast Indexing**: ~10-20 pages/sec for PDFs, ~100KB/sec for text
-- 🧪 **Well Tested**: 33+ unit tests, ~95% code quality compliance
+- **Well Tested**: 33+ unit tests, ~95% code quality compliance
 
 ## Technical Stack
 
@@ -45,7 +45,7 @@ See the [Roadmap](https://github.com/KatanaQuant/rag-kb#roadmap) for upcoming fe
 
 ## Status
 
-⚠️ **Early Alpha**: This is an early development release. Breaking changes expected in future releases.
+**Early Alpha**: This is an early development release. Breaking changes expected in future releases.
 
 ## Support
 

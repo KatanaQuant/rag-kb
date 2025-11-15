@@ -13,10 +13,10 @@
 The system now automatically detects and indexes new or modified files in the `knowledge_base/` directory without requiring a container restart!
 
 **Key Benefits:**
-- ✅ **Zero-restart indexing** - Just drop files and they're searchable
-- ✅ **Smart debouncing** - Handles bulk operations efficiently (git pull, mass file copies)
-- ✅ **Production-tested** - Verified with real workloads, no crashes or errors
-- ✅ **Fully configurable** - Fine-tune debounce timing and batch sizes
+- **Zero-restart indexing** - Just drop files and they're searchable
+- **Smart debouncing** - Handles bulk operations efficiently (git pull, mass file copies)
+- **Production-tested** - Verified with real workloads, no crashes or errors
+- **Fully configurable** - Fine-tune debounce timing and batch sizes
 
 **How it works:**
 - File watcher monitors `knowledge_base/` directory recursively
@@ -34,7 +34,7 @@ WATCH_BATCH_SIZE=50                 # Max files per batch (default: 50)
 
 ---
 
-## 📝 Changes
+## Changes
 
 ### Added
 - New `api/watcher.py` module (177 lines, 7 focused classes)
@@ -60,20 +60,20 @@ WATCH_BATCH_SIZE=50                 # Max files per batch (default: 50)
 
 ---
 
-## 🧪 Testing
+## Testing
 
 - **Unit Tests**: 17 new tests, all passing
 - **Integration Tests**: Production verified with real files
 - **Test Coverage**: 50+ tests across all modules
-- **Security Audit**: ✅ Thread-safe, no vulnerabilities
+- **Security Audit**: Thread-safe, no vulnerabilities
 
 **Production Verification:**
-- ✅ System startup successful (Arctic Embed model loaded)
-- ✅ Initial indexing: 2 docs, 365 chunks
-- ✅ File watcher started successfully
-- ✅ Real-time detection: Files indexed in <10s
-- ✅ Query verification: Auto-indexed content searchable via API
-- ✅ No errors or crashes during operation
+- System startup successful (Arctic Embed model loaded)
+- Initial indexing: 2 docs, 365 chunks
+- File watcher started successfully
+- Real-time detection: Files indexed in <10s
+- Query verification: Auto-indexed content searchable via API
+- No errors or crashes during operation
 
 ---
 
@@ -115,7 +115,7 @@ docker-compose up -d
 
 ---
 
-## ⚠️ Breaking Changes
+## Breaking Changes
 
 None. This release is fully backward compatible with v0.2.0-alpha.
 
@@ -129,7 +129,7 @@ None. This release is fully backward compatible with v0.2.0-alpha.
 
 ---
 
-## 📊 Stats
+## Stats
 
 - **Lines of Code**: +524 additions, -6 deletions
 - **New Files**: 2 (watcher.py, test_watcher.py)

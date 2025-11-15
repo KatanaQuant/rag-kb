@@ -10,6 +10,16 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 
 **Current Version**: v0.4.0-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
 
+> **CPU-Focused Build**: This project is optimized for CPU-only processing. Large knowledge bases may take significant time to index:
+>
+> - **Small KB** (10-50 docs): Minutes to hours
+> - **Medium KB** (100-500 docs): Hours to overnight
+> - **Large KB** (500+ docs): Days to weeks
+>
+> **Performance Recommendation**: For English-only content, consider using `sentence-transformers/static-retrieval-mrl-en-v1` model for 100-400x faster processing with minimal quality trade-off. See [Embedding Models](#embedding-models) section.
+>
+> For production workloads requiring fast indexing, GPU acceleration provides 60-150x speedup (minutes instead of days). See hardware requirements below.
+
 ---
 
 ## Table of Contents
@@ -17,7 +27,7 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 - [Features](#features)
 - [Architecture](#architecture)
 - [Quick Start](#quick-start)
-- [VSCode/Claude Code Integration](#vscodeclaude-code-integration)
+- [Claude Code Integration (VSCode)](#claude-code-integration-vscode)
 - [Content Ingestion](#content-ingestion)
 - [Usage](#usage)
 - [Development & Testing](#development--testing)
@@ -29,6 +39,7 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 
 ## Features
 
+- **Resumable Processing**: Checkpoint-based processing resumes from last position after interruptions
 - **Hybrid Search**: Combines vector similarity + keyword search for 10-30% better accuracy
 - **Intelligent Caching**: LRU cache for instant repeat queries
 - **Semantic Search**: Natural language queries across all your documents
@@ -37,7 +48,7 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 - **Multiple Formats**: PDF, Markdown, TXT, DOCX, Obsidian vaults, code repositories
 - **Token Efficient**: Returns only relevant chunks (~3-5K tokens vs 100K+ for full files)
 - **Docker-Based**: Runs anywhere Docker runs
-- **MCP Integration**: Built-in server for Claude Code/VSCode
+- **MCP Integration**: Built-in server for VSCode integration
 - **Portable**: Single SQLite database file - easy to backup and migrate
 
 ---
@@ -48,7 +59,7 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Claude Code / VSCode                      │
+│                         VSCode / IDE                         │
 └──────────────────────────┬──────────────────────────────────┘
                            │ MCP Protocol
                            ↓
@@ -68,7 +79,7 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 ┌─────────────────────────────────────────────────────────────┐
 │              Knowledge Base (File System)                    │
 │  knowledge_base/          data/                              │
-│  ├── books/              └── knowledge_base.db               │
+│  ├── books/              └── rag.db               │
 │  ├── code/                                                   │
 │  ├── obsidian/                                               │
 │  └── notes/                                                  │
@@ -79,7 +90,7 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 
 1. **Ingestion**: Files → Text Extraction → Chunking → Embedding → SQLite
 2. **Query**: Question → Embedding → Vector Search → Top Results → Response
-3. **MCP**: Claude queries via MCP → API processes → Results returned
+3. **MCP**: IDE queries via MCP → API processes → Results returned
 
 ---
 
@@ -98,20 +109,15 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 git clone https://github.com/KatanaQuant/rag-kb.git
 cd rag-kb
 
-# Checkout latest stable release (recommended)
-git checkout v0.3.0-alpha
-
-# Or stay on main for latest features (may have bugs)
-# git checkout main
+# Checkout latest stable release
+git checkout v0.4.0-alpha
 
 # Optional: Change port if 8000 is in use
 echo "RAG_PORT=8001" > .env
 
-# Optional: Use advanced embedding model (requires re-indexing, see below)
-# echo "MODEL_NAME=Snowflake/snowflake-arctic-embed-l-v2.0" >> .env
+# Optional: Use faster model for English-only content (recommended)
+echo "MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1" >> .env
 ```
-
-> **Upgrading from v0.1.0?** See [docs/MIGRATION_v0.1_to_v0.2.md](docs/MIGRATION_v0.1_to_v0.2.md)
 
 ### Step 1: Add Content
 
@@ -140,7 +146,7 @@ The service automatically indexes all supported files (PDF, TXT, DOCX, MD) when 
 # Build and start
 docker-compose up --build -d
 
-# Wait ~30 seconds for indexing
+# Wait ~30 seconds for indexing (longer for large knowledge bases)
 # Check status
 curl http://localhost:8000/health
 ```
@@ -165,11 +171,11 @@ curl -X POST http://localhost:8000/query \
 
 ---
 
-## VSCode/Claude Code Integration
+## Claude Code Integration (VSCode)
 
-Use your knowledge base directly in VSCode with Claude Code extension.
+Use your knowledge base directly with Claude Code in VSCode via MCP (Model Context Protocol).
 
-**Note:** Currently tested with VSCode. Other IDE examples available on request.
+**Note:** This integration requires the Claude Code extension for VSCode. The MCP server allows Claude to query your indexed documents automatically.
 
 ### Setup (One-Time)
 
@@ -202,7 +208,7 @@ Edit `~/.claude.json` to enable for specific projects:
 }
 ```
 
-Or use Claude Code UI to approve when prompted.
+Or use the UI to approve when prompted.
 
 **4. Reload VSCode:**
 - `Ctrl+Shift+P` → "Developer: Reload Window"
@@ -214,16 +220,9 @@ Or use Claude Code UI to approve when prompted.
 # Should show: rag-kb - ✓ Connected
 ```
 
-### Using in Claude Code
+### Using Claude Code
 
-Claude automatically queries your knowledge base when relevant:
-
-```
-You: "What does the law of active management say?"
-
-Claude: [Calls query_knowledge_base MCP tool]
-Based on your indexed books, the law of active management states...
-```
+Claude can automatically query your knowledge base when relevant to answer questions about your indexed documents.
 
 ---
 
@@ -234,7 +233,7 @@ The RAG service automatically indexes files in `knowledge_base/` on startup. Sup
 ### Supported Formats
 
 **Direct Ingestion** (automatic):
-- **PDF**: `.pdf` files
+- **PDF**: `.pdf` files (basic text extraction via PyPDF)
 - **Text**: `.txt`, `.md` files
 - **Documents**: `.docx` files
 
@@ -300,7 +299,7 @@ See [docs/CONTENT_SOURCES.md](docs/CONTENT_SOURCES.md) for more formats (Notion,
 
 ### Via Claude Code (Recommended)
 
-Just ask questions naturally. Claude automatically decides when to query your knowledge base.
+Ask Claude questions naturally in VSCode. Claude automatically decides when to query your knowledge base.
 
 ### Via Command Line
 
@@ -406,6 +405,107 @@ docker-compose up --build -d
 curl http://localhost:8000/health
 ```
 
+### Testing New Models (Without Disrupting Production)
+
+The test instance infrastructure allows safe experimentation on port 8001 while production runs on port 8000.
+
+**Quick Test Workflow:**
+
+```bash
+# 1. Prepare clean test environment
+./test-docling-instance.sh nuke  # Remove old test data (prompts for confirmation)
+
+# 2. Add sample documents
+cp knowledge_base/some-file.md knowledge_base_test/
+# Or create fresh test content
+
+# 3. Start test instance with new model
+MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1 ./test-docling-instance.sh start
+
+# 4. Check health and stats
+./test-docling-instance.sh health
+
+# 5. Test queries
+./test-docling-instance.sh query "your test question"
+
+# 6. Compare with production
+./test-docling-instance.sh compare
+
+# 7. Monitor resource usage
+docker stats rag-api-test --no-stream
+
+# 8. Stop when done
+./test-docling-instance.sh stop
+```
+
+**Test Instance Commands:**
+
+```bash
+./test-docling-instance.sh start    # Start on port 8001
+./test-docling-instance.sh stop     # Stop test instance
+./test-docling-instance.sh logs     # View logs
+./test-docling-instance.sh health   # Check health status
+./test-docling-instance.sh query "text"  # Run test query
+./test-docling-instance.sh reindex  # Force reindex
+./test-docling-instance.sh clean    # Remove test DB (keeps KB files)
+./test-docling-instance.sh nuke     # Remove ALL test data
+./test-docling-instance.sh compare  # Compare prod vs test
+```
+
+### Model Migration Workflow (Zero-Downtime)
+
+Migrate to a new embedding model without disrupting the running production instance.
+
+**Step-by-Step Migration:**
+
+```bash
+# 1. Test new model first (see above)
+MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1 ./test-docling-instance.sh start
+./test-docling-instance.sh query "test queries..."
+# Verify quality meets requirements
+
+# 2. Backup production database
+cp data/rag.db data/rag.db.backup-$(date +%Y%m%d)
+
+# 3. Update production configuration
+echo "MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1" > .env
+
+# 4. Rebuild production with new model
+docker-compose down
+rm data/rag.db  # New model requires fresh index
+docker-compose up --build -d
+
+# 5. Monitor indexing progress
+docker-compose logs -f rag-api | grep -E "Indexed|chunks"
+
+# 6. Verify health
+curl http://localhost:8000/health | jq
+
+# 7. Test queries
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"text": "test query", "top_k": 3}' | jq
+
+# 8. Check resource usage
+docker stats rag-api --no-stream
+```
+
+**Rollback if needed:**
+
+```bash
+# Stop new model
+docker-compose down
+
+# Restore backup
+mv data/rag.db.backup-YYYYMMDD data/rag.db
+
+# Revert configuration
+git checkout .env  # Or manually set old MODEL_NAME
+
+# Restart with old model
+docker-compose up -d
+```
+
 ---
 
 ## Troubleshooting
@@ -442,8 +542,8 @@ curl -X POST http://localhost:8000/index \
 ### Poor Search Quality
 
 **1. Use specific queries:**
-- ❌ "python"
-- ✅ "python async await error handling patterns"
+- Bad: "python"
+- Good: "python async await error handling patterns"
 
 **2. Increase results:**
 ```bash
@@ -486,9 +586,85 @@ curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 ```
 
+### Slow Indexing Performance
+
+**CPU-only processing is slow by design.** For faster indexing:
+
+**Option 1: Use faster embedding model (recommended for English content)**
+```bash
+# Edit .env
+echo "MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1" > .env
+
+# Rebuild
+docker-compose down
+rm data/rag.db
+docker-compose up --build -d
+```
+
+**Option 2: Reduce resource usage**
+```bash
+# Edit .env for smaller batches
+echo "BATCH_SIZE=3" >> .env
+echo "BATCH_DELAY=1.0" >> .env
+docker-compose restart rag-api
+```
+
+**Option 3: Consider GPU hardware** (60-150x faster)
+- See [Hardware Requirements](#hardware-requirements) section
+
 ---
 
 ## Advanced Configuration
+
+### Hardware Requirements
+
+**CPU-Only (Current Build):**
+- RAM: 4-8GB minimum (16GB recommended for large KB)
+- CPU: 2+ cores
+- Storage: 500MB + (2x knowledge base size)
+- Processing: 10-500 docs/hour depending on format
+
+**GPU-Accelerated (Future Enhancement):**
+- GPU: NVIDIA RTX 3060 or better (12GB+ VRAM)
+- RAM: 16GB+
+- Processing: 600-7500 docs/hour (60-150x faster)
+- Ideal for: Large knowledge bases, production workloads
+
+GPU support is not yet implemented. CPU-only mode is production-ready but slower.
+
+### Resource Limits (Recommended)
+
+To prevent system overload during large indexing operations, RAG-KB includes resource caps:
+
+**Configuration** (via `.env`):
+```bash
+MAX_CPUS=2.0          # Max CPU cores (default: 2.0)
+MAX_MEMORY=4G         # Max memory usage (default: 4G)
+BATCH_SIZE=5          # Files per batch (default: 5)
+BATCH_DELAY=0.5       # Delay between batches in seconds (default: 0.5)
+```
+
+**How it works**:
+- Docker resource limits prevent container from exceeding CPU/memory caps
+- Batch processing adds delays every N files to prevent resource spikes
+- Ideal for laptops and devices with limited resources
+
+**Adjust for your system**:
+```bash
+# Low-end device (2GB RAM, 2 cores)
+echo "MAX_MEMORY=2G" >> .env
+echo "MAX_CPUS=1.0" >> .env
+echo "BATCH_SIZE=3" >> .env
+
+# High-end device (16GB RAM, 8 cores)
+echo "MAX_MEMORY=8G" >> .env
+echo "MAX_CPUS=4.0" >> .env
+echo "BATCH_SIZE=10" >> .env
+echo "BATCH_DELAY=0.1" >> .env
+
+# Rebuild
+docker-compose up --build -d
+```
 
 ### Auto-Sync Configuration
 
@@ -593,38 +769,63 @@ curl http://localhost:8000/health
 
 ### Embedding Models
 
-v0.2.0+ supports multiple embedding models for different quality/speed trade-offs.
+v0.2.0+ supports multiple embedding models for different quality/speed/resource trade-offs.
 
 **Available Models:**
 
-| Model | Dimensions | Quality | Speed | Use Case |
-|-------|-----------|---------|-------|----------|
-| all-MiniLM-L6-v2 (default) | 384 | Good | Fastest | Quick indexing, simple queries |
-| **Arctic Embed 2.0-L** | 1024 | **Best** | Slower | Multi-domain KB, best retrieval |
-| Arctic Embed 2.0-M | 768 | Excellent | Moderate | Balanced quality/speed |
-| BGE-large-en-v1.5 | 1024 | Excellent | Moderate | Alternative high-quality option |
-| BGE-base-en-v1.5 | 768 | Very Good | Fast | Lightweight high-quality |
+| Model | Dimensions | Memory | MTEB Score | Speed | Use Case |
+|-------|-----------|--------|------------|-------|----------|
+| all-MiniLM-L6-v2 | 384 | ~80MB | Good | Very Fast | Quick prototyping, simple queries |
+| **static-retrieval-mrl-en-v1** | 1024 | **~400MB** | ~87% of mpnet | **100-400x faster** | **CPU-optimized, English-only, recommended** |
+| Arctic Embed 2.0-M | 768 | ~450MB | 55.4 (Retrieval) | Very Fast | Balanced quality/speed |
+| Arctic Embed 2.0-L | 1024 | ~1.2GB | **55.6 (Retrieval)** | Fast | Best retrieval quality, multilingual |
+| BGE-base-en-v1.5 | 768 | ~450MB | Very Good | Fast | Lightweight alternative |
+| BGE-large-en-v1.5 | 1024 | ~1.3GB | 64.2 (Avg) / 54.3 (Retrieval) | Medium | Alternative high-quality option |
 
-**To use Arctic Embed 2.0-L (recommended for multi-domain knowledge bases):**
+**Recommended Configurations:**
+
+**CPU-Optimized (Recommended for v0.4):**
+```bash
+# 66% less memory, 100-400x faster, English-only, 13% quality trade-off
+MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1
+```
+
+**Production (Multilingual):**
+```bash
+# Best retrieval quality, multilingual, slower processing
+MODEL_NAME=Snowflake/snowflake-arctic-embed-l-v2.0
+```
+
+**To change models:**
 
 ```bash
 # Create/edit .env file
-echo "MODEL_NAME=Snowflake/snowflake-arctic-embed-l-v2.0" > .env
+echo "MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1" > .env
 
 # Rebuild with new model (requires re-indexing)
 docker-compose down
-rm data/knowledge_base.db
+rm data/rag.db
 docker-compose up --build -d
 ```
 
+**Model Tradeoffs:**
+
+| Factor | static-retrieval-mrl (Recommended) | Arctic 2.0-L |
+|--------|-----------------------------------|--------------|
+| **Quality** | Good (~87% of mpnet) | Excellent (55.6 MTEB Retrieval) |
+| **Speed** | 100-400x faster | Fast |
+| **Memory** | 400MB (66% less) | 1.2GB |
+| **Multilingual** | English only | Yes (100+ languages) |
+| **Use Case** | CPU builds, English content | Multilingual, GPU builds |
+
 **Performance Notes:**
 
-- **Arctic Embed 2.0-L**: +45% better retrieval on MTEB benchmarks, ideal for diverse content (code + books + notes)
-- **MiniLM-L6-v2**: Fastest option, good for single-domain or quick prototyping
-- **Model download**: Arctic models are ~1.2GB (one-time download, cached thereafter)
+- **static-retrieval-mrl**: Static embeddings (no neural network inference), extreme speed, minimal memory, ideal for CPU-only deployments
+- **Arctic Embed 2.0-L**: Best-in-class retrieval (55.6 MTEB), multilingual support, ideal for diverse content with GPU acceleration
+- **Model download**: Models download once and are cached thereafter
 - **Re-indexing required**: Different dimensions = incompatible database format
 
-See [Migration Guide](docs/MIGRATION_v0.1_to_v0.2.md) for detailed model comparison and upgrade instructions.
+For model testing and migration workflows, see [Development & Testing](#development--testing).
 
 ### Chunking Configuration
 
@@ -653,7 +854,7 @@ CHUNK_OVERLAP = 200    # Overlap between chunks
 tar -czf rag-backup-$(date +%Y%m%d).tar.gz data/ knowledge_base/
 
 # Database only
-cp data/knowledge_base.db ~/backups/kb-$(date +%Y%m%d).db
+cp data/rag.db ~/backups/kb-$(date +%Y%m%d).db
 ```
 
 ### Network Access
@@ -666,7 +867,7 @@ ports:
 
 Access via: `http://YOUR_LOCAL_IP:8000`
 
-⚠️ **Security**: This exposes your knowledge base to your entire network.
+**Security**: This exposes your knowledge base to your entire network.
 
 ### Performance Stats
 
@@ -680,7 +881,7 @@ Access via: `http://YOUR_LOCAL_IP:8000`
 
 **Check stats:**
 ```bash
-du -h data/knowledge_base.db
+du -h data/rag.db
 curl http://localhost:8000/health | jq
 ```
 
@@ -753,29 +954,31 @@ Lists all indexed documents with metadata.
 
 Future improvements under consideration:
 
-**Advanced Embedding Models:**
-- [Snowflake Arctic Embed 2](https://ollama.com/library/snowflake-arctic-embed2) - State-of-the-art retrieval quality
-- [Google EmbeddingGemma](https://huggingface.co/google/embeddinggemma-300m) - More powerful embeddings
-- [BGE/GTE models](https://huggingface.co/BAAI) - Latest generation embeddings
+**Document Ingestion:**
+- Advanced PDF parsing (Docling, PyMuPDF4LLM, Marker-PDF)
+- OCR support for scanned PDFs
+- Improved table extraction
+
+**Embedding Models:**
+- Google Gemma2 - High performance, low cost alternative
+- BGE/GTE models - Latest generation embeddings
+- GPU acceleration support
+
+**Performance & Resource Management:**
+- GPU acceleration support for embeddings
+- Streaming responses
+- Distributed processing
 
 **Query Improvements:**
-- Hybrid search (vector + keyword)
 - Query expansion and rewriting
 - Contextual chunk retrieval
+- Better ranking algorithms
 
 **Integrations:**
 - Additional IDE support (beyond VSCode)
 - API authentication
 - Multi-user support
 - Cloud deployment guides
-
-**Performance:**
-- GPU acceleration for embeddings
-- Streaming responses
-- Incremental indexing
-- Query caching
-
-Contributions and suggestions welcome!
 
 ---
 

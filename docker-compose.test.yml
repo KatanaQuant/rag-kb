@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  rag-api-test:
+    build: ./api
+    container_name: rag-api-test
+    ports:
+      - "8001:8000"  # Different port to avoid conflict
+    volumes:
+      - ./knowledge_base_test:/app/knowledge_base:ro  # Separate test KB
+      - ./data_test:/app/data  # Separate test database
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MODEL_NAME=${MODEL_NAME:-sentence-transformers/all-MiniLM-L6-v2}
+      - BATCH_SIZE=${BATCH_SIZE:-5}
+      - BATCH_DELAY=${BATCH_DELAY:-0.5}
+      - WATCH_ENABLED=false  # Disable auto-watch for testing
+    restart: "no"  # Don't auto-restart, manual control
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '${MAX_CPUS:-2.0}'
+          memory: ${MAX_MEMORY:-4G}
+        reservations:
+          cpus: '0.5'
+          memory: 512M

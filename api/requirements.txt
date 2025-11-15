@@ -1,6 +1,6 @@
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-pydantic==2.5.3
+fastapi>=0.115.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.7.0
 
 # CPU-only PyTorch (avoid 700MB+ CUDA downloads)
 --extra-index-url https://download.pytorch.org/whl/cpu
@@ -19,4 +19,9 @@ python-docx==1.1.0
 markdown==3.5.2
 python-multipart==0.0.9
 watchdog==4.0.0
-numpy==1.26.3
+numpy>=1.26.4,<2.0.0
+
+# Advanced document parsing (default)
+# Note: Docling has heavy dependencies, install takes 3-5 min
+# Install with OCR extras: easyocr for ML-based OCR, tesserocr for Tesseract bindings
+docling[easyocr]==1.20.0

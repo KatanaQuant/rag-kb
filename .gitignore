@@ -14,13 +14,21 @@ package-lock.json
 
 # Data
 data/
+data_test/
+data_docling/
 *.db
 *.db-journal
 
+# Model caches
+.cache/
+
 # Knowledge base (contains personal/copyrighted content)
-knowledge_base/
+knowledge_base/*
 !knowledge_base/.gitkeep
 !knowledge_base/README.md
+knowledge_base_test/*
+knowledge_base_docling/*
+!knowledge_base_docling/README.md
 
 # Agent session files
 .agent/session.md
@@ -40,3 +48,4 @@ knowledge_base/
 # OS
 .DS_Store
 Thumbs.db
+.local-scripts/

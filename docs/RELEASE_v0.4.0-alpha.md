@@ -13,10 +13,10 @@
 The system now combines **vector similarity search** with **FTS5 keyword search** using Reciprocal Rank Fusion (RRF) for 10-30% better accuracy!
 
 **Key Benefits:**
-- ✅ **Better recall** for technical terms, acronyms, and specific terminology
-- ✅ **Improved precision** when queries contain both concepts and exact keywords
-- ✅ **Robust fallback** - automatically falls back to vector-only if keyword search fails
-- ✅ **Zero configuration** - works automatically when both indexes are available
+- **Better recall** for technical terms, acronyms, and specific terminology
+- **Improved precision** when queries contain both concepts and exact keywords
+- **Robust fallback** - automatically falls back to vector-only if keyword search fails
+- **Zero configuration** - works automatically when both indexes are available
 
 **How it works:**
 - Vector search finds semantically similar content (concepts, ideas)
@@ -34,10 +34,10 @@ The system now combines **vector similarity search** with **FTS5 keyword search*
 LRU (Least Recently Used) cache provides instant responses for repeat queries.
 
 **Key Benefits:**
-- ✅ **~1000x faster** for cached queries (0ms vs 200ms+)
-- ✅ **Reduced computation** - no embedding generation for cache hits
-- ✅ **Configurable** - adjust cache size via environment variable
-- ✅ **Smart eviction** - LRU policy keeps frequently-used queries cached
+- **~1000x faster** for cached queries (0ms vs 200ms+)
+- **Reduced computation** - no embedding generation for cache hits
+- **Configurable** - adjust cache size via environment variable
+- **Smart eviction** - LRU policy keeps frequently-used queries cached
 
 **Configuration:**
 ```bash
@@ -53,7 +53,7 @@ CACHE_MAX_SIZE=100                  # Maximum cached queries (default: 100)
 
 ---
 
-## 📝 Changes
+## Changes
 
 ### Added
 - New `api/hybrid_search.py` module (115 lines, 4 focused classes)
@@ -88,11 +88,11 @@ CACHE_MAX_SIZE=100                  # Maximum cached queries (default: 100)
 
 ---
 
-## 🧪 Testing
+## Testing
 
 - **Unit Tests**: 20 new tests, all passing
 - **Test Coverage**: 70+ tests across all modules
-- **Production Verification**: ✅ Tested with real workload, no errors
+- **Production Verification**: Tested with real workload, no errors
 
 **Test Results:**
 ```
@@ -102,13 +102,13 @@ api/tests/test_query_cache.py::11 tests PASSED
 ```
 
 **Production Verification:**
-- ✅ System startup successful (Arctic Embed model loaded)
-- ✅ Hybrid search initialized
-- ✅ Query cache enabled (size: 100)
-- ✅ Auto-sync working (files indexed in <10s)
-- ✅ Queries returning results from fused search
-- ✅ Cache hits working (instant repeat queries)
-- ✅ No errors or crashes during operation
+- System startup successful (Arctic Embed model loaded)
+- Hybrid search initialized
+- Query cache enabled (size: 100)
+- Auto-sync working (files indexed in <10s)
+- Queries returning results from fused search
+- Cache hits working (instant repeat queries)
+- No errors or crashes during operation
 
 ---
 
@@ -168,7 +168,7 @@ docker-compose up -d
 
 ---
 
-## ⚠️ Breaking Changes
+## Breaking Changes
 
 None. This release is fully backward compatible with v0.3.0-alpha.
 
@@ -182,7 +182,7 @@ None. This release is fully backward compatible with v0.3.0-alpha.
 
 ---
 
-## 📊 Stats
+## Stats
 
 - **Lines of Code**: +774 additions, -3 deletions
 - **New Files**: 3 (hybrid_search.py, query_cache.py, test files)

@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import List, Dict, Tuple, Optional
 import hashlib
 import re
+from dataclasses import dataclass
+from datetime import datetime
 
 from pypdf import PdfReader
 from docx import Document
@@ -11,6 +13,141 @@ import numpy as np
 
 from config import default_config
 from hybrid_search import HybridSearcher
+
+try:
+    from docling.document_converter import DocumentConverter
+    from docling.datamodel.document import DocumentConversionInput
+    DOCLING_AVAILABLE = True
+except ImportError:
+    DOCLING_AVAILABLE = False
+    print("Warning: Docling not available, falling back to pypdf")
+
+
+@dataclass
+class ProcessingProgress:
+    """Processing progress for a document"""
+    file_path: str
+    file_hash: str
+    total_chunks: int = 0
+    chunks_processed: int = 0
+    status: str = 'in_progress'
+    last_chunk_end: int = 0
+    error_message: Optional[str] = None
+    started_at: Optional[str] = None
+    last_updated: Optional[str] = None
+    completed_at: Optional[str] = None
+
+
+class ProcessingProgressTracker:
+    """Manages processing progress persistence"""
+
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        self.conn = None
+        self._connect()
+
+    def _connect(self):
+        """Connect to database"""
+        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+
+    def start_processing(self, file_path: str, file_hash: str) -> ProcessingProgress:
+        """Initialize or resume processing"""
+        progress = self.get_progress(file_path)
+        if progress and progress.file_hash == file_hash:
+            return progress
+        if progress:
+            self._delete_progress(file_path)
+        return self._create_progress(file_path, file_hash)
+
+    def _delete_progress(self, file_path: str):
+        """Delete old progress"""
+        self.conn.execute("DELETE FROM processing_progress WHERE file_path = ?", (file_path,))
+        self.conn.commit()
+
+    def _create_progress(self, file_path: str, file_hash: str) -> ProcessingProgress:
+        """Create new progress record"""
+        now = datetime.utcnow().isoformat()
+        self.conn.execute("""
+            INSERT INTO processing_progress
+            (file_path, file_hash, started_at, last_updated)
+            VALUES (?, ?, ?, ?)
+        """, (file_path, file_hash, now, now))
+        self.conn.commit()
+        return ProcessingProgress(file_path, file_hash, started_at=now, last_updated=now)
+
+    def update_progress(self, file_path: str, chunks_processed: int, last_chunk_end: int):
+        """Update progress after batch"""
+        now = datetime.utcnow().isoformat()
+        self.conn.execute("""
+            UPDATE processing_progress
+            SET chunks_processed = ?, last_chunk_end = ?, last_updated = ?
+            WHERE file_path = ?
+        """, (chunks_processed, last_chunk_end, now, file_path))
+        self.conn.commit()
+
+    def mark_completed(self, file_path: str):
+        """Mark as completed"""
+        now = datetime.utcnow().isoformat()
+        self.conn.execute("""
+            UPDATE processing_progress
+            SET status = 'completed', completed_at = ?, last_updated = ?
+            WHERE file_path = ?
+        """, (now, now, file_path))
+        self.conn.commit()
+
+    def mark_failed(self, file_path: str, error_message: str):
+        """Mark as failed"""
+        now = datetime.utcnow().isoformat()
+        self.conn.execute("""
+            UPDATE processing_progress
+            SET status = 'failed', error_message = ?, last_updated = ?
+            WHERE file_path = ?
+        """, (error_message, now, file_path))
+        self.conn.commit()
+
+    def get_incomplete_files(self) -> List[ProcessingProgress]:
+        """Get all incomplete files"""
+        cursor = self.conn.execute("""
+            SELECT file_path, file_hash, total_chunks, chunks_processed,
+                   status, last_chunk_end, error_message, started_at,
+                   last_updated, completed_at
+            FROM processing_progress
+            WHERE status = 'in_progress'
+        """)
+        return [self._row_to_progress(row) for row in cursor.fetchall()]
+
+    def get_progress(self, file_path: str) -> Optional[ProcessingProgress]:
+        """Get progress for file"""
+        cursor = self.conn.execute("""
+            SELECT file_path, file_hash, total_chunks, chunks_processed,
+                   status, last_chunk_end, error_message, started_at,
+                   last_updated, completed_at
+            FROM processing_progress
+            WHERE file_path = ?
+        """, (file_path,))
+        row = cursor.fetchone()
+        return self._row_to_progress(row) if row else None
+
+    @staticmethod
+    def _row_to_progress(row) -> ProcessingProgress:
+        """Convert row to object"""
+        return ProcessingProgress(
+            file_path=row[0],
+            file_hash=row[1],
+            total_chunks=row[2],
+            chunks_processed=row[3],
+            status=row[4],
+            last_chunk_end=row[5],
+            error_message=row[6],
+            started_at=row[7],
+            last_updated=row[8],
+            completed_at=row[9]
+        )
+
+    def close(self):
+        """Close connection"""
+        if self.conn:
+            self.conn.close()
 
 
 class FileHasher:
@@ -36,8 +173,61 @@ class FileHasher:
         return iter(lambda: file_handle.read(8192), b'')
 
 
+class DoclingExtractor:
+    """Extracts text from documents using Docling (advanced parsing)"""
+
+    _converter = None
+
+    @classmethod
+    def get_converter(cls):
+        """Lazy load converter (singleton pattern)"""
+        if cls._converter is None:
+            from docling.datamodel.pipeline_options import PipelineOptions
+            from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+
+            # Configure pipeline for CPU-only processing
+            pipeline_options = PipelineOptions(
+                do_ocr=True,  # Enable OCR with Tesseract
+                do_table_structure=True  # Enable table structure extraction
+            )
+
+            # Use PyPdfium backend (fast, stable, no OCR dependencies)
+            cls._converter = DocumentConverter(
+                pipeline_options=pipeline_options,
+                pdf_backend=PyPdfiumDocumentBackend
+            )
+        return cls._converter
+
+    @staticmethod
+    def extract(path: Path) -> List[Tuple[str, int]]:
+        """Extract text from PDF/DOCX using Docling (simple markdown export)"""
+        try:
+            converter = DoclingExtractor.get_converter()
+            # Create proper input from path
+            input_doc = DocumentConversionInput.from_paths([path])
+            # convert() returns an iterator of ConversionResult objects
+            result_iter = converter.convert(input_doc)
+            # Get the first (and usually only) result from the iterator
+            conv_result = next(iter(result_iter))
+
+            # Export to markdown (simple, fast approach)
+            markdown_text = conv_result.document.export_to_markdown()
+
+            # Return as single page (page=0) for legacy chunker compatibility
+            # TextChunker will handle splitting into semantic chunks
+            return [(markdown_text, 0)] if markdown_text else [("", 0)]
+        except Exception as e:
+            print(f"Docling extraction failed for {path.name}: {e}")
+            import traceback
+            traceback.print_exc()
+            # Fallback to pypdf for PDFs
+            if path.suffix.lower() == '.pdf':
+                return PDFExtractor.extract(path)
+            raise
+
+
 class PDFExtractor:
-    """Extracts text from PDF files"""
+    """Extracts text from PDF files (fallback when Docling fails)"""
 
     @staticmethod
     def extract(path: Path) -> List[Tuple[str, int]]:
@@ -118,7 +308,8 @@ class MarkdownExtractor:
 class TextExtractor:
     """Extracts text from various file formats"""
 
-    def __init__(self):
+    def __init__(self, config=default_config):
+        self.config = config
         self.extractors = self._build_extractors()
 
     def extract(self, file_path: Path) -> List[Tuple[str, int]]:
@@ -129,13 +320,31 @@ class TextExtractor:
 
     def _build_extractors(self) -> Dict:
         """Map extensions to extractors"""
-        return {
-            '.pdf': PDFExtractor.extract,
-            '.docx': DOCXExtractor.extract,
-            '.txt': TextFileExtractor.extract,
-            '.md': MarkdownExtractor.extract,
-            '.markdown': MarkdownExtractor.extract
-        }
+        # Use Docling for PDF/DOCX if enabled and available
+        use_docling = DOCLING_AVAILABLE and self.config.docling.enabled
+
+        if use_docling:
+            print("Using Docling for advanced PDF/DOCX extraction")
+            return {
+                '.pdf': DoclingExtractor.extract,
+                '.docx': DoclingExtractor.extract,
+                '.txt': TextFileExtractor.extract,
+                '.md': MarkdownExtractor.extract,
+                '.markdown': MarkdownExtractor.extract
+            }
+        else:
+            if not DOCLING_AVAILABLE:
+                print("WARNING: Docling not available, using PyPDF fallback")
+            else:
+                print("INFO: Docling disabled (USE_DOCLING=false), using PyPDF")
+            # Fallback to legacy extractors
+            return {
+                '.pdf': PDFExtractor.extract,
+                '.docx': DOCXExtractor.extract,
+                '.txt': TextFileExtractor.extract,
+                '.md': MarkdownExtractor.extract,
+                '.markdown': MarkdownExtractor.extract
+            }
 
     def _validate_extension(self, ext: str):
         """Validate extension is supported"""
@@ -182,6 +391,66 @@ class TextChunker:
         return current + self.config.size - self.config.overlap
 
 
+class ChunkedTextProcessor:
+    """Processes text in resumable chunks"""
+
+    def __init__(self, chunker: TextChunker,
+                 progress_tracker: ProcessingProgressTracker,
+                 batch_size: int = 50):
+        self.chunker = chunker
+        self.tracker = progress_tracker
+        self.batch_size = batch_size
+
+    def process_text(self, file_path: str, full_text: str,
+                    file_hash: str, page_num: int = None) -> List[Dict]:
+        """Process text with resume"""
+        progress = self.tracker.start_processing(file_path, file_hash)
+
+        # Skip if already completed
+        if progress.status == 'completed':
+            text = full_text
+            return self._create_chunks(text, page_num)
+
+        text = self._get_remaining(full_text, progress)
+        chunks = self._create_chunks(text, page_num)
+        return self._batch_process(file_path, chunks, progress)
+
+    @staticmethod
+    def _get_remaining(text: str, progress: ProcessingProgress) -> str:
+        """Get unprocessed text"""
+        if progress.last_chunk_end > 0:
+            return text[progress.last_chunk_end:]
+        return text
+
+    def _create_chunks(self, text: str, page: int) -> List[Dict]:
+        """Create chunks from text"""
+        return self.chunker.chunk(text, page)
+
+    def _batch_process(self, path: str, chunks: List[Dict],
+                      progress: ProcessingProgress) -> List[Dict]:
+        """Process in batches"""
+        all_chunks = []
+        chunks_count = progress.chunks_processed
+        char_position = progress.last_chunk_end
+
+        for i in range(0, len(chunks), self.batch_size):
+            batch = chunks[i:i+self.batch_size]
+            all_chunks.extend(batch)
+            chunks_count += len(batch)
+            char_position += sum(len(c['content']) for c in batch)
+            self.tracker.update_progress(path, chunks_count, char_position)
+
+        self.tracker.mark_completed(path)
+        return all_chunks
+
+    def _update_tracker(self, path: str, batch: List[Dict],
+                       progress: ProcessingProgress):
+        """Update progress tracking"""
+        processed = progress.chunks_processed + len(batch)
+        chunk_end = progress.last_chunk_end + sum(len(c['content']) for c in batch)
+        self.tracker.update_progress(path, processed, chunk_end)
+
+
 class DocumentProcessor:
     """Coordinates document processing"""
 
@@ -189,10 +458,16 @@ class DocumentProcessor:
         '.pdf', '.txt', '.md', '.markdown', '.docx'
     }
 
-    def __init__(self):
+    def __init__(self, progress_tracker: Optional[ProcessingProgressTracker] = None):
         self.hasher = FileHasher()
         self.extractor = TextExtractor()
         self.chunker = TextChunker()
+        self.tracker = progress_tracker
+        self.chunked_processor = None
+        if self.tracker:
+            self.chunked_processor = ChunkedTextProcessor(
+                self.chunker, self.tracker, batch_size=50
+            )
 
     def get_file_hash(self, path: Path) -> str:
         """Get file hash"""
@@ -200,6 +475,50 @@ class DocumentProcessor:
 
     def process_file(self, path: Path) -> List[Dict]:
         """Process file into chunks"""
+        if self.tracker:
+            return self._process_with_resume(path)
+        return self._process_legacy(path)
+
+    def _process_with_resume(self, path: Path) -> List[Dict]:
+        """Process with resumable tracking"""
+        try:
+            file_hash = self.get_file_hash(path)
+            progress = self.tracker.get_progress(str(path))
+            if self._is_completed(progress, file_hash):
+                print(f"Skipping completed: {path.name}")
+                return []
+            return self._do_resumable_process(path, file_hash)
+        except Exception as e:
+            self.tracker.mark_failed(str(path), str(e))
+            print(f"Error processing: {path.name}")
+            return []
+
+    def _is_completed(self, progress, file_hash: str) -> bool:
+        """Check if file already completed"""
+        return progress and progress.status == 'completed' and progress.file_hash == file_hash
+
+    def _do_resumable_process(self, path: Path, file_hash: str) -> List[Dict]:
+        """Process with resume capability"""
+        # Stage 1: Extract text
+        extracted_items = self.extractor.extract(path)
+        total_chars = sum(len(text) for text, _ in extracted_items)
+        print(f"Extraction complete: {path.name} - {total_chars:,} chars extracted")
+
+        all_chunks = []
+
+        # Stage 2: Chunk text
+        for text, page_num in extracted_items:
+            chunks = self.chunked_processor.process_text(
+                str(path), text, file_hash, page_num
+            )
+            enriched = self._enrich_chunks(chunks, path)
+            all_chunks.extend(enriched)
+
+        print(f"Chunking complete: {path.name} - {len(all_chunks)} chunks created")
+        return all_chunks
+
+    def _process_legacy(self, path: Path) -> List[Dict]:
+        """Legacy processing without resume"""
         try:
             return self._do_process(path)
         except Exception as e:
@@ -208,8 +527,8 @@ class DocumentProcessor:
 
     def _do_process(self, path: Path) -> List[Dict]:
         """Perform processing"""
-        text_pages = self.extractor.extract(path)
-        return self._process_pages(text_pages, path)
+        extracted_items = self.extractor.extract(path)
+        return self._process_pages(extracted_items, path)
 
     def _process_pages(self, pages: List, path: Path) -> List[Dict]:
         """Process extracted pages"""
@@ -296,6 +615,7 @@ class SchemaManager:
         self._create_chunks_table()
         self._create_vector_table()
         self._create_fts_table()
+        self._create_processing_progress_table()
         self.conn.commit()
 
     def _create_documents_table(self):
@@ -355,6 +675,23 @@ class SchemaManager:
             """)
         except Exception as e:
             print(f"Note: fts_chunks exists: {e}")
+
+    def _create_processing_progress_table(self):
+        """Create processing progress tracking table"""
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS processing_progress (
+                file_path TEXT PRIMARY KEY,
+                file_hash TEXT,
+                total_chunks INTEGER DEFAULT 0,
+                chunks_processed INTEGER DEFAULT 0,
+                status TEXT DEFAULT 'in_progress',
+                last_chunk_end INTEGER DEFAULT 0,
+                error_message TEXT,
+                started_at TEXT,
+                last_updated TEXT,
+                completed_at TEXT
+            )
+        """)
 
 
 class VectorRepository:

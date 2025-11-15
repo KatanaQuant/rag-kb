@@ -44,8 +44,8 @@ Use mcp__rag-kb__query_knowledge_base with:
 ```
 
 **After RAG results**:
-- ✅ If relevant chunks found: Base answer on KB content, cite sources
-- ❌ If no relevant chunks: State "no relevant content in KB" then use general knowledge
+- If relevant chunks found: Base answer on KB content, cite sources
+- If no relevant chunks: State "no relevant content in KB" then use general knowledge
 - 🤔 If uncertain: Show user the chunks and ask if they're relevant
 
 **Example**:
@@ -105,11 +105,11 @@ docker-compose up -d
 ```
 
 Claude should:
-1. ✅ Use `query_knowledge_base` tool
-2. ✅ Show the search query
-3. ✅ Display relevant chunks
-4. ✅ Answer based on KB content
-5. ✅ Cite the source document
+1. Use `query_knowledge_base` tool
+2. Show the search query
+3. Display relevant chunks
+4. Answer based on KB content
+5. Cite the source document
 
 ---
 
@@ -118,9 +118,9 @@ Claude should:
 ### For Users
 
 **Be explicit when you want RAG**:
-- ✅ "Check my KB for information about..."
-- ✅ "What do my trading books say about..."
-- ✅ "According to my documentation..."
+- "Check my KB for information about..."
+- "What do my trading books say about..."
+- "According to my documentation..."
 
 **Help Claude prioritize**:
 - Mention book/author names you know are indexed
