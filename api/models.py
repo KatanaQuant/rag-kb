@@ -39,3 +39,9 @@ class IndexResponse(BaseModel):
     indexed_files: int
     total_chunks: int
     message: str
+
+
+class DocumentInfoResponse(BaseModel):
+    file_path: str
+    extraction_method: str
+    indexed_at: Optional[str] = None

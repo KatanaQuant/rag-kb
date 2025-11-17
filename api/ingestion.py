@@ -5,6 +5,9 @@ import hashlib
 import re
 from dataclasses import dataclass
 from datetime import datetime
+import logging
+import sys
+import warnings
 
 from pypdf import PdfReader
 from docx import Document
@@ -13,6 +16,15 @@ import numpy as np
 
 from config import default_config
 from hybrid_search import HybridSearcher
+
+# Suppress verbose Docling/PDF warnings and errors
+logging.getLogger('pdfminer').setLevel(logging.CRITICAL)
+logging.getLogger('PIL').setLevel(logging.CRITICAL)
+logging.getLogger('docling').setLevel(logging.CRITICAL)
+logging.getLogger('docling_parse').setLevel(logging.CRITICAL)
+logging.getLogger('docling_core').setLevel(logging.CRITICAL)
+logging.getLogger('pdfium').setLevel(logging.CRITICAL)
+warnings.filterwarnings('ignore', category=UserWarning, module='pypdf')
 
 try:
     from docling.document_converter import DocumentConverter
@@ -183,6 +195,44 @@ class FileHasher:
         return iter(lambda: file_handle.read(8192), b'')
 
 
+class GhostscriptHelper:
+    """Helper for PDF font embedding and structure fixes using Ghostscript"""
+
+    @staticmethod
+    def fix_pdf(pdf_path: Path) -> bool:
+        """
+        Process PDF with Ghostscript to embed fonts and fix structure.
+        Returns True if successful, False otherwise.
+        """
+        import subprocess
+
+        temp_pdf = pdf_path.with_suffix('.gs_tmp.pdf')
+
+        try:
+            result = subprocess.run([
+                'gs', '-dNOPAUSE', '-dBATCH', '-sDEVICE=pdfwrite',
+                '-dEmbedAllFonts=true', '-dSubsetFonts=true',
+                '-dCompressFonts=true', '-dPDFSETTINGS=/prepress',
+                f'-sOutputFile={temp_pdf}', str(pdf_path)
+            ], capture_output=True, text=True, timeout=300)
+
+            if result.returncode == 0 and temp_pdf.exists():
+                # Replace original with fixed version
+                temp_pdf.replace(pdf_path)
+                return True
+            else:
+                # Clean up temp file if it exists
+                if temp_pdf.exists():
+                    temp_pdf.unlink()
+                return False
+
+        except Exception:
+            # Clean up temp file if it exists
+            if temp_pdf.exists():
+                temp_pdf.unlink()
+            return False
+
+
 class DoclingExtractor:
     """Extracts text from documents using Docling (advanced parsing)"""
 
@@ -209,49 +259,137 @@ class DoclingExtractor:
         return cls._chunker
 
     @staticmethod
-    def extract(path: Path) -> List[Tuple[str, int]]:
-        """Extract text from PDF/DOCX using Docling with HybridChunker"""
-        converter = DoclingExtractor.get_converter()
-        # convert() returns ConversionResult directly (docling 2.61.2 API)
-        result = converter.convert(str(path))
-        document = result.document
-        # Always use hybrid chunking (structure + token-aware)
-        return DoclingExtractor._extract_hybrid_chunks(document)
+    def extract(path: Path, retry_with_ghostscript: bool = True) -> List[Tuple[str, int]]:
+        """Extract text from PDF/DOCX using Docling with HybridChunker
+
+        Args:
+            path: Path to PDF/DOCX file
+            retry_with_ghostscript: If True, automatically retry with Ghostscript on failure
+
+        Returns:
+            List of (text, token_count) tuples
+        """
+        result = None
+        docling_failed = False
+        original_error = None
+
+        try:
+            converter = DoclingExtractor.get_converter()
+            # convert() returns ConversionResult directly (docling 2.61.2 API)
+            result = converter.convert(str(path))
+
+            # Check conversion status and provide diagnostic info
+            if hasattr(result, 'status'):
+                from docling.datamodel.base_models import ConversionStatus
+                if result.status == ConversionStatus.FAILURE:
+                    docling_failed = True
+
+                    # Extract error details from result
+                    errors = []
+                    if hasattr(result, 'errors') and result.errors:
+                        for error in result.errors[:3]:  # Limit to first 3 errors
+                            errors.append(f"    - {str(error)}")
+
+                    error_summary = "\n".join(errors) if errors else "    - No specific error details available"
+
+                    original_error = RuntimeError(
+                        f"Docling conversion failed for: {path.name}\n"
+                        f"  Status: FAILURE\n"
+                        f"  Details:\n{error_summary}"
+                    )
+                    raise original_error
+
+            document = result.document
+            # Always use hybrid chunking (structure + token-aware)
+            return DoclingExtractor._extract_hybrid_chunks(document)
+
+        except Exception as e:
+            # Save original error for potential re-raise
+            if original_error is None:
+                original_error = e
+
+            # Only retry for PDF files (not DOCX)
+            if retry_with_ghostscript and path.suffix.lower() == '.pdf':
+                # Print condensed error message from first attempt
+                error_reason = "Unknown error"
+                if result and hasattr(result, 'errors') and result.errors:
+                    # Get first error message and condense it
+                    first_error = str(result.errors[0]) if result.errors else "No details"
+                    error_reason = first_error[:100]  # Limit to 100 chars
+                elif original_error:
+                    error_reason = str(original_error).split('\n')[0][:100]
+
+                print(f"  → Docling failed ({error_reason}), attempting Ghostscript fix...")
+
+                if GhostscriptHelper.fix_pdf(path):
+                    print(f"  → Ghostscript succeeded, retrying extraction...")
+
+                    # Retry extraction with Ghostscript disabled to prevent infinite loop
+                    try:
+                        return DoclingExtractor.extract(path, retry_with_ghostscript=False)
+                    except Exception as retry_error:
+                        # Ghostscript didn't help, raise original error
+                        print(f"  → Retry failed after Ghostscript fix")
+                        raise original_error
+                else:
+                    print(f"  → Ghostscript fix failed")
+
+            # Re-raise original error
+            error_msg = str(original_error)
+            # If we already formatted the error above, re-raise as-is
+            if "Docling conversion failed for:" in error_msg:
+                raise original_error
+            # Check if result object exists and has error information
+            if result and hasattr(result, 'errors') and result.errors:
+                errors = []
+                for error in result.errors[:3]:  # Limit to first 3 errors
+                    errors.append(f"    - {str(error)}")
+                error_summary = "\n".join(errors) if errors else "    - Unknown error"
+
+                raise RuntimeError(
+                    f"Docling conversion failed for: {path.name}\n"
+                    f"  Details:\n{error_summary}\n"
+                    f"  Possible causes:\n"
+                    f"    - PDF structure incompatible with Docling parser\n"
+                    f"    - Invalid page dimensions or corrupted PDF\n"
+                    f"    - PDF generated from EPUB (try pandoc for better compatibility)"
+                )
+            # Provide user-friendly error messages for other exceptions
+            elif "ConversionStatus.FAILURE" in error_msg:
+                raise RuntimeError(
+                    f"Docling conversion failed for: {path.name}\n"
+                    f"  Status: FAILURE (no detailed error information available)\n"
+                    f"  Possible causes:\n"
+                    f"    - PDF structure incompatible with Docling parser\n"
+                    f"    - Invalid page dimensions or corrupted PDF\n"
+                    f"    - PDF generated from EPUB (try pandoc for better compatibility)"
+                )
+            elif "page-dimensions" in error_msg.lower():
+                raise RuntimeError(
+                    f"PDF page dimension detection failed.\n"
+                    f"  File: {path.name}\n"
+                    f"  This PDF's page structure is not compatible with Docling.\n"
+                    f"  Move to knowledge_base/problematic/ to skip processing."
+                )
+            else:
+                # Re-raise with file context
+                raise RuntimeError(f"Failed to extract from {path.name}: {error_msg}") from e
 
     @staticmethod
     def _extract_hybrid_chunks(document) -> List[Tuple[str, int]]:
         """Extract hybrid chunks using HybridChunker (structure + token-aware)"""
-        # Debug: check document
-        print(f"DEBUG: document type = {type(document)}")
-        if hasattr(document, 'texts'):
-            print(f"DEBUG: document has {len(document.texts)} texts")
-            total_text_len = 0
-            for i, text_item in enumerate(document.texts):  # Show all texts
-                # TextItem has a 'text' attribute with the actual content
-                if hasattr(text_item, 'text'):
-                    text_content = text_item.text
-                    total_text_len += len(text_content)
-                    print(f"DEBUG: text[{i}] ({len(text_content)} chars): '{text_content[:100]}...'" if len(text_content) > 100 else f"DEBUG: text[{i}] ({len(text_content)} chars): '{text_content}'")
-                else:
-                    print(f"DEBUG: text[{i}] type = {type(text_item)}")
-            print(f"DEBUG: Total text length = {total_text_len} chars")
-
         chunker = DoclingExtractor.get_chunker(default_config.chunks.max_tokens)
-        print(f"DEBUG: chunker = {chunker}")
 
         chunks_list = []
         chunk_iter = chunker.chunk(document)
-        print(f"DEBUG: chunk iterator = {chunk_iter}")
 
-        for i, chunk in enumerate(chunk_iter):
-            print(f"DEBUG: processing chunk {i}")
+        for chunk in chunk_iter:
             # Get chunk text (use text property or export to markdown)
             chunk_text = chunk.text if hasattr(chunk, 'text') else str(chunk)
             # Get page number from metadata if available
             page = chunk.meta.page if hasattr(chunk, 'meta') and hasattr(chunk.meta, 'page') else 0
             chunks_list.append((chunk_text, page))
 
-        print(f"Hybrid chunking: {len(chunks_list)} chunks extracted")
         return chunks_list
 
 
@@ -318,25 +456,126 @@ class MarkdownExtractor:
         return [(text, None)]
 
 
+class EpubExtractor:
+    """Converts EPUB to PDF using Pandoc, keeps PDF, moves EPUB to original/"""
+
+    @staticmethod
+    def extract(path: Path) -> List[Tuple[str, int]]:
+        """Convert EPUB to PDF, move EPUB to original/, extract from PDF"""
+        import subprocess
+        import shutil
+
+        # Create PDF path in same directory as EPUB
+        pdf_path = path.with_suffix('.pdf')
+
+        # Create original/ subdirectory if it doesn't exist
+        original_dir = path.parent / 'original'
+        original_dir.mkdir(exist_ok=True)
+
+        pandoc_failed = False
+
+        try:
+            print(f"Converting EPUB to PDF: {path.name}")
+
+            # Run pandoc to convert EPUB to PDF
+            result = subprocess.run(
+                ['pandoc', str(path), '-o', str(pdf_path), '--pdf-engine=xelatex'],
+                capture_output=True,
+                text=True,
+                timeout=300  # 5 minute timeout
+            )
+
+            if result.returncode != 0:
+                pandoc_failed = True
+                raise RuntimeError(
+                    f"Pandoc EPUB conversion failed.\n"
+                    f"  File: {path.name}\n"
+                    f"  Error: {result.stderr}\n"
+                    f"  Install pandoc and texlive if missing."
+                )
+
+            print(f"  → PDF created, embedding fonts with Ghostscript...")
+
+            # Post-process with Ghostscript to embed fonts (fixes Docling compatibility)
+            temp_pdf = pdf_path.with_suffix('.tmp.pdf')
+            gs_result = subprocess.run([
+                'gs', '-dNOPAUSE', '-dBATCH', '-sDEVICE=pdfwrite',
+                '-dEmbedAllFonts=true', '-dSubsetFonts=true',
+                '-dCompressFonts=true', '-dPDFSETTINGS=/prepress',
+                f'-sOutputFile={temp_pdf}', str(pdf_path)
+            ], capture_output=True, text=True, timeout=300)
+
+            if gs_result.returncode == 0:
+                # Replace original with font-embedded version
+                temp_pdf.replace(pdf_path)
+                print(f"  → Fonts embedded successfully")
+            else:
+                # Ghostscript failed, clean up temp file and continue with original
+                if temp_pdf.exists():
+                    temp_pdf.unlink()
+                print(f"  → Warning: Font embedding failed, using original PDF")
+
+            print(f"  → Extracting text with Docling...")
+
+            # Move EPUB to original/ BEFORE attempting Docling extraction
+            # This way if Docling fails, EPUB is already safe in original/
+            epub_dest = original_dir / path.name
+            shutil.move(str(path), str(epub_dest))
+            print(f"  → Moved {path.name} to original/")
+
+            # Use Docling to extract from the generated PDF
+            chunks = DoclingExtractor.extract(pdf_path)
+
+            print(f"  ✓ EPUB conversion complete: {len(chunks)} chunks extracted")
+            print(f"  ✓ Kept {pdf_path.name} for future indexing")
+
+            return chunks
+
+        except Exception as e:
+            # If pandoc failed and PDF was created, clean it up
+            if pandoc_failed and pdf_path.exists():
+                pdf_path.unlink()
+            # Re-raise the exception - PDF will be handled by auto-move feature
+            raise
+
+
 class TextExtractor:
     """Extracts text from various file formats"""
 
     def __init__(self, config=default_config):
         self.config = config
         self.extractors = self._build_extractors()
+        self.last_method = None  # Track which method was used
 
     def extract(self, file_path: Path) -> List[Tuple[str, int]]:
         """Extract text based on file extension"""
         ext = file_path.suffix.lower()
         self._validate_extension(ext)
+
+        # Track which extraction method is being used
+        method_map = {
+            '.pdf': 'docling_hybrid',
+            '.docx': 'docling_hybrid',
+            '.epub': 'epub_pandoc_docling',
+            '.md': 'semantic_markdown',
+            '.markdown': 'semantic_markdown',
+            '.txt': 'semantic_text'
+        }
+        self.last_method = method_map.get(ext, 'unknown')
+
         return self.extractors[ext](file_path)
+
+    def get_last_method(self) -> str:
+        """Get the last extraction method used"""
+        return self.last_method or 'unknown'
 
     def _build_extractors(self) -> Dict:
         """Map extensions to extractors - Docling only, no fallbacks"""
-        print("Using Docling + HybridChunker for PDF/DOCX, semantic chunking for MD/TXT")
+        print("Using Docling + HybridChunker for PDF/DOCX/EPUB, semantic chunking for MD/TXT")
         return {
             '.pdf': DoclingExtractor.extract,
             '.docx': DoclingExtractor.extract,
+            '.epub': EpubExtractor.extract,
             '.md': MarkdownExtractor.extract,
             '.markdown': MarkdownExtractor.extract,
             '.txt': TextFileExtractor.extract
@@ -488,7 +727,7 @@ class DocumentProcessor:
     """Coordinates document processing"""
 
     SUPPORTED_EXTENSIONS = {
-        '.pdf', '.txt', '.md', '.markdown', '.docx'
+        '.pdf', '.txt', '.md', '.markdown', '.docx', '.epub'
     }
 
     def __init__(self, progress_tracker: Optional[ProcessingProgressTracker] = None):
@@ -515,18 +754,57 @@ class DocumentProcessor:
     def _process_with_resume(self, path: Path) -> List[Dict]:
         """Process with resumable tracking"""
         try:
+            # Check if file exists (may have been moved during EPUB processing)
+            if not path.exists():
+                print(f"Skipping (file not found): {path.name}")
+                return []
+
             file_hash = self.get_file_hash(path)
             progress = self.tracker.get_progress(str(path))
             if self._is_completed(progress, file_hash):
                 print(f"Skipping completed: {path.name}")
                 return []
             return self._do_resumable_process(path, file_hash)
-        except Exception as e:
-            self.tracker.mark_failed(str(path), str(e))
-            print(f"Error processing: {path.name}: {e}")
-            import traceback
-            traceback.print_exc()
+        except FileNotFoundError:
+            # File was moved during processing (e.g., EPUB moved to original/)
+            print(f"Skipping (file moved): {path.name}")
             return []
+        except Exception as e:
+            error_msg = str(e)
+            self.tracker.mark_failed(str(path), error_msg)
+
+            # Auto-move problematic PDFs to problematic/ subdirectory
+            if isinstance(e, RuntimeError) and "PDF conversion failed" in error_msg:
+                self._move_to_problematic(path)
+
+            # Print clean error message (traceback only in verbose mode)
+            print(f"\n{'='*80}")
+            print(f"ERROR: Failed to process {path.name}")
+            print(f"{'='*80}")
+            print(error_msg)
+            print(f"{'='*80}\n")
+
+            # Only print traceback if it's not a user-friendly RuntimeError
+            if not isinstance(e, RuntimeError):
+                import traceback
+                traceback.print_exc()
+            return []
+
+    def _move_to_problematic(self, path: Path):
+        """Move problematic file to problematic/ subdirectory"""
+        import shutil
+
+        # Create problematic directory if it doesn't exist
+        problematic_dir = path.parent / 'problematic'
+        problematic_dir.mkdir(exist_ok=True)
+
+        # Move file
+        dest = problematic_dir / path.name
+        try:
+            shutil.move(str(path), str(dest))
+            print(f"→ Moved {path.name} to problematic/ subdirectory")
+        except Exception as move_error:
+            print(f"Warning: Could not move file to problematic/: {move_error}")
 
     def _is_completed(self, progress, file_hash: str) -> bool:
         """Check if file already completed"""
@@ -536,8 +814,9 @@ class DocumentProcessor:
         """Process with resume capability"""
         # Stage 1: Extract text
         extracted_items = self.extractor.extract(path)
+        extraction_method = self.extractor.get_last_method()
         total_chars = sum(len(text) for text, _ in extracted_items)
-        print(f"Extraction complete: {path.name} - {total_chars:,} chars extracted")
+        print(f"Extraction complete ({extraction_method}): {path.name} - {total_chars:,} chars extracted")
 
         all_chunks = []
 
@@ -548,6 +827,10 @@ class DocumentProcessor:
             )
             enriched = self._enrich_chunks(chunks, path)
             all_chunks.extend(enriched)
+
+        # Store extraction method in chunks for later database insertion
+        for chunk in all_chunks:
+            chunk['_extraction_method'] = extraction_method
 
         print(f"Chunking complete: {path.name} - {len(all_chunks)} chunks created")
         return all_chunks
@@ -563,7 +846,14 @@ class DocumentProcessor:
     def _do_process(self, path: Path) -> List[Dict]:
         """Perform processing"""
         extracted_items = self.extractor.extract(path)
-        return self._process_pages(extracted_items, path)
+        extraction_method = self.extractor.get_last_method()
+        chunks = self._process_pages(extracted_items, path)
+
+        # Store extraction method in chunks for later database insertion
+        for chunk in chunks:
+            chunk['_extraction_method'] = extraction_method
+
+        return chunks
 
     def _process_pages(self, pages: List, path: Path) -> List[Dict]:
         """Process extracted pages"""
@@ -660,9 +950,19 @@ class SchemaManager:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 file_path TEXT UNIQUE NOT NULL,
                 file_hash TEXT NOT NULL,
-                indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                extraction_method TEXT
             )
         """)
+
+        # Migration: Add extraction_method column if it doesn't exist
+        try:
+            self.conn.execute("""
+                ALTER TABLE documents ADD COLUMN extraction_method TEXT
+            """)
+            print("Migration: Added extraction_method column to documents table")
+        except Exception:
+            pass  # Column already exists
 
     def _create_chunks_table(self):
         """Create chunks table"""
@@ -748,11 +1048,25 @@ class VectorRepository:
         )
         return cursor.fetchone()
 
+    def get_extraction_method(self, path: str) -> str:
+        """Get extraction method used for a document"""
+        cursor = self.conn.execute(
+            "SELECT extraction_method FROM documents WHERE file_path = ?",
+            (path,)
+        )
+        result = cursor.fetchone()
+        return result[0] if result and result[0] else 'unknown'
+
     def add_document(self, path: str, hash_val: str,
                     chunks: List[Dict], embeddings: List) -> int:
         """Add document with chunks"""
+        # Extract extraction_method from first chunk if available
+        extraction_method = None
+        if chunks and '_extraction_method' in chunks[0]:
+            extraction_method = chunks[0]['_extraction_method']
+
         self._delete_old(path)
-        doc_id = self._insert_doc(path, hash_val)
+        doc_id = self._insert_doc(path, hash_val, extraction_method)
         self._insert_chunks(doc_id, chunks, embeddings)
         self.conn.commit()
         return doc_id
@@ -764,11 +1078,11 @@ class VectorRepository:
             (path,)
         )
 
-    def _insert_doc(self, path: str, hash_val: str) -> int:
+    def _insert_doc(self, path: str, hash_val: str, extraction_method: str = None) -> int:
         """Insert document record"""
         cursor = self.conn.execute(
-            "INSERT INTO documents (file_path, file_hash) VALUES (?, ?)",
-            (path, hash_val)
+            "INSERT INTO documents (file_path, file_hash, extraction_method) VALUES (?, ?, ?)",
+            (path, hash_val, extraction_method)
         )
         return cursor.lastrowid
 
@@ -916,6 +1230,27 @@ class VectorStore:
     def get_stats(self) -> Dict:
         """Get statistics"""
         return self.repo.get_stats()
+
+    def get_document_info(self, filename: str) -> Dict:
+        """Get document information including extraction method"""
+        # Search for file path containing the filename
+        cursor = self.conn.execute("""
+            SELECT file_path, extraction_method, indexed_at
+            FROM documents
+            WHERE file_path LIKE ?
+            ORDER BY indexed_at DESC
+            LIMIT 1
+        """, (f"%{filename}%",))
+        result = cursor.fetchone()
+
+        if not result:
+            return None
+
+        return {
+            'file_path': result[0],
+            'extraction_method': result[1] or 'unknown',
+            'indexed_at': result[2]
+        }
 
     def close(self):
         """Close connection"""

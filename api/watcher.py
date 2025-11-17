@@ -66,7 +66,7 @@ class FileChangeCollector:
 class DocumentEventHandler(FileSystemEventHandler):
     """Handles file system events for documents"""
 
-    SUPPORTED_EXTENSIONS = {'.pdf', '.md', '.txt', '.docx'}
+    SUPPORTED_EXTENSIONS = {'.pdf', '.md', '.txt', '.docx', '.epub'}
 
     def __init__(self, collector: FileChangeCollector, timer: DebounceTimer):
         self.collector = collector
@@ -92,13 +92,23 @@ class DocumentEventHandler(FileSystemEventHandler):
     def _handle_change(self, file_path: str):
         """Process file change event"""
         path = Path(file_path)
-        if self._is_supported(path):
+        if self._is_supported(path) and not self._is_excluded(path):
             self.collector.add(path)
             self.timer.trigger()
 
     def _is_supported(self, path: Path) -> bool:
         """Check if file type is supported"""
         return path.suffix.lower() in self.SUPPORTED_EXTENSIONS
+
+    def _is_excluded(self, path: Path) -> bool:
+        """Check if file path should be excluded from processing"""
+        # Exclude files in 'problematic' and 'original' subdirectories
+        if 'problematic' in path.parts or 'original' in path.parts:
+            return True
+        # Exclude temporary files created during processing
+        if '.tmp.pdf' in path.name or '.gs_tmp.pdf' in path.name:
+            return True
+        return False
 
 
 class IndexingCoordinator:

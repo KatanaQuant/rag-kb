@@ -10,7 +10,8 @@ from sentence_transformers import SentenceTransformer
 
 from models import (
     QueryRequest, QueryResponse, SearchResult,
-    HealthResponse, IndexRequest, IndexResponse
+    HealthResponse, IndexRequest, IndexResponse,
+    DocumentInfoResponse
 )
 from ingestion import DocumentProcessor, VectorStore, ProcessingProgressTracker
 from config import default_config
@@ -62,7 +63,7 @@ class FileWalker:
     def _walk_files(self):
         """Walk all files"""
         for file_path in self.base_path.rglob("*"):
-            if self._is_supported(file_path):
+            if self._is_supported(file_path) and not self._is_excluded(file_path):
                 yield file_path
 
     def _is_supported(self, path: Path) -> bool:
@@ -70,6 +71,16 @@ class FileWalker:
         if not path.is_file():
             return False
         return path.suffix.lower() in self.extensions
+
+    def _is_excluded(self, path: Path) -> bool:
+        """Check if file path should be excluded from processing"""
+        # Exclude files in 'problematic' and 'original' subdirectories
+        if 'problematic' in path.parts or 'original' in path.parts:
+            return True
+        # Exclude temporary files created during processing
+        if '.tmp.pdf' in path.name or '.gs_tmp.pdf' in path.name:
+            return True
+        return False
 
 
 class DocumentIndexer:
@@ -501,6 +512,20 @@ async def index(request: IndexRequest, background_tasks: BackgroundTasks):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail="Indexing failed")
+
+
+@app.get("/document/{filename}", response_model=DocumentInfoResponse)
+async def get_document_info(filename: str):
+    """Get document information including extraction method"""
+    try:
+        info = state.vector_store.get_document_info(filename)
+        if not info:
+            raise HTTPException(status_code=404, detail=f"Document not found: {filename}")
+        return DocumentInfoResponse(**info)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to retrieve document info")
 
 
 def _do_reindex(force: bool) -> IndexResponse:

@@ -8,12 +8,13 @@ services:
       - "${RAG_PORT:-8000}:8000"
     volumes:
       - ./api:/app  # Hot-mount API code for development
-      - ./knowledge_base:/app/knowledge_base:ro
+      - ./knowledge_base:/app/knowledge_base
       - ./data:/app/data
       - ./.cache/deepsearch_glm:/app/.cache/deepsearch_glm  # DeepSearch GLM cache
       - ./.cache/docling:/home/appuser/.cache/docling  # Docling model cache
       - ./.cache/huggingface:/home/appuser/.cache/huggingface  # Hugging Face model cache (Docling models)
       - ./.cache/easyocr:/home/appuser/.EasyOCR  # EasyOCR model cache (detection models)
+      - ./.cache/rapidocr:/usr/local/lib/python3.11/site-packages/rapidocr/models  # RapidOCR model cache (OCR models)
     environment:
       - PYTHONUNBUFFERED=1
       - MODEL_NAME=${MODEL_NAME:-sentence-transformers/all-MiniLM-L6-v2}
