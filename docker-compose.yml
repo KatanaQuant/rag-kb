@@ -7,14 +7,29 @@ services:
     ports:
       - "${RAG_PORT:-8000}:8000"
     volumes:
+      - ./api:/app  # Hot-mount API code for development
       - ./knowledge_base:/app/knowledge_base:ro
       - ./data:/app/data
+      - ./.cache/deepsearch_glm:/app/.cache/deepsearch_glm  # DeepSearch GLM cache
+      - ./.cache/docling:/home/appuser/.cache/docling  # Docling model cache
+      - ./.cache/huggingface:/home/appuser/.cache/huggingface  # Hugging Face model cache (Docling models)
+      - ./.cache/easyocr:/home/appuser/.EasyOCR  # EasyOCR model cache (detection models)
     environment:
       - PYTHONUNBUFFERED=1
       - MODEL_NAME=${MODEL_NAME:-sentence-transformers/all-MiniLM-L6-v2}
+      - BATCH_SIZE=${BATCH_SIZE:-5}
+      - BATCH_DELAY=${BATCH_DELAY:-0.5}
+      - USE_DOCLING=${USE_DOCLING:-true}  # Enable Docling PDF extraction (default)
+      - SEMANTIC_CHUNKING=${SEMANTIC_CHUNKING:-true}  # Enable semantic chunking (default)
+      - CHUNK_MAX_TOKENS=${CHUNK_MAX_TOKENS:-512}  # Max tokens per semantic chunk
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '${MAX_CPUS:-8.0}'
+          memory: ${MAX_MEMORY:-16G}

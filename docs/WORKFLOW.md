@@ -1,5 +1,69 @@
 # Code Analysis Workflow
 
+## Development Workflow: Testing Without Disrupting Production
+
+### IMPORTANT: Always Use Test Instance for Changes
+
+When testing new features, upgrades, or configurations:
+
+**DO:**
+```bash
+# Start isolated test instance on port 8001
+./test-docling-instance.sh start
+
+# Test your changes
+cp test-files/*.pdf knowledge_base_test/
+./test-docling-instance.sh reindex
+./test-docling-instance.sh query "test query"
+
+# Stop when done
+./test-docling-instance.sh stop
+```
+
+**DON'T:**
+```bash
+# NEVER directly rebuild production while testing
+docker-compose down  # ← This kills your working instance!
+docker-compose up --build
+```
+
+### Why This Matters
+
+| Aspect | Production | Test Instance |
+|--------|-----------|---------------|
+| Port | 8000 | 8001 |
+| Database | `data/` (live data) | `data_test/` (disposable) |
+| Knowledge Base | `knowledge_base/` (your real content) | `knowledge_base_test/` (test files) |
+| Uptime | **Must stay running** | Can break/restart freely |
+
+### Example: Testing Docling Integration
+
+```bash
+# 1. Start test instance
+./test-docling-instance.sh start
+
+# 2. Add test PDF
+cp ~/complex-document.pdf knowledge_base_test/
+
+# 3. Index with new Docling extractor
+./test-docling-instance.sh reindex
+
+# 4. Compare quality
+# Old (pypdf): curl localhost:8000/query -d '{"text": "table data"}'
+# New (Docling): ./test-docling-instance.sh query "table data"
+
+# 5. If satisfied, migrate to production
+./test-docling-instance.sh stop
+docker-compose down
+docker-compose up --build -d
+```
+
+### Quick Reference
+
+See [TEST_INSTANCE.md](../TEST_INSTANCE.md) for full test instance documentation.
+
+---
+
 ## Use Case 1: Reverse Engineering Existing Code
 
 ### Goal

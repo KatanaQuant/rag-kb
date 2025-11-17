@@ -4,13 +4,13 @@ This release adds **configurable embedding models** with a focus on **Snowflake 
 
 ## What's New
 
-- ✨ **Arctic Embed 2.0-L** support (1024 dimensions, best quality)
-- ✨ **Arctic Embed 2.0-M** support (768 dimensions, balanced)
+- **Arctic Embed 2.0-L** support (1024 dimensions, best quality)
+- **Arctic Embed 2.0-M** support (768 dimensions, balanced)
 - ⚙️ **Configurable model selection** via `.env` file
-- 🎯 **Dynamic embedding dimensions** - automatically set based on model
+- **Dynamic embedding dimensions** - automatically set based on model
 - 📚 Support for **BGE** and **EmbeddingGemma** models from roadmap
 - 🚀 **Docker optimization**: CPU-only PyTorch (~50% smaller images, 60% faster builds)
-- 🔧 **Bug fixes**: PyTorch 2.5.1 compatibility with latest transformers
+- **Bug fixes**: PyTorch 2.5.1 compatibility with latest transformers
 
 ## Model Comparison
 
@@ -23,7 +23,7 @@ This release adds **configurable embedding models** with a focus on **Snowflake 
 
 ## Breaking Changes
 
-⚠️ **Database Format Change**: Different embedding dimensions require re-indexing your knowledge base.
+**Database Format Change**: Different embedding dimensions require re-indexing your knowledge base.
 
 **If upgrading from v0.1.0**:
 - Vector database must be rebuilt when switching models
@@ -31,7 +31,7 @@ This release adds **configurable embedding models** with a focus on **Snowflake 
 - First-time model download - Arctic Embed 2.0-L is ~1.2GB
 - Docker images now use CPU-only PyTorch (saves ~520MB)
 
-📖 **[Migration Guide](https://github.com/KatanaQuant/rag-kb/blob/main/docs/MIGRATION_v0.1_to_v0.2.md)** - Step-by-step instructions with rollback procedures
+**[Migration Guide](https://github.com/KatanaQuant/rag-kb/blob/main/docs/MIGRATION_v0.1_to_v0.2.md)** - Step-by-step instructions with rollback procedures
 
 ## Quick Start (New Users)
 
@@ -101,7 +101,7 @@ See the [Migration Guide](https://github.com/KatanaQuant/rag-kb/blob/main/docs/M
 
 ## Status
 
-⚠️ **Early Alpha**: Breaking changes expected in future releases.
+**Early Alpha**: Breaking changes expected in future releases.
 
 ## Support
 

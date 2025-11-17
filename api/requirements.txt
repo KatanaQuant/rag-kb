@@ -1,6 +1,6 @@
-fastapi==0.109.0
-uvicorn[standard]==0.27.0
-pydantic==2.5.3
+fastapi>=0.115.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.7.0
 
 # CPU-only PyTorch (avoid 700MB+ CUDA downloads)
 --extra-index-url https://download.pytorch.org/whl/cpu
@@ -9,14 +9,20 @@ torchvision==0.20.1+cpu
 
 # Sentence transformers (will use CPU torch above)
 sentence-transformers>=3.0.0
+transformers>=4.30.0
 
 # Vector database
 sqlite-vec==0.1.1
 
 # Document processing
 pypdf==4.0.1
-python-docx==1.1.0
+python-docx>=1.1.2
 markdown==3.5.2
 python-multipart==0.0.9
 watchdog==4.0.0
-numpy==1.26.3
+numpy>=1.26.4,<2.0.0
+
+# Advanced document parsing (default)
+# Note: Docling has heavy dependencies, install takes 3-5 min
+# Note: HybridChunker available in docling-core 2.8.0+ (requires docling 2.9.0+)
+docling>=2.9.0

@@ -94,7 +94,7 @@ If your RAG API runs on a different port:
       "command": "node",
       "args": ["/path/to/mcp-server/index.js"],
       "env": {
-        "RAG_API_URL": "http://localhost:8001"
+        "RAG_API_URL": "http://localhost:8000"
       }
     }
   }

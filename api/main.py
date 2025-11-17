@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import List
@@ -11,7 +12,7 @@ from models import (
     QueryRequest, QueryResponse, SearchResult,
     HealthResponse, IndexRequest, IndexResponse
 )
-from ingestion import DocumentProcessor, VectorStore
+from ingestion import DocumentProcessor, VectorStore, ProcessingProgressTracker
 from config import default_config
 from watcher import FileWatcherService
 from query_cache import QueryCache
@@ -26,6 +27,9 @@ class AppState:
         self.processor = None
         self.watcher = None
         self.cache = None
+        self.progress_tracker = None
+        self.indexing_in_progress = False
+        self.indexing_stats = {"files": 0, "chunks": 0}
 
 
 # Global state
@@ -122,10 +126,12 @@ class DocumentIndexer:
 
     def _store_chunks(self, path: Path, chunks: List):
         """Store chunks with embeddings"""
+        print(f"Embedding started: {path.name} - {len(chunks)} chunks")
         embeddings = self._gen_embeddings(chunks)
+        print(f"Embedding complete: {path.name} - {len(chunks)} chunks embedded")
         hash_val = self.processor.get_file_hash(path)
         self._add_to_store(path, hash_val, chunks, embeddings)
-        print(f"Indexed {path.name}: {len(chunks)} chunks")
+        print(f"Indexed {path.name}: {len(chunks)} chunks stored")
 
     def _gen_embeddings(self, chunks: List) -> List:
         """Generate embeddings"""
@@ -146,15 +152,43 @@ class DocumentIndexer:
 class IndexOrchestrator:
     """Orchestrates full indexing process"""
 
-    def __init__(self, base_path: Path, indexer, processor):
+    def __init__(self, base_path: Path, indexer, processor, progress_tracker=None):
         self.base_path = base_path
         self.indexer = indexer
         self.walker = self._create_walker(base_path, processor)
+        self.tracker = progress_tracker
 
     @staticmethod
     def _create_walker(base_path, processor):
         """Create file walker"""
         return FileWalker(base_path, processor.SUPPORTED_EXTENSIONS)
+
+    def resume_incomplete_processing(self):
+        """Resume processing incomplete files"""
+        if not self.tracker:
+            return
+        incomplete = self.tracker.get_incomplete_files()
+        if not incomplete:
+            return
+        print(f"Resuming {len(incomplete)} incomplete files...")
+        self._process_incomplete(incomplete)
+
+    def _process_incomplete(self, incomplete):
+        """Process incomplete files"""
+        for progress in incomplete:
+            self._resume_one(progress)
+
+    def _resume_one(self, progress):
+        """Resume one file"""
+        try:
+            file_path = Path(progress.file_path)
+            if not file_path.exists():
+                self.tracker.mark_failed(progress.file_path, "File no longer exists")
+                return
+            self.indexer.index_file(file_path, force=True)
+        except Exception as e:
+            print(f"Failed to resume {progress.file_path}: {e}")
+            self.tracker.mark_failed(progress.file_path, str(e))
 
     def index_all(self, force: bool = False) -> tuple[int, int]:
         """Index all documents"""
@@ -168,12 +202,22 @@ class IndexOrchestrator:
         return 0, 0
 
     def _index_files(self, force: bool) -> tuple[int, int]:
-        """Index all files"""
+        """Index all files with batch processing"""
         indexed_files = 0
         total_chunks = 0
+        file_count = 0
+        batch_size = default_config.batch.size
+        batch_delay = default_config.batch.delay
+
         for file_path in self.walker.walk():
             files, chunks = self._index_one(file_path, force, indexed_files, total_chunks)
             indexed_files, total_chunks = files, chunks
+            file_count += 1
+
+            # Add delay after each batch to prevent resource spikes
+            if file_count % batch_size == 0:
+                time.sleep(batch_delay)
+
         return indexed_files, total_chunks
 
     def _index_one(self, path, force, files, chunks):
@@ -272,11 +316,12 @@ class StartupManager:
         print("Initializing RAG system...")
         self._load_model()
         self._init_store()
+        self._init_progress_tracker()
         self._init_processor()
         self._init_cache()
-        self._index_docs()
-        self._start_watcher()
-        print("RAG system ready!")
+        self._resume_incomplete()
+        print("RAG system ready! Starting background indexing...")
+        self._start_background_indexing()
 
     def _load_model(self):
         """Load embedding model"""
@@ -289,9 +334,16 @@ class StartupManager:
         print("Initializing vector store...")
         self.state.vector_store = VectorStore()
 
+    def _init_progress_tracker(self):
+        """Initialize progress tracker"""
+        if default_config.processing.enabled:
+            db_path = default_config.database.path
+            self.state.progress_tracker = ProcessingProgressTracker(db_path)
+            print("Resumable processing enabled")
+
     def _init_processor(self):
         """Initialize processor"""
-        self.state.processor = DocumentProcessor()
+        self.state.processor = DocumentProcessor(self.state.progress_tracker)
 
     def _init_cache(self):
         """Initialize query cache"""
@@ -300,6 +352,13 @@ class StartupManager:
             print(f"Query cache enabled (size: {default_config.cache.max_size})")
         else:
             print("Query cache disabled")
+
+    def _resume_incomplete(self):
+        """Resume incomplete processing"""
+        if not self.state.progress_tracker:
+            return
+        orchestrator = self._create_orchestrator()
+        orchestrator.resume_incomplete_processing()
 
     def _index_docs(self):
         """Index documents"""
@@ -313,13 +372,14 @@ class StartupManager:
         """Run indexing process"""
         orchestrator = self._create_orchestrator()
         files, chunks = orchestrator.index_all()
+        self.state.indexing_stats = {"files": files, "chunks": chunks}
         print(f"Indexed {files} docs, {chunks} chunks")
 
     def _create_orchestrator(self):
         """Create orchestrator"""
         indexer = self._create_indexer()
         kb_path = default_config.paths.knowledge_base
-        return IndexOrchestrator(kb_path, indexer, self.state.processor)
+        return IndexOrchestrator(kb_path, indexer, self.state.processor, self.state.progress_tracker)
 
     def _create_indexer(self):
         """Create indexer"""
@@ -328,6 +388,24 @@ class StartupManager:
             self.state.model,
             self.state.vector_store
         )
+
+    def _start_background_indexing(self):
+        """Start indexing in background thread"""
+        import threading
+        thread = threading.Thread(target=self._background_indexing_task, daemon=True)
+        thread.start()
+
+    def _background_indexing_task(self):
+        """Background task for indexing and watcher startup"""
+        # Start watcher first so system is responsive immediately
+        self._start_watcher()
+
+        # Then do indexing in background
+        self.state.indexing_in_progress = True
+        try:
+            self._index_docs()
+        finally:
+            self.state.indexing_in_progress = False
 
     def _start_watcher(self):
         """Start file watcher if enabled"""
@@ -360,6 +438,8 @@ def _cleanup():
         state.watcher.stop()
     if state.vector_store:
         state.vector_store.close()
+    if state.progress_tracker:
+        state.progress_tracker.close()
 
 
 app = FastAPI(
@@ -396,7 +476,8 @@ async def health():
         status="healthy",
         indexed_documents=stats['indexed_documents'],
         total_chunks=stats['total_chunks'],
-        model=default_config.model.name
+        model=default_config.model.name,
+        indexing_in_progress=state.indexing_in_progress
     )
 
 
@@ -442,7 +523,7 @@ def _build_indexer():
 def _build_orchestrator(indexer):
     """Build orchestrator"""
     kb_path = default_config.paths.knowledge_base
-    return IndexOrchestrator(kb_path, indexer, state.processor)
+    return IndexOrchestrator(kb_path, indexer, state.processor, state.progress_tracker)
 
 
 def _build_response(files: int, chunks: int) -> IndexResponse:

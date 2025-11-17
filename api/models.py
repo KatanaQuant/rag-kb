@@ -27,6 +27,7 @@ class HealthResponse(BaseModel):
     indexed_documents: int
     total_chunks: int
     model: str
+    indexing_in_progress: bool
 
 
 class IndexRequest(BaseModel):

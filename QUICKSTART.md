@@ -82,7 +82,7 @@ scp rag-migration.tar.gz user@new-machine:~/
 # New machine:
 tar -xzf rag-migration.tar.gz
 docker-compose up --build -d
-# ✅ All indexed content ready immediately!
+# All indexed content ready immediately!
 ```
 
 ---

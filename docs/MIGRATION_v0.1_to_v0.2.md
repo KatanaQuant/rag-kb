@@ -3,7 +3,7 @@
 **Release Date**: 2025-11-14
 **Estimated Time**: 10-15 minutes (plus model download time)
 **Difficulty**: Easy
-**Status**: ✅ Tested and validated
+**Status**: Tested and validated
 
 ---
 
@@ -13,13 +13,13 @@ v0.2.0-alpha adds **multi-model embedding support** with a focus on **Snowflake 
 
 ### What's New
 
-- ✨ **Arctic Embed 2.0-L** support (1024 dimensions, best quality)
-- ✨ **Arctic Embed 2.0-M** support (768 dimensions, balanced)
+- **Arctic Embed 2.0-L** support (1024 dimensions, best quality)
+- **Arctic Embed 2.0-M** support (768 dimensions, balanced)
 - ⚙️ **Configurable model selection** via `.env` file
-- 🎯 **Dynamic embedding dimensions** - automatically set based on model
+- **Dynamic embedding dimensions** - automatically set based on model
 - 📚 Support for **BGE** and **EmbeddingGemma** models from roadmap
 - 🚀 **Docker optimization**: CPU-only PyTorch (~50% smaller images, 60% faster builds)
-- 🔧 **Bug fixes**: PyTorch 2.5.1 compatibility with latest transformers
+- **Bug fixes**: PyTorch 2.5.1 compatibility with latest transformers
 
 ### Model Comparison
 
@@ -34,7 +34,7 @@ v0.2.0-alpha adds **multi-model embedding support** with a focus on **Snowflake 
 
 ## Breaking Changes
 
-⚠️ **Database Format Change**: Different embedding dimensions require re-indexing your knowledge base.
+**Database Format Change**: Different embedding dimensions require re-indexing your knowledge base.
 
 1. **Vector database must be rebuilt** when switching models
 2. **Your documents stay safe** - only the vector embeddings change (documents in `knowledge_base/` are untouched)
@@ -108,7 +108,7 @@ MODEL_NAME=BAAI/bge-base-en-v1.5   # 768 dim
 
 ### Step 4: Remove Old Database
 
-⚠️ **Only do this after backing up in Step 1!**
+**Only do this after backing up in Step 1!**
 
 ```bash
 # Remove old database (it's incompatible with new model dimensions)
@@ -128,9 +128,9 @@ docker-compose logs -f rag-api
 **What to expect:**
 
 **Build phase (~2-4 minutes):**
-- ✅ CPU-only PyTorch download (~185MB, not 706MB CUDA!)
-- ✅ Python dependencies installation
-- ✅ Docker image creation (~1GB final size)
+- CPU-only PyTorch download (~185MB, not 706MB CUDA!)
+- Python dependencies installation
+- Docker image creation (~1GB final size)
 
 **Startup phase (~2-5 minutes, first time only):**
 - Model download: Arctic Embed 2.0-L (~1.2GB, cached for future use)

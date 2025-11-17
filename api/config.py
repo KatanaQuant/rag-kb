@@ -14,6 +14,7 @@ MODEL_DIMENSIONS = {
     "google/embeddinggemma-300m": 768,
     "BAAI/bge-large-en-v1.5": 1024,
     "BAAI/bge-base-en-v1.5": 768,
+    "sentence-transformers/static-retrieval-mrl-en-v1": 1024,  # Static embedding, 100-400x faster on CPU
 }
 
 
@@ -23,6 +24,8 @@ class ChunkConfig:
     size: int = 1000
     overlap: int = 200
     min_size: int = 50
+    semantic: bool = True  # Use semantic chunking with Docling (HybridChunker)
+    max_tokens: int = 512  # Token limit for semantic chunks
 
 
 @dataclass
@@ -67,6 +70,28 @@ class CacheConfig:
 
 
 @dataclass
+class BatchConfig:
+    """Batch processing configuration for resource management"""
+    size: int = 5
+    delay: float = 0.5
+
+
+@dataclass
+class DoclingConfig:
+    """Docling PDF extraction configuration"""
+    enabled: bool = True  # Default to advanced PDF extraction
+
+
+@dataclass
+class ProcessingConfig:
+    """Resumable processing configuration"""
+    enabled: bool = True
+    batch_size: int = 50
+    max_retries: int = 3
+    cleanup_completed: bool = False
+
+
+@dataclass
 class Config:
     """Main configuration container"""
     chunks: ChunkConfig
@@ -75,6 +100,9 @@ class Config:
     paths: PathConfig
     watcher: WatcherConfig
     cache: CacheConfig
+    batch: BatchConfig
+    docling: DoclingConfig
+    processing: ProcessingConfig
 
     @classmethod
     def from_env(cls) -> 'Config':
@@ -91,15 +119,35 @@ class Config:
             enabled=os.getenv("CACHE_ENABLED", "true").lower() == "true",
             max_size=int(os.getenv("CACHE_MAX_SIZE", "100"))
         )
+        batch = BatchConfig(
+            size=int(os.getenv("BATCH_SIZE", "5")),
+            delay=float(os.getenv("BATCH_DELAY", "0.5"))
+        )
+        docling = DoclingConfig(
+            enabled=os.getenv("USE_DOCLING", "true").lower() == "true"
+        )
+        processing = ProcessingConfig(
+            enabled=os.getenv("RESUMABLE_PROCESSING", "true").lower() == "true",
+            batch_size=int(os.getenv("PROCESSING_BATCH_SIZE", "50")),
+            max_retries=int(os.getenv("PROCESSING_MAX_RETRIES", "3")),
+            cleanup_completed=os.getenv("CLEANUP_COMPLETED_PROGRESS", "false").lower() == "true"
+        )
+        chunks = ChunkConfig(
+            semantic=os.getenv("SEMANTIC_CHUNKING", "true").lower() == "true",
+            max_tokens=int(os.getenv("CHUNK_MAX_TOKENS", "512"))
+        )
         return cls(
-            chunks=ChunkConfig(),
+            chunks=chunks,
             database=DatabaseConfig(
                 embedding_dim=model.get_embedding_dim()
             ),
             model=model,
             paths=PathConfig(),
             watcher=watcher,
-            cache=cache
+            cache=cache,
+            batch=batch,
+            docling=docling,
+            processing=processing
         )
 
 

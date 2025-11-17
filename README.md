@@ -8,7 +8,15 @@
 
 Built with FastAPI, sqlite-vec, and sentence-transformers.
 
-**Current Version**: v0.4.0-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
+**Current Version**: v0.5.0-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
+
+> **CPU-Only Build**: This project is optimized exclusively for CPU processing. No GPU required or supported. Large knowledge bases may take significant time to index:
+>
+> - **Small KB** (10-50 docs): Minutes to hours
+> - **Medium KB** (100-500 docs): Hours to overnight
+> - **Large KB** (500+ docs): Days to weeks
+>
+> **Performance Recommendation**: For English-only content, use `sentence-transformers/static-retrieval-mrl-en-v1` model for 100-400x faster processing with minimal quality trade-off. See [Embedding Models](#embedding-models) section.
 
 ---
 
@@ -17,7 +25,7 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 - [Features](#features)
 - [Architecture](#architecture)
 - [Quick Start](#quick-start)
-- [VSCode/Claude Code Integration](#vscodeclaude-code-integration)
+- [Claude Code Integration (VSCode)](#claude-code-integration-vscode)
 - [Content Ingestion](#content-ingestion)
 - [Usage](#usage)
 - [Development & Testing](#development--testing)
@@ -29,15 +37,18 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 
 ## Features
 
+- **Semantic Chunking**: Token-aware chunking with HybridChunker preserves paragraphs, sections, and tables
+- **Advanced PDF Processing**: Docling integration with OCR support, table extraction, and layout preservation
+- **Resumable Processing**: Checkpoint-based processing resumes from last position after interruptions
 - **Hybrid Search**: Combines vector similarity + keyword search for 10-30% better accuracy
 - **Intelligent Caching**: LRU cache for instant repeat queries
 - **Semantic Search**: Natural language queries across all your documents
 - **100% Local**: No external APIs, complete privacy
 - **Auto-Sync**: Automatically detects and indexes new/modified files in real-time
-- **Multiple Formats**: PDF, Markdown, TXT, DOCX, Obsidian vaults, code repositories
+- **Multiple Formats**: PDF, DOCX (Docling + HybridChunker), Markdown, TXT (semantic chunking)
 - **Token Efficient**: Returns only relevant chunks (~3-5K tokens vs 100K+ for full files)
 - **Docker-Based**: Runs anywhere Docker runs
-- **MCP Integration**: Built-in server for Claude Code/VSCode
+- **MCP Integration**: Built-in server for IDE integration
 - **Portable**: Single SQLite database file - easy to backup and migrate
 
 ---
@@ -48,7 +59,7 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Claude Code / VSCode                      │
+│                         VSCode / IDE                         │
 └──────────────────────────┬──────────────────────────────────┘
                            │ MCP Protocol
                            ↓
@@ -68,9 +79,8 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 ┌─────────────────────────────────────────────────────────────┐
 │              Knowledge Base (File System)                    │
 │  knowledge_base/          data/                              │
-│  ├── books/              └── knowledge_base.db               │
-│  ├── code/                                                   │
-│  ├── obsidian/                                               │
+│  ├── books/              └── rag.db               │
+│  ├── docs/                                                   │
 │  └── notes/                                                  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -79,7 +89,7 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 
 1. **Ingestion**: Files → Text Extraction → Chunking → Embedding → SQLite
 2. **Query**: Question → Embedding → Vector Search → Top Results → Response
-3. **MCP**: Claude queries via MCP → API processes → Results returned
+3. **MCP**: IDE queries via MCP → API processes → Results returned
 
 ---
 
@@ -98,20 +108,15 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 git clone https://github.com/KatanaQuant/rag-kb.git
 cd rag-kb
 
-# Checkout latest stable release (recommended)
-git checkout v0.3.0-alpha
-
-# Or stay on main for latest features (may have bugs)
-# git checkout main
+# Checkout latest stable release
+git checkout v0.5.0-alpha
 
 # Optional: Change port if 8000 is in use
 echo "RAG_PORT=8001" > .env
 
-# Optional: Use advanced embedding model (requires re-indexing, see below)
-# echo "MODEL_NAME=Snowflake/snowflake-arctic-embed-l-v2.0" >> .env
+# Optional: Use faster model for English-only content (recommended)
+echo "MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1" >> .env
 ```
-
-> **Upgrading from v0.1.0?** See [docs/MIGRATION_v0.1_to_v0.2.md](docs/MIGRATION_v0.1_to_v0.2.md)
 
 ### Step 1: Add Content
 
@@ -121,18 +126,17 @@ Create subdirectories and add your files:
 
 ```bash
 # Create organization structure (optional)
-mkdir -p knowledge_base/{books,notes,code,papers}
+mkdir -p knowledge_base/{books,notes,docs,papers}
 
 # Add some content
 cp ~/Documents/my-book.pdf knowledge_base/books/
+cp ~/Documents/*.md knowledge_base/docs/
 cp ~/notes/*.txt knowledge_base/notes/
 ```
 
-The service automatically indexes all supported files (PDF, TXT, DOCX, MD) when it starts.
+The service automatically indexes all supported files when it starts.
 
 **Note:** Your content stays local and private - it's never committed to git.
-
-**Other formats** (Obsidian vaults, code repositories, etc.) are supported via custom workflows - see [Advanced Workflows](#advanced-workflows) below.
 
 ### Step 2: Start the Service
 
@@ -140,7 +144,7 @@ The service automatically indexes all supported files (PDF, TXT, DOCX, MD) when 
 # Build and start
 docker-compose up --build -d
 
-# Wait ~30 seconds for indexing
+# Wait ~30 seconds for indexing (longer for large knowledge bases)
 # Check status
 curl http://localhost:8000/health
 ```
@@ -165,11 +169,11 @@ curl -X POST http://localhost:8000/query \
 
 ---
 
-## VSCode/Claude Code Integration
+## Claude Code Integration (VSCode)
 
-Use your knowledge base directly in VSCode with Claude Code extension.
+Use your knowledge base directly with Claude Code in VSCode via MCP (Model Context Protocol).
 
-**Note:** Currently tested with VSCode. Other IDE examples available on request.
+**Note:** This integration requires the Claude Code extension for VSCode. The MCP server allows Claude to query your indexed documents automatically.
 
 ### Setup (One-Time)
 
@@ -202,7 +206,7 @@ Edit `~/.claude.json` to enable for specific projects:
 }
 ```
 
-Or use Claude Code UI to approve when prompted.
+Or use the UI to approve when prompted.
 
 **4. Reload VSCode:**
 - `Ctrl+Shift+P` → "Developer: Reload Window"
@@ -214,16 +218,9 @@ Or use Claude Code UI to approve when prompted.
 # Should show: rag-kb - ✓ Connected
 ```
 
-### Using in Claude Code
+### Using Claude Code
 
-Claude automatically queries your knowledge base when relevant:
-
-```
-You: "What does the law of active management say?"
-
-Claude: [Calls query_knowledge_base MCP tool]
-Based on your indexed books, the law of active management states...
-```
+Claude can automatically query your knowledge base when relevant to answer questions about your indexed documents.
 
 ---
 
@@ -233,14 +230,15 @@ The RAG service automatically indexes files in `knowledge_base/` on startup. Sup
 
 ### Supported Formats
 
-**Direct Ingestion** (automatic):
-- **PDF**: `.pdf` files
-- **Text**: `.txt`, `.md` files
-- **Documents**: `.docx` files
+**PDF & DOCX** (Docling + HybridChunker):
+- **PDF** (`.pdf`): Docling 2.9.0 extraction with RapidOCR, table detection, and HybridChunker for token-aware semantic chunking
+- **DOCX** (`.docx`): Docling 2.9.0 extraction with HybridChunker for token-aware semantic chunking
 
-**Pre-processed Ingestion** (requires export scripts):
-- **Code repositories**: Use export scripts
-- **Obsidian vaults**: Use `ingest-obsidian.sh`
+**Markdown & Text** (Semantic Chunking):
+- **Markdown** (`.md`, `.markdown`): Semantic chunking with paragraph/section boundary preservation
+- **Text** (`.txt`): Semantic chunking with natural boundary detection
+
+**Why HybridChunker?** PDF/DOCX get advanced structure-aware chunking that preserves document semantics (tables, code blocks, sections) while filling chunks closer to the embedding model's token capacity (512 tokens). This provides 4x better token utilization and 40% fewer chunks compared to fixed-size chunking. See [docs/WHY_HYBRIDCHUNKER.md](docs/WHY_HYBRIDCHUNKER.md) for technical details.
 
 ### Simple Workflow
 
@@ -255,52 +253,13 @@ docker-compose restart rag-api
 curl http://localhost:8000/health
 ```
 
-### Advanced Workflows
-
-#### Obsidian Vault
-
-```bash
-# Simple ingestion (preserves wiki links, callouts, tags)
-./ingest-obsidian.sh ~/Documents/MyVault vault-name
-
-# Restart to index
-docker-compose restart rag-api
-```
-
-See [docs/OBSIDIAN_INTEGRATION.md](docs/OBSIDIAN_INTEGRATION.md) for details.
-
-#### Code Repositories
-
-Export code to Markdown for better semantic chunking:
-
-```bash
-# Simple export
-./export-codebase-simple.sh /path/to/project > knowledge_base/code/project.md
-
-# With directory tree
-./export-codebase.sh /path/to/project > knowledge_base/code/project-full.md
-
-# For analysis (with description)
-./export-for-analysis.sh /path/to/project "API server" > knowledge_base/code/api.md
-
-# Restart to index
-docker-compose restart rag-api
-```
-
-**Why pre-process code?**
-- Better semantic chunking (functions stay together)
-- Preserves file structure and context
-- Removes noise (binaries, dependencies)
-
-See [docs/CONTENT_SOURCES.md](docs/CONTENT_SOURCES.md) for more formats (Notion, Jupyter, Slack, etc).
-
 ---
 
 ## Usage
 
 ### Via Claude Code (Recommended)
 
-Just ask questions naturally. Claude automatically decides when to query your knowledge base.
+Ask Claude questions naturally in VSCode. Claude automatically decides when to query your knowledge base.
 
 ### Via Command Line
 
@@ -359,7 +318,7 @@ The codebase is organized into focused, testable modules:
 
 **[api/ingestion.py](api/ingestion.py)** - Document processing pipeline
 - Format extractors (PDF, DOCX, Markdown, Text)
-- Text chunking with configurable overlap
+- Semantic chunking with HybridChunker (token-aware, document-aware boundaries) or fixed-size chunking with configurable overlap
 - Vector storage and retrieval
 
 **[api/main.py](api/main.py)** - FastAPI application
@@ -406,6 +365,107 @@ docker-compose up --build -d
 curl http://localhost:8000/health
 ```
 
+### Testing New Models (Without Disrupting Production)
+
+The test instance infrastructure allows safe experimentation on port 8001 while production runs on port 8000.
+
+**Quick Test Workflow:**
+
+```bash
+# 1. Prepare clean test environment
+./test-docling-instance.sh nuke  # Remove old test data (prompts for confirmation)
+
+# 2. Add sample documents
+cp knowledge_base/some-file.md knowledge_base_test/
+# Or create fresh test content
+
+# 3. Start test instance with new model
+MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1 ./test-docling-instance.sh start
+
+# 4. Check health and stats
+./test-docling-instance.sh health
+
+# 5. Test queries
+./test-docling-instance.sh query "your test question"
+
+# 6. Compare with production
+./test-docling-instance.sh compare
+
+# 7. Monitor resource usage
+docker stats rag-api-test --no-stream
+
+# 8. Stop when done
+./test-docling-instance.sh stop
+```
+
+**Test Instance Commands:**
+
+```bash
+./test-docling-instance.sh start    # Start on port 8001
+./test-docling-instance.sh stop     # Stop test instance
+./test-docling-instance.sh logs     # View logs
+./test-docling-instance.sh health   # Check health status
+./test-docling-instance.sh query "text"  # Run test query
+./test-docling-instance.sh reindex  # Force reindex
+./test-docling-instance.sh clean    # Remove test DB (keeps KB files)
+./test-docling-instance.sh nuke     # Remove ALL test data
+./test-docling-instance.sh compare  # Compare prod vs test
+```
+
+### Model Migration Workflow (Zero-Downtime)
+
+Migrate to a new embedding model without disrupting the running production instance.
+
+**Step-by-Step Migration:**
+
+```bash
+# 1. Test new model first (see above)
+MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1 ./test-docling-instance.sh start
+./test-docling-instance.sh query "test queries..."
+# Verify quality meets requirements
+
+# 2. Backup production database
+cp data/rag.db data/rag.db.backup-$(date +%Y%m%d)
+
+# 3. Update production configuration
+echo "MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1" > .env
+
+# 4. Rebuild production with new model
+docker-compose down
+rm data/rag.db  # New model requires fresh index
+docker-compose up --build -d
+
+# 5. Monitor indexing progress
+docker-compose logs -f rag-api | grep -E "Indexed|chunks"
+
+# 6. Verify health
+curl http://localhost:8000/health | jq
+
+# 7. Test queries
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"text": "test query", "top_k": 3}' | jq
+
+# 8. Check resource usage
+docker stats rag-api --no-stream
+```
+
+**Rollback if needed:**
+
+```bash
+# Stop new model
+docker-compose down
+
+# Restore backup
+mv data/rag.db.backup-YYYYMMDD data/rag.db
+
+# Revert configuration
+git checkout .env  # Or manually set old MODEL_NAME
+
+# Restart with old model
+docker-compose up -d
+```
+
 ---
 
 ## Troubleshooting
@@ -442,8 +502,8 @@ curl -X POST http://localhost:8000/index \
 ### Poor Search Quality
 
 **1. Use specific queries:**
-- ❌ "python"
-- ✅ "python async await error handling patterns"
+- Bad: "python"
+- Good: "python async await error handling patterns"
 
 **2. Increase results:**
 ```bash
@@ -486,9 +546,84 @@ curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 ```
 
+### Slow Indexing Performance
+
+**CPU-only processing is slow by design.** For faster indexing:
+
+**Option 1: Use faster embedding model (recommended for English content)**
+```bash
+# Edit .env
+echo "MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1" > .env
+
+# Rebuild
+docker-compose down
+rm data/rag.db
+docker-compose up --build -d
+```
+
+**Option 2: Reduce resource usage**
+```bash
+# Edit .env for smaller batches
+echo "BATCH_SIZE=3" >> .env
+echo "BATCH_DELAY=1.0" >> .env
+docker-compose restart rag-api
+```
+
+**Option 3: Adjust resource limits**
+- See [Resource Limits](#resource-limits-recommended) section
+
 ---
 
 ## Advanced Configuration
+
+### Hardware Requirements
+
+**CPU-Only (Production-Ready):**
+- RAM: 4-8GB minimum (16GB recommended for large KB)
+- CPU: 2+ cores (4+ recommended)
+- Storage: 500MB + (2x knowledge base size)
+- Processing: 10-500 docs/hour depending on format and model choice
+
+**Recommended Setup:**
+- 8-16 CPU cores for faster parallel processing
+- 16GB RAM for comfortable large knowledge base indexing
+- SSD storage for faster database I/O
+
+**Note:** This project is CPU-only by design. No GPU support is planned.
+
+### Resource Limits (Recommended)
+
+To prevent system overload during large indexing operations, RAG-KB includes resource caps:
+
+**Configuration** (via `.env`):
+```bash
+MAX_CPUS=2.0          # Max CPU cores (default: 2.0)
+MAX_MEMORY=4G         # Max memory usage (default: 4G)
+BATCH_SIZE=5          # Files per batch (default: 5)
+BATCH_DELAY=0.5       # Delay between batches in seconds (default: 0.5)
+```
+
+**How it works**:
+- Docker resource limits prevent container from exceeding CPU/memory caps
+- Batch processing adds delays every N files to prevent resource spikes
+- Ideal for laptops and devices with limited resources
+
+**Adjust for your system**:
+```bash
+# Low-end device (2GB RAM, 2 cores)
+echo "MAX_MEMORY=2G" >> .env
+echo "MAX_CPUS=1.0" >> .env
+echo "BATCH_SIZE=3" >> .env
+
+# High-end device (16GB RAM, 8 cores)
+echo "MAX_MEMORY=8G" >> .env
+echo "MAX_CPUS=4.0" >> .env
+echo "BATCH_SIZE=10" >> .env
+echo "BATCH_DELAY=0.1" >> .env
+
+# Rebuild
+docker-compose up --build -d
+```
 
 ### Auto-Sync Configuration
 
@@ -509,8 +644,7 @@ WATCH_BATCH_SIZE=50                 # Max files per batch (default: 50)
 
 **Use cases**:
 - **Real-time**: Drop PDFs into `knowledge_base/books/` → indexed automatically
-- **Git operations**: `git pull` new code → changes detected and indexed
-- **Obsidian sync**: Notes update → immediately searchable
+- **Updates**: Modify existing files → changes detected and reindexed
 - **Bulk imports**: Copy 100 files → batched into efficient indexing
 
 **To disable auto-sync** (e.g., for manual control):
@@ -593,51 +727,98 @@ curl http://localhost:8000/health
 
 ### Embedding Models
 
-v0.2.0+ supports multiple embedding models for different quality/speed trade-offs.
+v0.2.0+ supports multiple embedding models for different quality/speed/resource trade-offs.
 
 **Available Models:**
 
-| Model | Dimensions | Quality | Speed | Use Case |
-|-------|-----------|---------|-------|----------|
-| all-MiniLM-L6-v2 (default) | 384 | Good | Fastest | Quick indexing, simple queries |
-| **Arctic Embed 2.0-L** | 1024 | **Best** | Slower | Multi-domain KB, best retrieval |
-| Arctic Embed 2.0-M | 768 | Excellent | Moderate | Balanced quality/speed |
-| BGE-large-en-v1.5 | 1024 | Excellent | Moderate | Alternative high-quality option |
-| BGE-base-en-v1.5 | 768 | Very Good | Fast | Lightweight high-quality |
+| Model | Dimensions | Memory | MTEB Score | Speed | Use Case |
+|-------|-----------|--------|------------|-------|----------|
+| all-MiniLM-L6-v2 | 384 | ~80MB | Good | Very Fast | Quick prototyping, simple queries |
+| **static-retrieval-mrl-en-v1** | 1024 | **~400MB** | ~87% of mpnet | **100-400x faster** | **CPU-optimized, English-only, recommended** |
+| Arctic Embed 2.0-M | 768 | ~450MB | 55.4 (Retrieval) | Very Fast | Balanced quality/speed |
+| Arctic Embed 2.0-L | 1024 | ~1.2GB | **55.6 (Retrieval)** | Fast | Best retrieval quality, multilingual |
+| BGE-base-en-v1.5 | 768 | ~450MB | Very Good | Fast | Lightweight alternative |
+| BGE-large-en-v1.5 | 1024 | ~1.3GB | 64.2 (Avg) / 54.3 (Retrieval) | Medium | Alternative high-quality option |
 
-**To use Arctic Embed 2.0-L (recommended for multi-domain knowledge bases):**
+**Recommended Configurations:**
+
+**CPU-Optimized (Recommended for v0.4):**
+```bash
+# 66% less memory, 100-400x faster, English-only, 13% quality trade-off
+MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1
+```
+
+**Production (Multilingual):**
+```bash
+# Best retrieval quality, multilingual, slower processing
+MODEL_NAME=Snowflake/snowflake-arctic-embed-l-v2.0
+```
+
+**To change models:**
 
 ```bash
 # Create/edit .env file
-echo "MODEL_NAME=Snowflake/snowflake-arctic-embed-l-v2.0" > .env
+echo "MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1" > .env
 
 # Rebuild with new model (requires re-indexing)
 docker-compose down
-rm data/knowledge_base.db
+rm data/rag.db
 docker-compose up --build -d
 ```
 
+**Model Tradeoffs:**
+
+| Factor | static-retrieval-mrl (Recommended) | Arctic 2.0-L |
+|--------|-----------------------------------|--------------|
+| **Quality** | Good (~87% of mpnet) | Excellent (55.6 MTEB Retrieval) |
+| **Speed** | 100-400x faster | Fast |
+| **Memory** | 400MB (66% less) | 1.2GB |
+| **Multilingual** | English only | Yes (100+ languages) |
+| **Use Case** | CPU builds, English content | Multilingual, GPU builds |
+
 **Performance Notes:**
 
-- **Arctic Embed 2.0-L**: +45% better retrieval on MTEB benchmarks, ideal for diverse content (code + books + notes)
-- **MiniLM-L6-v2**: Fastest option, good for single-domain or quick prototyping
-- **Model download**: Arctic models are ~1.2GB (one-time download, cached thereafter)
+- **static-retrieval-mrl**: Static embeddings (no neural network inference), extreme speed, minimal memory, ideal for CPU-only deployments
+- **Arctic Embed 2.0-L**: Best-in-class retrieval (55.6 MTEB), multilingual support, ideal for diverse content with GPU acceleration
+- **Model download**: Models download once and are cached thereafter
 - **Re-indexing required**: Different dimensions = incompatible database format
 
-See [Migration Guide](docs/MIGRATION_v0.1_to_v0.2.md) for detailed model comparison and upgrade instructions.
+For model testing and migration workflows, see [Development & Testing](#development--testing).
 
 ### Chunking Configuration
 
-Edit `api/config.py`:
+**HybridChunker (PDF/DOCX - Recommended):**
+
+The system uses HybridChunker for PDF and DOCX files, providing token-aware semantic chunking that preserves document structure while maximizing embedding model capacity utilization.
+
+**Configuration** (via `.env`):
+```bash
+SEMANTIC_CHUNKING=true        # Enable HybridChunker (default: true)
+CHUNK_MAX_TOKENS=512          # Match embedding model capacity (default: 512)
+USE_DOCLING=true              # Required for HybridChunker (default: true)
+```
+
+**Why HybridChunker?**
+- **4x better token utilization**: Fills chunks closer to 512-token embedding capacity (vs ~79 tokens with fixed-size)
+- **40% fewer chunks**: More efficient storage and faster retrieval
+- **Preserves semantics**: Keeps tables, code blocks, paragraphs, and sections intact
+- **Better retrieval quality**: Complete concepts improve relevance scores by 10-15%
+
+**Real-world example** (272-page technical book):
+- HybridChunker: 372 chunks averaging 324 tokens each
+- Fixed-size: ~1,623 chunks averaging 79 tokens each
+- Result: Same content, 77% fewer chunks, 4x better token usage
+
+**Markdown/Text Chunking:**
+
+For Markdown and text files, the system uses semantic chunking with boundary detection:
 ```python
+# Edit api/config.py for fallback chunking behavior
 CHUNK_SIZE = 1000      # Characters per chunk
 CHUNK_OVERLAP = 200    # Overlap between chunks
 ```
 
-**Guidelines:**
-- Smaller chunks (500-800): Better precision, more chunks
-- Larger chunks (1500-2000): Better context, fewer chunks
-- More overlap (300-400): Better continuity, more storage
+**For detailed technical explanation**, see [docs/WHY_HYBRIDCHUNKER.md](docs/WHY_HYBRIDCHUNKER.md)
 
 ### Backup Strategy
 
@@ -653,7 +834,7 @@ CHUNK_OVERLAP = 200    # Overlap between chunks
 tar -czf rag-backup-$(date +%Y%m%d).tar.gz data/ knowledge_base/
 
 # Database only
-cp data/knowledge_base.db ~/backups/kb-$(date +%Y%m%d).db
+cp data/rag.db ~/backups/kb-$(date +%Y%m%d).db
 ```
 
 ### Network Access
@@ -666,7 +847,7 @@ ports:
 
 Access via: `http://YOUR_LOCAL_IP:8000`
 
-⚠️ **Security**: This exposes your knowledge base to your entire network.
+**Security**: This exposes your knowledge base to your entire network.
 
 ### Performance Stats
 
@@ -680,7 +861,7 @@ Access via: `http://YOUR_LOCAL_IP:8000`
 
 **Check stats:**
 ```bash
-du -h data/knowledge_base.db
+du -h data/rag.db
 curl http://localhost:8000/health | jq
 ```
 
@@ -753,29 +934,35 @@ Lists all indexed documents with metadata.
 
 Future improvements under consideration:
 
-**Advanced Embedding Models:**
-- [Snowflake Arctic Embed 2](https://ollama.com/library/snowflake-arctic-embed2) - State-of-the-art retrieval quality
-- [Google EmbeddingGemma](https://huggingface.co/google/embeddinggemma-300m) - More powerful embeddings
-- [BGE/GTE models](https://huggingface.co/BAAI) - Latest generation embeddings
+**Semantic Chunking Expansion:**
+- Extend HybridChunker support to Markdown and TXT files
+- Custom conversion pipelines for code repositories (preserve function/class boundaries)
+- Obsidian vault integration (preserve wiki links, backlinks, and note structure)
+- Jupyter notebook support (preserve code cells and markdown cells separately)
+
+**Document Ingestion:**
+- Advanced PDF parsing enhancements (PyMuPDF4LLM, Marker-PDF integration)
+
+**Embedding Models:**
+- Google Gemma2 - High performance, low cost alternative
+- BGE/GTE models - Latest generation embeddings
+- Improved CPU-optimized models
+
+**Performance & Resource Management:**
+- Streaming responses
+- Distributed processing
+- Advanced CPU optimization
 
 **Query Improvements:**
-- Hybrid search (vector + keyword)
 - Query expansion and rewriting
 - Contextual chunk retrieval
+- Better ranking algorithms
 
 **Integrations:**
 - Additional IDE support (beyond VSCode)
 - API authentication
 - Multi-user support
 - Cloud deployment guides
-
-**Performance:**
-- GPU acceleration for embeddings
-- Streaming responses
-- Incremental indexing
-- Query caching
-
-Contributions and suggestions welcome!
 
 ---
 
