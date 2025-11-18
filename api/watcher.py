@@ -139,11 +139,14 @@ class IndexingCoordinator:
 
         success_count = 0
         error_count = 0
+        skipped_count = 0
 
         for file_path in files_list:
             try:
-                chunks = self.indexer.index_file(file_path, force=False)
-                if chunks > 0:
+                chunks, was_skipped = self.indexer.index_file(file_path, force=False)
+                if was_skipped:
+                    skipped_count += 1
+                elif chunks > 0:
                     success_count += 1
                     print(f"  ✓ {file_path.name}: {chunks} chunks")
             except Exception as e:
@@ -151,7 +154,7 @@ class IndexingCoordinator:
                 print(f"  ✗ {file_path.name}: indexing failed")
 
         if success_count > 0 or error_count > 0:
-            print(f"Indexed: {success_count} success, {error_count} errors")
+            print(f"Indexed: {success_count} success, {error_count} errors, {skipped_count} skipped")
 
 
 class FileWatcherService:

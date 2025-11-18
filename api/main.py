@@ -6,6 +6,7 @@ from typing import List
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue
 import threading
+from collections import defaultdict
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -237,6 +238,43 @@ class IndexOrchestrator:
         print(f"Path missing: {self.base_path}")
         return 0, 0
 
+    def _group_files_for_display(self, files: List[Path]) -> str:
+        """Group files by directory for cleaner display
+
+        PDFs in root are listed individually.
+        Files in subdirectories are grouped by directory with counts.
+        """
+        root_pdfs = []
+        dir_groups = defaultdict(list)
+
+        for file_path in files:
+            parts = file_path.parts
+            kb_index = parts.index('knowledge_base') if 'knowledge_base' in parts else -1
+
+            if kb_index >= 0 and kb_index + 2 < len(parts):
+                # File is in a subdirectory
+                subdir = parts[kb_index + 1]
+                dir_groups[subdir].append(file_path)
+            elif file_path.suffix == '.pdf':
+                # PDF in root directory
+                root_pdfs.append(file_path)
+
+        # Build display string
+        lines = []
+        if root_pdfs:
+            lines.append("PDFs:")
+            for pdf in sorted(root_pdfs):
+                lines.append(f"  - {pdf.name}")
+
+        if dir_groups:
+            if root_pdfs:
+                lines.append("")
+            lines.append("Directories:")
+            for dir_name, files in sorted(dir_groups.items(), key=lambda x: -len(x[1])):
+                lines.append(f"  - {dir_name}/ ({len(files)} files)")
+
+        return "\n".join(lines)
+
     def _index_files(self, force: bool) -> tuple[int, int]:
         """Index all files with batch processing and async embedding"""
         indexed_files = 0
@@ -254,6 +292,7 @@ class IndexOrchestrator:
             return 0, 0
 
         print(f"Found {total_files} files to process")
+        print(self._group_files_for_display(all_files))
 
         for idx, file_path in enumerate(all_files, 1):
             chunks, was_skipped = self.indexer.index_file(file_path, force)

@@ -166,7 +166,7 @@ class TestIndexingCoordinator:
     def test_process_files(self):
         """Test processing files"""
         indexer = Mock()
-        indexer.index_file = Mock(return_value=10)
+        indexer.index_file = Mock(return_value=(10, False))
         collector = FileChangeCollector()
         coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
 
@@ -183,7 +183,7 @@ class TestIndexingCoordinator:
     def test_batch_size_limit(self):
         """Test batch size is respected"""
         indexer = Mock()
-        indexer.index_file = Mock(return_value=10)
+        indexer.index_file = Mock(return_value=(10, False))
         collector = FileChangeCollector()
         coordinator = IndexingCoordinator(indexer, collector, batch_size=2)
 
@@ -197,7 +197,7 @@ class TestIndexingCoordinator:
     def test_error_handling(self):
         """Test errors don't stop processing"""
         indexer = Mock()
-        indexer.index_file = Mock(side_effect=[Exception("Error"), 10])
+        indexer.index_file = Mock(side_effect=[Exception("Error"), (10, False)])
         collector = FileChangeCollector()
         coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
 
@@ -234,7 +234,7 @@ class TestFileWatcherService:
     def test_debounce_callback_processes_changes(self):
         """Test debounce triggers indexing"""
         indexer = Mock()
-        indexer.index_file = Mock(return_value=10)
+        indexer.index_file = Mock(return_value=(10, False))
         watch_path = Path("/test")
         service = FileWatcherService(
             watch_path=watch_path,
@@ -264,3 +264,64 @@ class TestFileWatcherService:
         file1 = Path("/test/file1.pdf")
         service.collector.add(file1)
         service._on_debounce()  # Should not raise
+
+
+class TestIndexingCoordinatorWithTupleReturn:
+    """Test coordinator handles tuple return from index_file correctly"""
+
+    def test_index_file_returns_tuple_success(self, capsys):
+        """Test coordinator handles (chunks, was_skipped) tuple correctly"""
+        indexer = Mock()
+        # Real index_file returns (chunks, was_skipped)
+        indexer.index_file = Mock(return_value=(10, False))
+        collector = FileChangeCollector()
+        coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
+
+        file1 = Path("/test/file1.pdf")
+        collector.add(file1)
+
+        # Should properly unpack tuple and show success message
+        coordinator.process_changes()
+        captured = capsys.readouterr()
+
+        # Should show success, not failure
+        assert "✓" in captured.out
+        assert "10 chunks" in captured.out
+        assert "✗" not in captured.out
+        assert indexer.index_file.call_count == 1
+
+    def test_index_file_returns_tuple_skipped(self, capsys):
+        """Test coordinator handles skipped file (0 chunks, was_skipped=True)"""
+        indexer = Mock()
+        # File was skipped (already indexed)
+        indexer.index_file = Mock(return_value=(0, True))
+        collector = FileChangeCollector()
+        coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
+
+        file1 = Path("/test/file1.pdf")
+        collector.add(file1)
+
+        coordinator.process_changes()
+        captured = capsys.readouterr()
+
+        # Skipped files should not show as errors
+        assert "✗" not in captured.out
+        assert indexer.index_file.call_count == 1
+
+    def test_index_file_returns_tuple_no_chunks(self, capsys):
+        """Test coordinator handles file with no chunks (0 chunks, was_skipped=False)"""
+        indexer = Mock()
+        # File was processed but had no chunks (e.g., empty file)
+        indexer.index_file = Mock(return_value=(0, False))
+        collector = FileChangeCollector()
+        coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
+
+        file1 = Path("/test/file1.pdf")
+        collector.add(file1)
+
+        coordinator.process_changes()
+        captured = capsys.readouterr()
+
+        # Files with 0 chunks should not show as errors
+        assert "✗" not in captured.out
+        assert indexer.index_file.call_count == 1
