@@ -2,6 +2,8 @@
 
 One-page cheat sheet for common RAG operations.
 
+**Current Version**: v0.8.0-alpha
+
 ---
 
 ## First Time Setup
@@ -11,8 +13,9 @@ One-page cheat sheet for common RAG operations.
 git clone https://github.com/yourusername/rag-kb.git
 cd rag-kb
 
-# 2. Add content
+# 2. Add content (PDF, Markdown, Code)
 cp ~/Documents/*.pdf knowledge_base/books/
+cp -r ~/projects/myapp knowledge_base/code/
 
 # 3. Start
 docker-compose up --build -d
@@ -58,16 +61,18 @@ curl -X POST http://localhost:8000/query -d '{"text": "query", "top_k": 3}'
 ## Adding Content
 
 ```bash
-# Books/PDFs
+# Documents (PDF, DOCX, EPUB, Markdown)
 cp ~/Downloads/book.pdf knowledge_base/books/
+cp ~/Documents/*.md knowledge_base/notes/
 docker-compose restart rag-api
 
-# Obsidian vault
-./ingest-obsidian.sh ~/Documents/MyVault vault-name
-
-# Code repository
-./export-codebase-simple.sh ~/projects/myapp > knowledge_base/code/myapp.md
+# Code repositories (Python, Java, TypeScript, JavaScript, C#)
+# Just copy the entire directory - auto-filters build artifacts
+cp -r ~/projects/myapp knowledge_base/code/
 docker-compose restart rag-api
+
+# Watch for automatic indexing
+docker-compose logs -f rag-api
 ```
 
 ---
@@ -121,12 +126,23 @@ docker-compose logs rag-api | grep -i error
 "What does my codebase say about authentication?"
 "Find all my notes about React hooks"
 "How does [book name] explain [concept]?"
+"Show me the implementation of the login function"
 
 # Via curl:
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d '{"text": "your question here", "top_k": 5}'
 ```
+
+---
+
+## Supported File Types
+
+**Documents**: `.pdf`, `.docx`, `.epub`, `.md`, `.markdown`, `.txt`
+
+**Code**: `.py`, `.java`, `.ts`, `.tsx`, `.js`, `.jsx`, `.cs`
+
+**Auto-excluded**: `node_modules/`, `__pycache__/`, `.git/`, `venv/`, build artifacts, minified files
 
 ---
 

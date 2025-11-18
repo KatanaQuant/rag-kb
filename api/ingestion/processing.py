@@ -138,7 +138,10 @@ class DocumentProcessor:
     """Coordinates document processing"""
 
     SUPPORTED_EXTENSIONS = {
-        '.pdf', '.txt', '.md', '.markdown', '.docx', '.epub'
+        # Documents
+        '.pdf', '.txt', '.md', '.markdown', '.docx', '.epub',
+        # Code files
+        '.py', '.java', '.ts', '.tsx', '.js', '.jsx', '.cs'
     }
 
     def __init__(self, progress_tracker: Optional[ProcessingProgressTracker] = None):
@@ -205,7 +208,9 @@ class DocumentProcessor:
         return []
 
     def _is_pdf_conversion_error(self, error: Exception, error_msg: str) -> bool:
-        """Check if error is a PDF conversion failure"""
+        """Check if error is a PDF conversion failure or invalid EPUB"""
+        if isinstance(error, ValueError) and "Invalid EPUB file" in error_msg:
+            return True
         return isinstance(error, RuntimeError) and "PDF conversion failed" in error_msg
 
     def _print_error(self, filename: str, error_msg: str):
@@ -217,8 +222,8 @@ class DocumentProcessor:
         print(f"{'='*80}\n")
 
     def _print_traceback_if_needed(self, error: Exception):
-        """Print traceback for non-RuntimeError exceptions"""
-        if not isinstance(error, RuntimeError):
+        """Print traceback for non-RuntimeError/ValueError exceptions"""
+        if not isinstance(error, (RuntimeError, ValueError)):
             import traceback
             traceback.print_exc()
 
@@ -277,7 +282,11 @@ class DocumentProcessor:
         try:
             return self._do_process(doc_file)
         except Exception as e:
-            print(f"Error processing: {doc_file.name}")
+            print(f"\nError processing: {doc_file.name}")
+            print(f"Error type: {type(e).__name__}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            print(f"Returning empty chunks for: {doc_file.name}\n")
             return []
 
     def _do_process(self, doc_file: DocumentFile) -> List[Dict]:

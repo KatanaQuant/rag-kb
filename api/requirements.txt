@@ -26,3 +26,7 @@ numpy>=1.26.4,<2.0.0
 # Note: Docling has heavy dependencies, install takes 3-5 min
 # Note: HybridChunker available in docling-core 2.8.0+ (requires docling 2.9.0+)
 docling>=2.9.0
+
+# Code parsing with AST-based chunking
+# Note: Uses tree-sitter for language-agnostic AST parsing
+astchunk>=0.1.0

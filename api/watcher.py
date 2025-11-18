@@ -66,7 +66,12 @@ class FileChangeCollector:
 class DocumentEventHandler(FileSystemEventHandler):
     """Handles file system events for documents"""
 
-    SUPPORTED_EXTENSIONS = {'.pdf', '.md', '.txt', '.docx', '.epub'}
+    SUPPORTED_EXTENSIONS = {
+        # Documents
+        '.pdf', '.md', '.txt', '.docx', '.epub', '.markdown',
+        # Code files
+        '.py', '.java', '.ts', '.tsx', '.js', '.jsx', '.cs'
+    }
 
     def __init__(self, collector: FileChangeCollector, timer: DebounceTimer):
         self.collector = collector

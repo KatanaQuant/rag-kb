@@ -26,9 +26,32 @@ class ChunkData:
 
 @dataclass
 class DocumentFile:
-    """Represents a document file with its hash"""
+    """Represents a document file with its hash
+
+    Following Sandi Metz 'Tell, Don't Ask': This class knows how to create
+    itself from a path, encapsulating the hash calculation logic.
+    """
     path: Path
     hash: str
+
+    @classmethod
+    def from_path(cls, path: Path) -> 'DocumentFile':
+        """Factory method to create DocumentFile from path
+
+        Following Sandi Metz principles:
+        - Feature Envy Fix: DocumentFile knows how to hash itself
+        - Single Responsibility: Encapsulates document file creation
+        - Dependency Injection: Can be overridden for testing
+
+        Args:
+            path: Path to document file
+
+        Returns:
+            DocumentFile with computed hash
+        """
+        from ingestion.helpers import FileHasher
+        file_hash = FileHasher.hash_file(path)
+        return cls(path=path, hash=file_hash)
 
     @property
     def extension(self) -> str:

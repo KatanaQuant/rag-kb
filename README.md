@@ -120,9 +120,9 @@ echo "MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1" >> .env
 
 ### Step 1: Add Content
 
-The `knowledge_base/` directory is where you put your documents. It's **gitignored by default** to protect your personal/copyrighted content.
+The `knowledge_base/` directory is where you put your documents and code. It's **gitignored by default** to protect your personal/copyrighted content.
 
-Create subdirectories and add your files:
+**Add Documents:**
 
 ```bash
 # Create organization structure (optional)
@@ -133,6 +133,26 @@ cp ~/Documents/my-book.pdf knowledge_base/books/
 cp ~/Documents/*.md knowledge_base/docs/
 cp ~/notes/*.txt knowledge_base/notes/
 ```
+
+**Add Codebases (v0.8.0+):**
+
+Same simple workflow - just drop repos into `knowledge_base/`:
+
+```bash
+cd knowledge_base
+git clone https://github.com/anthropics/anthropic-sdk-python.git
+
+# Or copy your own projects
+cp -r ~/projects/my-trading-bot ./my-trading-bot
+```
+
+The system automatically:
+- Routes `.py`, `.ts`, `.java`, `.cs` files → AST-based chunking (respects function/class boundaries)
+- Routes `.md`, `.pdf`, `.epub` files → Document extraction with Docling
+- Skips `.git/`, `node_modules/`, `__pycache__/`, `.env` files, build artifacts, etc.
+
+**Query Example**: "How does the SDK handle API retries?"
+- Returns: `retry.py` implementation + README.md docs + related code
 
 The service automatically indexes all supported files when it starts.
 

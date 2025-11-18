@@ -3,6 +3,9 @@ import time
 from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import List
+from concurrent.futures import ThreadPoolExecutor
+from queue import Queue
+import threading
 
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +17,7 @@ from models import (
     DocumentInfoResponse
 )
 from ingestion import DocumentProcessor, VectorStore, ProcessingProgressTracker, FileHasher
+from ingestion.file_filter import FileFilterPolicy
 from domain_models import DocumentFile
 from config import default_config
 from watcher import FileWatcherService
@@ -49,11 +53,18 @@ class ModelLoader:
 
 
 class FileWalker:
-    """Walks knowledge base directory"""
+    """Walks knowledge base directory
 
-    def __init__(self, base_path: Path, extensions: set):
+    Refactored following Sandi Metz principles:
+    - Dependency Injection: filter_policy injected vs. hardcoded
+    - Single Responsibility: Only handles directory walking
+    - Small class: Reduced from ~70 lines to ~20 lines
+    """
+
+    def __init__(self, base_path: Path, extensions: set, filter_policy: FileFilterPolicy = None):
         self.base_path = base_path
         self.extensions = extensions
+        self.filter_policy = filter_policy or FileFilterPolicy()
 
     def walk(self):
         """Yield supported files"""
@@ -64,7 +75,7 @@ class FileWalker:
     def _walk_files(self):
         """Walk all files"""
         for file_path in self.base_path.rglob("*"):
-            if self._is_supported(file_path) and not self._is_excluded(file_path):
+            if self._is_supported(file_path) and not self.filter_policy.should_exclude(file_path):
                 yield file_path
 
     def _is_supported(self, path: Path) -> bool:
@@ -73,30 +84,23 @@ class FileWalker:
             return False
         return path.suffix.lower() in self.extensions
 
-    def _is_excluded(self, path: Path) -> bool:
-        """Check if file path should be excluded from processing"""
-        # Exclude files in 'problematic' and 'original' subdirectories
-        if 'problematic' in path.parts or 'original' in path.parts:
-            return True
-        # Exclude temporary files created during processing
-        if '.tmp.pdf' in path.name or '.gs_tmp.pdf' in path.name:
-            return True
-        return False
-
 
 class DocumentIndexer:
-    """Handles document indexing operations"""
+    """Handles document indexing operations with async embedding"""
 
     def __init__(self, processor, model, vector_store):
         self.processor = processor
         self.model = model
         self.store = vector_store
+        self.embedding_executor = ThreadPoolExecutor(max_workers=1)  # Single worker for embedding
+        self.pending_embeddings = []  # Track pending futures
 
-    def index_file(self, file_path: Path, force: bool = False) -> int:
-        """Index single file"""
+    def index_file(self, file_path: Path, force: bool = False) -> tuple[int, bool]:
+        """Index single file. Returns (chunks_count, was_skipped)"""
         if not self._should_index(file_path, force):
-            return self._skip_file(file_path)
-        return self._do_index(file_path)
+            return (0, True)  # Skipped
+        chunks = self._do_index(file_path)
+        return (chunks, False)  # Indexed
 
     def _should_index(self, path: Path, force: bool) -> bool:
         """Check if should index"""
@@ -110,17 +114,12 @@ class DocumentIndexer:
         indexed = self.store.is_document_indexed(str(path), file_hash)
         return not indexed
 
-    @staticmethod
-    def _skip_file(path: Path) -> int:
-        """Skip file logging"""
-        print(f"Skipping: {path.name}")
-        return 0
-
     def _do_index(self, path: Path) -> int:
-        """Perform indexing"""
-        print(f"Processing: {path.name}")
-        file_hash = FileHasher.hash_file(path)
-        doc_file = DocumentFile(path=path, hash=file_hash)
+        """Perform indexing
+
+        Following Sandi Metz 'Tell, Don't Ask': Let DocumentFile create itself
+        """
+        doc_file = DocumentFile.from_path(path)
         chunks = self._get_chunks(doc_file)
         return self._store_if_valid(doc_file, chunks)
 
@@ -139,12 +138,36 @@ class DocumentIndexer:
         return len(chunks)
 
     def _store_chunks(self, doc_file: DocumentFile, chunks: List):
-        """Store chunks with embeddings"""
-        print(f"Embedding started: {doc_file.name} - {len(chunks)} chunks")
+        """Store chunks with async embeddings"""
+        print(f"Embedding queued: {doc_file.name} - {len(chunks)} chunks")
+
+        # Submit embedding+storage to background thread
+        future = self.embedding_executor.submit(
+            self._embed_and_store,
+            doc_file.path,
+            doc_file.hash,
+            doc_file.name,
+            chunks
+        )
+        self.pending_embeddings.append(future)
+
+    def _embed_and_store(self, path, hash_val, name, chunks):
+        """Background task: embed and store chunks"""
+        print(f"Embedding started: {name} - {len(chunks)} chunks")
         embeddings = self._gen_embeddings(chunks)
-        print(f"Embedding complete: {doc_file.name} - {len(chunks)} chunks embedded")
-        self._add_to_store(doc_file.path, doc_file.hash, chunks, embeddings)
-        print(f"Indexed {doc_file.name}: {len(chunks)} chunks stored")
+        print(f"Embedding complete: {name} - {len(chunks)} chunks embedded")
+        self._add_to_store(path, hash_val, chunks, embeddings)
+        print(f"Indexed {name}: {len(chunks)} chunks stored")
+
+    def wait_for_pending(self):
+        """Wait for all pending embeddings to complete"""
+        if not self.pending_embeddings:
+            return
+        print(f"Waiting for {len(self.pending_embeddings)} pending embedding tasks...")
+        for future in self.pending_embeddings:
+            future.result()  # Wait for completion
+        self.pending_embeddings.clear()
+        print("All pending embeddings complete")
 
     def _gen_embeddings(self, chunks: List) -> List:
         """Generate embeddings"""
@@ -215,38 +238,49 @@ class IndexOrchestrator:
         return 0, 0
 
     def _index_files(self, force: bool) -> tuple[int, int]:
-        """Index all files with batch processing"""
+        """Index all files with batch processing and async embedding"""
         indexed_files = 0
         total_chunks = 0
+        skipped_files = 0
         file_count = 0
         batch_size = default_config.batch.size
         batch_delay = default_config.batch.delay
 
-        for file_path in self.walker.walk():
-            files, chunks = self._index_one(file_path, force, indexed_files, total_chunks)
-            indexed_files, total_chunks = files, chunks
+        # Collect all files first to show progress
+        all_files = list(self.walker.walk())
+        total_files = len(all_files)
+
+        if total_files == 0:
+            return 0, 0
+
+        print(f"Found {total_files} files to process")
+
+        for idx, file_path in enumerate(all_files, 1):
+            chunks, was_skipped = self.indexer.index_file(file_path, force)
+
+            if was_skipped:
+                skipped_files += 1
+            else:
+                if chunks > 0:
+                    indexed_files += 1
+                    total_chunks += chunks
+
             file_count += 1
+
+            # Show progress every 10 files or at milestones
+            if idx % 10 == 0 or idx == total_files:
+                percentage = (idx / total_files) * 100
+                skip_msg = f", {skipped_files} skipped" if skipped_files > 0 else ""
+                print(f"Progress: {idx}/{total_files} files ({percentage:.1f}%) - {indexed_files} indexed{skip_msg}, {total_chunks} chunks")
 
             # Add delay after each batch to prevent resource spikes
             if file_count % batch_size == 0:
                 time.sleep(batch_delay)
 
+        # Wait for all pending embeddings to complete
+        self.indexer.wait_for_pending()
+
         return indexed_files, total_chunks
-
-    def _index_one(self, path, force, files, chunks):
-        """Index one file"""
-        new_chunks = self._try_index(path, force)
-        if new_chunks > 0:
-            return files + 1, chunks + new_chunks
-        return files, chunks
-
-    def _try_index(self, path: Path, force: bool) -> int:
-        """Try indexing with error handling"""
-        try:
-            return self.indexer.index_file(path, force)
-        except Exception as e:
-            print(f"Error: {path.name}: indexing failed")
-            return 0
 
 
 class QueryExecutor:
