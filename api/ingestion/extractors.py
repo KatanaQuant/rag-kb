@@ -390,9 +390,19 @@ class EpubExtractor:
 
     @staticmethod
     def _convert_with_pandoc(epub_path: Path, pdf_path: Path):
-        """Convert EPUB to PDF using Pandoc"""
+        """Convert EPUB to PDF using Pandoc with fallback for longtable errors
+
+        Strategy:
+        1. Try direct EPUB→PDF with xelatex
+        2. If longtable error occurs, fallback to EPUB→HTML→PDF with wkhtmltopdf
+
+        Known Issue: Pandoc has a bug with nested tables in EPUB files that causes
+        "Forbidden control sequence found while scanning use of \\LT@nofcols" errors.
+        The workaround is to use HTML as an intermediate format with wkhtmltopdf.
+        """
         import subprocess
 
+        # Attempt 1: Direct conversion with xelatex
         result = subprocess.run(
             ['pandoc', str(epub_path), '-o', str(pdf_path), '--pdf-engine=xelatex'],
             capture_output=True,
@@ -400,13 +410,72 @@ class EpubExtractor:
             timeout=300
         )
 
-        if result.returncode != 0:
-            raise RuntimeError(
-                f"Pandoc EPUB conversion failed.\n"
-                f"  File: {epub_path.name}\n"
-                f"  Error: {result.stderr}\n"
-                f"  Install pandoc and texlive if missing."
+        # Check if it succeeded
+        if result.returncode == 0:
+            return
+
+        # Check if it's the known longtable error
+        if 'LT@nofcols' in result.stderr or 'longtable' in result.stderr.lower():
+            print(f"  → Detected longtable error, retrying with wkhtmltopdf...")
+            EpubExtractor._convert_via_html_fallback(epub_path, pdf_path)
+            return
+
+        # Other error - raise it
+        raise RuntimeError(
+            f"Pandoc EPUB conversion failed.\n"
+            f"  File: {epub_path.name}\n"
+            f"  Error: {result.stderr}\n"
+            f"  Install pandoc and texlive if missing."
+        )
+
+    @staticmethod
+    def _convert_via_html_fallback(epub_path: Path, pdf_path: Path):
+        """Fallback: Convert EPUB→HTML→PDF using Chromium headless
+
+        This avoids LaTeX longtable issues by using HTML-based PDF generation.
+        Uses Chromium in headless mode as wkhtmltopdf is unmaintained.
+        """
+        import subprocess
+        import tempfile
+
+        # Step 1: EPUB → HTML
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
+            html_path = f.name
+
+        try:
+            result = subprocess.run(
+                ['pandoc', str(epub_path), '-o', html_path, '-s', '--self-contained'],
+                capture_output=True,
+                text=True,
+                timeout=300
             )
+
+            if result.returncode != 0:
+                raise RuntimeError(f"EPUB to HTML conversion failed: {result.stderr}")
+
+            # Step 2: HTML → PDF with Chromium headless
+            result = subprocess.run(
+                [
+                    'chromium',
+                    '--headless',
+                    '--disable-gpu',
+                    '--no-sandbox',
+                    '--print-to-pdf=' + str(pdf_path),
+                    'file://' + html_path
+                ],
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+
+            if result.returncode != 0:
+                raise RuntimeError(f"HTML to PDF conversion failed: {result.stderr}")
+
+            print(f"  → Successfully converted via HTML fallback (Chromium)")
+
+        finally:
+            # Clean up temp HTML file
+            Path(html_path).unlink(missing_ok=True)
 
     @staticmethod
     def _embed_fonts_with_ghostscript(pdf_path: Path):

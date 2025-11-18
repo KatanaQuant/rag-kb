@@ -1074,6 +1074,11 @@ Future improvements under consideration:
 - Obsidian vault integration (preserve wiki links, backlinks, and note structure)
 - Jupyter notebook support (preserve code cells and markdown cells separately)
 
+**Code Language Support:**
+- Currently supported: Python, Java, C#, TypeScript (via astchunk library)
+- Go support blocked: astchunk library does not support Go yet
+- Future additions depend on upstream astchunk support for additional languages
+
 **Document Ingestion:**
 - Advanced PDF parsing enhancements (PyMuPDF4LLM, Marker-PDF integration)
 
