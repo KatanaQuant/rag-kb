@@ -13,9 +13,11 @@ from ingestion import (
     ProcessingProgress,
     ChunkedTextProcessor,
     DocumentProcessor,
-    TextChunker
+    TextChunker,
+    FileHasher
 )
 from config import ChunkConfig
+from domain_models import DocumentFile
 
 
 @pytest.fixture
@@ -58,7 +60,7 @@ def tracker(temp_db):
 @pytest.fixture
 def chunker():
     """Create text chunker"""
-    config = ChunkConfig(size=100, overlap=20, min_size=10)
+    config = ChunkConfig(size=100, overlap=20, min_size=10, semantic=False)
     return TextChunker(config)
 
 
@@ -225,11 +227,14 @@ class TestDocumentProcessor:
         """Test skipping completed files with matching hash"""
         processor = DocumentProcessor(tracker)
 
+        file_hash = FileHasher.hash_file(temp_file)
+        doc_file = DocumentFile(path=temp_file, hash=file_hash)
+
         # First processing
-        chunks1 = processor.process_file(temp_file)
+        chunks1 = processor.process_file(doc_file)
 
         # Second processing (should skip)
-        chunks2 = processor.process_file(temp_file)
+        chunks2 = processor.process_file(doc_file)
 
         assert len(chunks1) > 0
         assert len(chunks2) == 0  # Skipped
@@ -239,14 +244,18 @@ class TestDocumentProcessor:
         processor = DocumentProcessor(tracker)
 
         # First processing
-        chunks1 = processor.process_file(temp_file)
+        file_hash1 = FileHasher.hash_file(temp_file)
+        doc_file1 = DocumentFile(path=temp_file, hash=file_hash1)
+        chunks1 = processor.process_file(doc_file1)
 
         # Modify file
         with open(temp_file, 'a') as f:
             f.write("\nNew content added")
 
         # Should reprocess
-        chunks2 = processor.process_file(temp_file)
+        file_hash2 = FileHasher.hash_file(temp_file)
+        doc_file2 = DocumentFile(path=temp_file, hash=file_hash2)
+        chunks2 = processor.process_file(doc_file2)
 
         assert len(chunks1) > 0
         assert len(chunks2) > 0
@@ -255,7 +264,9 @@ class TestDocumentProcessor:
         """Test legacy processing without tracker"""
         processor = DocumentProcessor(progress_tracker=None)
 
-        chunks = processor.process_file(temp_file)
+        file_hash = FileHasher.hash_file(temp_file)
+        doc_file = DocumentFile(path=temp_file, hash=file_hash)
+        chunks = processor.process_file(doc_file)
 
         assert len(chunks) > 0
 
@@ -264,7 +275,8 @@ class TestDocumentProcessor:
         processor = DocumentProcessor(tracker)
 
         # Process non-existent file
-        chunks = processor.process_file(Path("/nonexistent/file.txt"))
+        doc_file = DocumentFile(path=Path("/nonexistent/file.txt"), hash="fake_hash")
+        chunks = processor.process_file(doc_file)
 
         assert len(chunks) == 0
 
@@ -273,12 +285,13 @@ class TestDocumentProcessor:
         processor = DocumentProcessor(tracker)
 
         # Simulate interrupted processing
-        file_hash = processor.get_file_hash(temp_file)
+        file_hash = FileHasher.hash_file(temp_file)
         tracker.start_processing(str(temp_file), file_hash)
         tracker.update_progress(str(temp_file), 5, 250)
 
         # Resume
-        chunks = processor.process_file(temp_file)
+        doc_file = DocumentFile(path=temp_file, hash=file_hash)
+        chunks = processor.process_file(doc_file)
 
         progress = tracker.get_progress(str(temp_file))
         assert progress.status == "completed"

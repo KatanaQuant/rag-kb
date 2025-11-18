@@ -13,7 +13,8 @@ from models import (
     HealthResponse, IndexRequest, IndexResponse,
     DocumentInfoResponse
 )
-from ingestion import DocumentProcessor, VectorStore, ProcessingProgressTracker
+from ingestion import DocumentProcessor, VectorStore, ProcessingProgressTracker, FileHasher
+from domain_models import DocumentFile
 from config import default_config
 from watcher import FileWatcherService
 from query_cache import QueryCache
@@ -105,7 +106,7 @@ class DocumentIndexer:
 
     def _needs_indexing(self, path: Path) -> bool:
         """Check if file needs indexing"""
-        file_hash = self.processor.get_file_hash(path)
+        file_hash = FileHasher.hash_file(path)
         indexed = self.store.is_document_indexed(str(path), file_hash)
         return not indexed
 
@@ -118,31 +119,32 @@ class DocumentIndexer:
     def _do_index(self, path: Path) -> int:
         """Perform indexing"""
         print(f"Processing: {path.name}")
-        chunks = self._get_chunks(path)
-        return self._store_if_valid(path, chunks)
+        file_hash = FileHasher.hash_file(path)
+        doc_file = DocumentFile(path=path, hash=file_hash)
+        chunks = self._get_chunks(doc_file)
+        return self._store_if_valid(doc_file, chunks)
 
-    def _get_chunks(self, path: Path) -> List:
+    def _get_chunks(self, doc_file: DocumentFile) -> List:
         """Extract chunks from file"""
-        chunks = self.processor.process_file(path)
+        chunks = self.processor.process_file(doc_file)
         if not chunks:
-            print(f"No chunks: {path.name}")
+            print(f"No chunks: {doc_file.name}")
         return chunks
 
-    def _store_if_valid(self, path: Path, chunks: List) -> int:
+    def _store_if_valid(self, doc_file: DocumentFile, chunks: List) -> int:
         """Store chunks if valid"""
         if not chunks:
             return 0
-        self._store_chunks(path, chunks)
+        self._store_chunks(doc_file, chunks)
         return len(chunks)
 
-    def _store_chunks(self, path: Path, chunks: List):
+    def _store_chunks(self, doc_file: DocumentFile, chunks: List):
         """Store chunks with embeddings"""
-        print(f"Embedding started: {path.name} - {len(chunks)} chunks")
+        print(f"Embedding started: {doc_file.name} - {len(chunks)} chunks")
         embeddings = self._gen_embeddings(chunks)
-        print(f"Embedding complete: {path.name} - {len(chunks)} chunks embedded")
-        hash_val = self.processor.get_file_hash(path)
-        self._add_to_store(path, hash_val, chunks, embeddings)
-        print(f"Indexed {path.name}: {len(chunks)} chunks stored")
+        print(f"Embedding complete: {doc_file.name} - {len(chunks)} chunks embedded")
+        self._add_to_store(doc_file.path, doc_file.hash, chunks, embeddings)
+        print(f"Indexed {doc_file.name}: {len(chunks)} chunks stored")
 
     def _gen_embeddings(self, chunks: List) -> List:
         """Generate embeddings"""

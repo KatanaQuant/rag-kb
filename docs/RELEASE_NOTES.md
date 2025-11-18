@@ -6,6 +6,15 @@ Complete release history for RAG Knowledge Base.
 
 ## Releases
 
+### v0.7.0-alpha - 2025-11-17
+**Structure and Complexity Reduction**
+
+- Split 1310-line monolith into 7 focused modules
+- All modules achieve A maintainability rating
+- Added 29 new unit tests (145 total, 100% passing)
+- Eliminated all D/C complexity violations
+- Comprehensive repository cleanup and documentation improvements
+
 ### [v0.6.0-alpha](RELEASE_v0.6.0-alpha.md) - 2025-11-17
 **EPUB Support & Automatic Ghostscript Retry**
 
@@ -57,18 +66,18 @@ Complete release history for RAG Knowledge Base.
 
 ## Latest Release
 
-**Current Version**: v0.6.0-alpha
+**Current Version**: v0.7.0-alpha
 
-[View Latest Release](RELEASE_v0.6.0-alpha.md)
+Major architectural refactoring focused on code quality and maintainability.
 
 ---
 
 ## Upgrade Path
 
-- v0.5.0-alpha → v0.6.0-alpha: Fully compatible, database auto-migrates
-- v0.4.0-alpha → v0.6.0-alpha: Fully compatible, recommended to re-index
-- v0.3.0-alpha → v0.6.0-alpha: Fully compatible, recommended to re-index
-- Earlier versions → v0.6.0-alpha: See migration guides in individual releases
+- v0.6.0-alpha → v0.7.0-alpha: Fully compatible, internal refactoring only (no migration needed)
+- v0.5.0-alpha → v0.7.0-alpha: Fully compatible, database auto-migrates
+- v0.4.0-alpha → v0.7.0-alpha: Fully compatible, recommended to re-index
+- Earlier versions → v0.7.0-alpha: See migration guides in individual releases
 
 ---
 

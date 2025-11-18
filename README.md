@@ -8,7 +8,7 @@
 
 Built with FastAPI, sqlite-vec, and sentence-transformers.
 
-**Current Version**: v0.6.0-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
+**Current Version**: v0.7.0-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
 
 > **CPU-Only Build**: This project is optimized exclusively for CPU processing. No GPU required or supported. Large knowledge bases may take significant time to index:
 >
@@ -600,10 +600,30 @@ curl http://localhost:8000/health
 # Should show: rag-kb - Connected
 ```
 
-**3. Restart VSCode:**
+**3. If shows "Failed to connect" - verify path is correct:**
+
+After switching machines or moving the project, the MCP path may be outdated:
+
+```bash
+# Remove old configuration
+~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude mcp remove rag-kb
+
+# Re-add with correct absolute path (replace with your actual path)
+~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude mcp add \
+  --transport stdio \
+  --scope user \
+  rag-kb \
+  --env RAG_API_URL=http://localhost:8000 \
+  -- node /media/veracrypt1/CODE/rag-kb/mcp-server/index.js
+
+# Verify connection
+~/.vscode/extensions/anthropic.claude-code-*/resources/native-binary/claude mcp list
+```
+
+**4. Restart VSCode:**
 - `Ctrl+Shift+P` → "Developer: Reload Window"
 
-**4. Check VSCode logs:**
+**5. Check VSCode logs:**
 - VSCode → Output → Select "MCP" from dropdown
 
 ### Node.js Version Error
@@ -660,6 +680,30 @@ docker-compose restart rag-api
 - SSD storage for faster database I/O
 
 **Note:** This project is CPU-only by design. No GPU support is planned.
+
+### Configuration via .env
+
+RAG-KB uses a two-tier configuration approach:
+
+1. **docker-compose.yml**: Provides sensible defaults for all settings
+2. **.env file**: Optional overrides for customization (you only specify what you want to change)
+
+**How it works:**
+- Docker Compose automatically loads `.env` from the project root
+- Any variable in `.env` overrides the corresponding default in `docker-compose.yml`
+- If `.env` doesn't exist or a variable is missing, the default is used
+
+**Example .env file:**
+```bash
+# Only override what you need to change
+MODEL_NAME=Snowflake/snowflake-arctic-embed-l-v2.0
+RAG_PORT=8001
+MAX_MEMORY=8G
+```
+
+All other settings (batch size, cache config, chunking, etc.) will use the defaults from `docker-compose.yml`.
+
+**See `.env.example` for all available options with documentation.**
 
 ### Resource Limits (Recommended)
 

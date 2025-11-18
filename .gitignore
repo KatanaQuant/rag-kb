@@ -61,3 +61,8 @@ new-instance.sh
 Thumbs.db
 .local-scripts/
 api/core.*
+
+# Marketing materials (untracked)
+marketing/
+data_test/
+knowledge_base_test/

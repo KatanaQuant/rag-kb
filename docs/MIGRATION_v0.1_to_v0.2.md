@@ -15,10 +15,10 @@ v0.2.0-alpha adds **multi-model embedding support** with a focus on **Snowflake 
 
 - **Arctic Embed 2.0-L** support (1024 dimensions, best quality)
 - **Arctic Embed 2.0-M** support (768 dimensions, balanced)
-- ⚙️ **Configurable model selection** via `.env` file
+- **Configurable model selection** via `.env` file
 - **Dynamic embedding dimensions** - automatically set based on model
-- 📚 Support for **BGE** and **EmbeddingGemma** models from roadmap
-- 🚀 **Docker optimization**: CPU-only PyTorch (~50% smaller images, 60% faster builds)
+- Support for **BGE** and **EmbeddingGemma** models from roadmap
+- **Docker optimization**: CPU-only PyTorch (~50% smaller images, 60% faster builds)
 - **Bug fixes**: PyTorch 2.5.1 compatibility with latest transformers
 
 ### Model Comparison

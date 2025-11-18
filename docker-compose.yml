@@ -7,7 +7,6 @@ services:
     ports:
       - "${RAG_PORT:-8000}:8000"
     volumes:
-      - ./api:/app  # Hot-mount API code for development
       - ./knowledge_base:/app/knowledge_base
       - ./data:/app/data
       - ./.cache/deepsearch_glm:/app/.cache/deepsearch_glm  # DeepSearch GLM cache

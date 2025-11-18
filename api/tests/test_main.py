@@ -17,6 +17,7 @@ from main import (
 )
 from models import QueryRequest, QueryResponse
 from ingestion import DocumentProcessor
+from domain_models import ChunkData
 
 
 class TestAppState:
@@ -179,7 +180,13 @@ class TestDocumentIndexer:
             {'content': 'chunk1'},
             {'content': 'chunk2'}
         ]
-        model.encode.return_value = [[0.1], [0.2]]
+
+        # Mock embeddings with .tolist() method
+        mock_emb1 = Mock()
+        mock_emb1.tolist.return_value = [0.1]
+        mock_emb2 = Mock()
+        mock_emb2.tolist.return_value = [0.2]
+        model.encode.return_value = [mock_emb1, mock_emb2]
 
         result = indexer.index_file(file_path, force=True)
         assert result == 2
