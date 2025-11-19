@@ -70,7 +70,9 @@ class DocumentEventHandler(FileSystemEventHandler):
         # Documents
         '.pdf', '.md', '.txt', '.docx', '.epub', '.markdown',
         # Code files
-        '.py', '.java', '.ts', '.tsx', '.js', '.jsx', '.cs'
+        '.py', '.java', '.ts', '.tsx', '.js', '.jsx', '.cs',
+        # Jupyter notebooks
+        '.ipynb'
     }
 
     def __init__(self, collector: FileChangeCollector, timer: DebounceTimer):
@@ -142,6 +144,8 @@ class IndexingCoordinator:
         skipped_count = 0
 
         for file_path in files_list:
+            # Show processing message BEFORE starting
+            print(f"  Processing {file_path.name}...")
             try:
                 chunks, was_skipped = self.indexer.index_file(file_path, force=False)
                 if was_skipped:

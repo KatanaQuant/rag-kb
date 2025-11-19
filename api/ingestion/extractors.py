@@ -632,10 +632,11 @@ class TextExtractor:
 
     def __init__(self, config=default_config):
         self.config = config
-        self.extractors = self._build_extractors()
         self.last_method = None  # Track which method was used
         self.obsidian_graph = ObsidianGraphBuilder()  # Shared graph for vault
         self.obsidian_detector = get_obsidian_detector()
+        self.jupyter_extractor = JupyterExtractor()  # Instance for notebook extraction
+        self.extractors = self._build_extractors()
 
     def extract(self, file_path: Path) -> ExtractionResult:
         """Extract text based on file extension"""
@@ -702,7 +703,7 @@ class TextExtractor:
             '.jsx': CodeExtractor.extract,
             '.cs': CodeExtractor.extract,
             # Jupyter notebooks (AST + cell-aware chunking)
-            '.ipynb': JupyterExtractor.extract
+            '.ipynb': self.jupyter_extractor.extract
         }
 
     def _validate_extension(self, ext: str):

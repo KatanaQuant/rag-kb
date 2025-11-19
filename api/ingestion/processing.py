@@ -182,12 +182,12 @@ class DocumentProcessor:
     def _should_process(self, doc_file: DocumentFile) -> bool:
         """Check if file should be processed"""
         if not doc_file.exists():
-            print(f"Skipping (file not found): {doc_file.name}")
+            # Silent skip - file not found (avoid log spam)
             return False
 
         progress = self.tracker.get_progress(str(doc_file.path))
         if self._is_completed(progress, doc_file.hash):
-            print(f"Skipping completed: {doc_file.name}")
+            # Silent skip - already completed (avoid log spam)
             return False
 
         return True
