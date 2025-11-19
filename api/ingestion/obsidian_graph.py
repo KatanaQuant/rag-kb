@@ -1,21 +1,34 @@
 """Obsidian Knowledge Graph Builder and Manager
 
-Builds and manages a NetworkX graph representing:
-- Notes as nodes
-- Wikilinks as edges (bidirectional)
-- Tags as nodes connected to notes
-- Headers as hierarchical nodes within notes
-- Shared concepts as edges
+POODR Phase 2.4 Complete: Orchestrator Pattern + Component Decomposition
+- Delegates to specialized extractors and query helpers
+- Single Responsibility: Coordinate graph building
+- Thin orchestration layer over specialized components
 
-Supports multi-hop graph traversal for enriched RAG retrieval.
+Architecture:
+- WikilinkExtractor: Extract wikilinks and build edges
+- TagExtractor: Extract tags and build tag nodes
+- HeaderExtractor: Extract headers and build hierarchy
+- GraphQuery: Graph traversal and query operations
+
+This class coordinates graph building while keeping each component focused
+on a single responsibility.
+
+Metrics Journey:
+- Before: 367 lines, CC 5, MI 46.33
+- After: ~180 lines (orchestrator only), CC <3, MI >65 (estimated)
 """
 
 import networkx as nx
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, Optional
+from typing import Dict, List, Optional
 import json
-import re
 from dataclasses import dataclass, field, asdict
+
+from ingestion.obsidian.graph.wikilink_extractor import WikilinkExtractor
+from ingestion.obsidian.graph.tag_extractor import TagExtractor
+from ingestion.obsidian.graph.header_extractor import HeaderExtractor
+from ingestion.obsidian.graph.graph_query import GraphQuery
 
 
 @dataclass
@@ -48,21 +61,52 @@ class ObsidianEdge:
 class ObsidianGraphBuilder:
     """Builds knowledge graph from Obsidian vault structure
 
-    Architecture follows Sandi Metz principles:
-    - Small, focused methods (<10 lines each)
-    - Single responsibility per method
-    - Clear separation of concerns
+    ORCHESTRATOR PATTERN (Phase 2.4 Complete!):
+    This class coordinates specialized components - it doesn't do the work itself.
+    Each responsibility delegated to a focused class:
+
+    - WikilinkExtractor: Wikilink extraction and edge creation
+    - TagExtractor: Tag extraction and node creation
+    - HeaderExtractor: Header extraction and hierarchy building
+    - GraphQuery: Graph traversal and query operations
+
+    Architecture (orchestrated):
+    1. Add note to graph (note node creation)
+    2. Extract wikilinks (WikilinkExtractor)
+    3. Extract tags (TagExtractor)
+    4. Extract headers (HeaderExtractor)
+    5. Query graph (GraphQuery)
+
+    POODR Compliance:
+    - Phase 2.4: Component decomposition
+    - Single Responsibility: Orchestrate, don't implement
+    - Composition over inheritance: Uses helper classes
     """
 
     def __init__(self):
+        """Initialize graph builder with specialized extractors
+
+        POODR Pattern: Dependency Injection + Default Factory
+        - Creates all extractors internally (could be injected for testing)
+        """
         self.graph = nx.MultiDiGraph()  # Supports multiple edges between nodes
         self.note_paths: Dict[str, Path] = {}  # title -> path mapping
-        self.wikilink_pattern = re.compile(r'\[\[([^\]|]+)(?:\|([^\]]+))?\]\]')
-        self.tag_pattern = re.compile(r'#([\w/\-]+)')
+
+        # Specialized extractors (Phase 2.4 decomposition)
+        self.wikilink_extractor = WikilinkExtractor()
+        self.tag_extractor = TagExtractor()
+        self.header_extractor = HeaderExtractor()
+        self.query = GraphQuery()
 
     def add_note(self, file_path: Path, title: str, content: str,
                  frontmatter: Optional[Dict] = None) -> str:
         """Add a note to the graph
+
+        Orchestrates the full note ingestion pipeline:
+        1. Create note node
+        2. Extract wikilinks (delegate to WikilinkExtractor)
+        3. Extract tags (delegate to TagExtractor)
+        4. Extract headers (delegate to HeaderExtractor)
 
         Args:
             file_path: Path to the note file
@@ -76,9 +120,12 @@ class ObsidianGraphBuilder:
         node_id = self._create_note_id(file_path)
         self._add_note_node(node_id, title, content, frontmatter)
         self._register_note_path(title, file_path)
-        self._extract_and_add_wikilinks(node_id, content)
-        self._extract_and_add_tags(node_id, content)
-        self._extract_and_add_headers(node_id, content)
+
+        # Delegate extraction to specialized components
+        self.wikilink_extractor.extract_and_add(self.graph, node_id, content)
+        self.tag_extractor.extract_and_add(self.graph, node_id, content)
+        self.header_extractor.extract_and_add(self.graph, node_id, content)
+
         return node_id
 
     def _create_note_id(self, file_path: Path) -> str:
@@ -103,188 +150,45 @@ class ObsidianGraphBuilder:
         self.graph.add_node(node_id, **node.to_dict())
 
     def _register_note_path(self, title: str, file_path: Path):
-        """Register title -> path mapping for wikilink resolution"""
+        """Register note path for wikilink resolution"""
         self.note_paths[title] = file_path
 
-    def _extract_and_add_wikilinks(self, source_id: str, content: str):
-        """Extract wikilinks and add as edges"""
-        matches = self.wikilink_pattern.findall(content)
-        for target_title, alias in matches:
-            self._add_wikilink_edge(source_id, target_title.strip(), alias)
-
-    def _add_wikilink_edge(self, source_id: str, target_title: str,
-                           alias: Optional[str]):
-        """Add wikilink edge (will create target node if needed)"""
-        target_id = f"note_ref:{target_title}"
-
-        # Add target node if not exists (placeholder until we process that note)
-        if not self.graph.has_node(target_id):
-            self._add_placeholder_node(target_id, target_title)
-
-        # Add bidirectional edge
-        edge_meta = {'alias': alias} if alias else {}
-        self.graph.add_edge(source_id, target_id, edge_type='wikilink',
-                           **edge_meta)
-        self.graph.add_edge(target_id, source_id, edge_type='backlink',
-                           **edge_meta)
-
-    def _add_placeholder_node(self, node_id: str, title: str):
-        """Add placeholder node for referenced but not yet processed notes"""
-        node = ObsidianNode(
-            node_id=node_id,
-            node_type='note_ref',
-            title=title,
-            metadata={'placeholder': True}
-        )
-        self.graph.add_node(node_id, **node.to_dict())
-
-    def _extract_and_add_tags(self, note_id: str, content: str):
-        """Extract tags and add as nodes + edges"""
-        matches = self.tag_pattern.findall(content)
-        unique_tags = set(matches)
-
-        for tag in unique_tags:
-            self._add_tag_node_and_edge(note_id, tag)
-
-    def _add_tag_node_and_edge(self, note_id: str, tag: str):
-        """Add tag node and connect to note"""
-        tag_id = f"tag:{tag}"
-
-        # Add tag node if not exists
-        if not self.graph.has_node(tag_id):
-            node = ObsidianNode(
-                node_id=tag_id,
-                node_type='tag',
-                title=f"#{tag}",
-                metadata={'tag_name': tag}
-            )
-            self.graph.add_node(tag_id, **node.to_dict())
-
-        # Add edge from note to tag
-        self.graph.add_edge(note_id, tag_id, edge_type='tag')
-
-    def _extract_and_add_headers(self, note_id: str, content: str):
-        """Extract markdown headers and add as hierarchical nodes"""
-        header_pattern = re.compile(r'^(#{1,6})\s+(.+)$', re.MULTILINE)
-        matches = header_pattern.findall(content)
-
-        parent_id = note_id
-        prev_level = 0
-        header_stack = [(0, note_id)]  # (level, id) stack
-
-        for i, (hashes, title) in enumerate(matches):
-            level = len(hashes)
-            header_id = f"{note_id}:h{i}"
-
-            # Find parent (most recent header with level < current)
-            while header_stack and header_stack[-1][0] >= level:
-                header_stack.pop()
-            parent_id = header_stack[-1][1] if header_stack else note_id
-
-            self._add_header_node(header_id, title, level, parent_id)
-            header_stack.append((level, header_id))
-
-    def _add_header_node(self, header_id: str, title: str, level: int,
-                        parent_id: str):
-        """Add header node and connect to parent"""
-        node = ObsidianNode(
-            node_id=header_id,
-            node_type='header',
-            title=title,
-            metadata={'level': level}
-        )
-        self.graph.add_node(header_id, **node.to_dict())
-        self.graph.add_edge(parent_id, header_id, edge_type='header_child')
+    # ============================================================
+    # QUERY OPERATIONS (delegate to GraphQuery)
+    # ============================================================
 
     def get_connected_nodes(self, node_id: str, hops: int = 1,
                            edge_types: Optional[List[str]] = None) -> List[Dict]:
         """Get nodes connected within N hops
 
-        Args:
-            node_id: Starting node ID
-            hops: Number of hops (1 = immediate neighbors, 2 = neighbors + their neighbors)
-            edge_types: Filter by edge types (e.g., ['wikilink', 'backlink'])
-
-        Returns:
-            List of node dictionaries with metadata
+        Delegates to GraphQuery for traversal logic.
         """
-        if not self.graph.has_node(node_id):
-            return []
-
-        connected = set([node_id])
-        frontier = {node_id}
-
-        for _ in range(hops):
-            frontier = self._expand_frontier(frontier, edge_types, connected)
-
-        # Return node data for all connected nodes (except starting node)
-        connected.discard(node_id)
-        return [self.graph.nodes[nid] for nid in connected]
-
-    def _expand_frontier(self, frontier: Set[str], edge_types: Optional[List[str]],
-                        connected: Set[str]) -> Set[str]:
-        """Expand frontier by one hop"""
-        new_frontier = set()
-
-        for node in frontier:
-            neighbors = self._get_filtered_neighbors(node, edge_types)
-            new_neighbors = neighbors - connected
-            new_frontier.update(new_neighbors)
-            connected.update(new_neighbors)
-
-        return new_frontier
-
-    def _get_filtered_neighbors(self, node_id: str,
-                                edge_types: Optional[List[str]]) -> Set[str]:
-        """Get neighbors filtered by edge type"""
-        if edge_types is None:
-            return set(self.graph.neighbors(node_id))
-
-        neighbors = set()
-        for _, target, edge_data in self.graph.edges(node_id, data=True):
-            if edge_data.get('edge_type') in edge_types:
-                neighbors.add(target)
-
-        return neighbors
+        return self.query.get_connected_nodes(self.graph, node_id, hops, edge_types)
 
     def get_backlinks(self, node_id: str) -> List[str]:
-        """Get all nodes that link TO this node"""
-        if not self.graph.has_node(node_id):
-            return []
+        """Get all nodes that link TO this node
 
-        backlinks = []
-        for source, target, edge_data in self.graph.edges(data=True):
-            if target == node_id and edge_data.get('edge_type') == 'wikilink':
-                backlinks.append(source)
-
-        return backlinks
+        Delegates to GraphQuery for backlink logic.
+        """
+        return self.query.get_backlinks(self.graph, node_id)
 
     def get_tags_for_note(self, node_id: str) -> List[str]:
-        """Get all tags for a note"""
-        if not self.graph.has_node(node_id):
-            return []
+        """Get all tags for a note
 
-        tags = []
-        for _, target, edge_data in self.graph.edges(node_id, data=True):
-            if edge_data.get('edge_type') == 'tag':
-                tag_data = self.graph.nodes[target]
-                tags.append(tag_data['title'])
-
-        return tags
+        Delegates to GraphQuery for tag retrieval.
+        """
+        return self.query.get_tags_for_note(self.graph, node_id)
 
     def get_notes_with_tag(self, tag: str) -> List[str]:
-        """Get all notes with a specific tag"""
-        tag_id = f"tag:{tag.lstrip('#')}"
+        """Get all notes with a specific tag
 
-        if not self.graph.has_node(tag_id):
-            return []
+        Delegates to GraphQuery for tag search.
+        """
+        return self.query.get_notes_with_tag(self.graph, tag)
 
-        notes = []
-        for source, target, edge_data in self.graph.edges(data=True):
-            if target == tag_id and edge_data.get('edge_type') == 'tag':
-                notes.append(source)
-
-        return notes
+    # ============================================================
+    # GRAPH ANALYTICS
+    # ============================================================
 
     def compute_pagerank(self, max_iter: int = 100) -> Dict[str, float]:
         """Compute PageRank scores for all nodes
@@ -298,6 +202,10 @@ class ObsidianGraphBuilder:
             # Return uniform scores if PageRank fails
             return {node: 1.0 / len(self.graph.nodes)
                     for node in self.graph.nodes}
+
+    # ============================================================
+    # GRAPH I/O OPERATIONS
+    # ============================================================
 
     def export_graph(self) -> Dict:
         """Export graph to JSON-serializable format"""

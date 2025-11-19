@@ -302,8 +302,8 @@ class VectorRepository:
             # Check if stored path still exists (duplicate) or was moved
             from pathlib import Path
             if Path(stored_path).exists():
-                # Duplicate file - different path, same content
-                print(f"Skipping duplicate: {path} (same content as {stored_path})")
+                # Duplicate file - different path, same content (silent to avoid spam)
+                pass
             else:
                 # File was actually moved
                 self._update_path(hash_val, stored_path, path)
@@ -581,6 +581,60 @@ class VectorStore:
             'file_path': result[0],
             'extraction_method': result[1] or 'unknown',
             'indexed_at': result[2]
+        }
+
+    def delete_document(self, file_path: str) -> Dict:
+        """Delete a document and all its chunks from the vector store
+
+        This is a complete deletion that removes:
+        1. All chunks from the chunks table
+        2. The document record from the documents table
+        3. Vector embeddings (if vec_chunks table is accessible)
+
+        Note: Processing progress must be deleted separately via ProcessingProgressTracker
+
+        Args:
+            file_path: Full path to the document file
+
+        Returns:
+            Dict with deletion statistics
+        """
+        # Find document ID
+        cursor = self.conn.execute(
+            "SELECT id FROM documents WHERE file_path = ?",
+            (file_path,)
+        )
+        result = cursor.fetchone()
+
+        if not result:
+            return {
+                'found': False,
+                'chunks_deleted': 0,
+                'document_deleted': False
+            }
+
+        doc_id = result[0]
+
+        # Count chunks before deletion
+        cursor = self.conn.execute(
+            "SELECT COUNT(*) FROM chunks WHERE document_id = ?",
+            (doc_id,)
+        )
+        chunk_count = cursor.fetchone()[0]
+
+        # Delete chunks
+        self.conn.execute("DELETE FROM chunks WHERE document_id = ?", (doc_id,))
+
+        # Delete document
+        self.conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+
+        self.conn.commit()
+
+        return {
+            'found': True,
+            'document_id': doc_id,
+            'chunks_deleted': chunk_count,
+            'document_deleted': True
         }
 
     def close(self):

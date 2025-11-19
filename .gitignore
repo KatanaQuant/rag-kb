@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+.pytest_cache/
 *.py[cod]
 *$py.class
 *.so
@@ -15,7 +16,6 @@ package-lock.json
 # Data
 data/
 data_test/
-data_docling/
 data_new/
 data_old/
 *.db
@@ -38,17 +38,16 @@ knowledge_base_new/*
 knowledge_base_old/
 data.backup.*/
 data_backup/
+data_test/
+knowledge_base_test/
+up next/
 
 # Agent session files
-.agent/session.md
-.agent/next.md
 .agent/
 .claude/
 
 # Docker
 .env
-docker-compose.new.yml
-new-instance.sh
 
 # IDE
 .vscode/
@@ -61,12 +60,4 @@ new-instance.sh
 Thumbs.db
 .local-scripts/
 api/core.*
-
-# Marketing materials (untracked)
-marketing/
-data_test/
-knowledge_base_test/
-
-# Test scripts and staging areas
-test_graph_persist.py
-up next/
+core.*

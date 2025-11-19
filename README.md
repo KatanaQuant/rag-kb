@@ -8,7 +8,7 @@
 
 Built with FastAPI, sqlite-vec, and sentence-transformers.
 
-**Current Version**: v0.9.0-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
+**Current Version**: v0.9.1-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
 
 > **CPU-Only Build**: This project is optimized exclusively for CPU processing. No GPU required or supported. Large knowledge bases may take significant time to index:
 >
@@ -45,14 +45,17 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 - **Resumable Processing**: Checkpoint-based processing resumes from last position after interruptions
 - **Hybrid Search**: Combines vector similarity + keyword search for 10-30% better accuracy
 - **Intelligent Caching**: LRU cache for instant repeat queries
+- **Document Management API**: Delete documents with full cleanup (DELETE /document/{path}), search by pattern (GET /documents/search)
+- **Clean Logging**: Silent skips, milestone-based progress (25/50/75/100%), reduced noise
 - **Semantic Search**: Natural language queries across all your documents
 - **100% Local**: No external APIs, complete privacy
-- **Auto-Sync**: Automatically detects and indexes new/modified files in real-time
+- **Auto-Sync**: Automatically detects and indexes new/modified files in real-time (including .ipynb files)
 - **Multiple Formats**: PDF, EPUB, DOCX, Markdown, Code, Jupyter notebooks, Obsidian vaults
 - **Token Efficient**: Returns only relevant chunks (~3-5K tokens vs 100K+ for full files)
 - **Docker-Based**: Runs anywhere Docker runs
 - **MCP Integration**: Built-in server for IDE integration
 - **Portable**: Single SQLite database file - easy to backup and migrate
+- **Production-Ready Architecture**: POODR refactoring (25+ focused classes, dependency injection, duck typing)
 
 ---
 

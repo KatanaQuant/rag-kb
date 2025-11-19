@@ -169,6 +169,19 @@ class ProcessingProgressTracker:
             completed_at=row[9]
         )
 
+    def delete_document(self, file_path: str) -> bool:
+        """Delete processing progress for a document
+
+        Returns:
+            True if progress was deleted, False if not found
+        """
+        cursor = self.conn.execute(
+            "DELETE FROM processing_progress WHERE file_path = ?",
+            (file_path,)
+        )
+        self.conn.commit()
+        return cursor.rowcount > 0
+
     def close(self):
         """Close connection"""
         if self.conn:

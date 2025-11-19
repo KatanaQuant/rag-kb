@@ -127,8 +127,7 @@ class DocumentIndexer:
     def _get_chunks(self, doc_file: DocumentFile) -> List:
         """Extract chunks from file"""
         chunks = self.processor.process_file(doc_file)
-        if not chunks:
-            print(f"No chunks: {doc_file.name}")
+        # Silent when no chunks - avoid log spam
         return chunks
 
     def _store_if_valid(self, doc_file: DocumentFile, chunks: List) -> int:
@@ -306,9 +305,16 @@ class IndexOrchestrator:
 
             file_count += 1
 
-            # Show progress every 10 files or at milestones
-            if idx % 10 == 0 or idx == total_files:
-                percentage = (idx / total_files) * 100
+            # Show progress only at milestones (every 100 files or 25/50/75/100%)
+            percentage = (idx / total_files) * 100
+            should_show = (
+                idx % 100 == 0 or  # Every 100 files
+                idx == total_files or  # Final
+                percentage >= 25 and (idx - 1) / total_files * 100 < 25 or  # 25%
+                percentage >= 50 and (idx - 1) / total_files * 100 < 50 or  # 50%
+                percentage >= 75 and (idx - 1) / total_files * 100 < 75  # 75%
+            )
+            if should_show:
                 skip_msg = f", {skipped_files} skipped" if skipped_files > 0 else ""
                 print(f"Progress: {idx}/{total_files} files ({percentage:.1f}%) - {indexed_files} indexed{skip_msg}, {total_chunks} chunks")
 
@@ -321,6 +327,9 @@ class IndexOrchestrator:
 
         # Persist Obsidian knowledge graph if any Obsidian notes were indexed
         self._persist_obsidian_graph()
+
+        # Print final summary with all counts
+        print(f"Indexed {indexed_files} docs, {total_chunks} chunks ({skipped_files} already indexed)")
 
         return indexed_files, total_chunks
 
@@ -721,6 +730,117 @@ async def list_documents():
         raise HTTPException(
             status_code=500,
             detail="Failed to list documents"
+        )
+
+
+@app.get("/documents/search")
+async def search_documents(pattern: str = None):
+    """Search for documents by file path pattern
+
+    Args:
+        pattern: Optional substring to search for in file paths (case-insensitive)
+                 Examples: "AFTS", "notebook", ".pdf", "chapter1"
+
+    Returns:
+        List of matching documents with their metadata
+    """
+    try:
+        import sqlite3
+        conn = sqlite3.connect(default_config.database.path)
+
+        if pattern:
+            # Search with pattern (case-insensitive)
+            cursor = conn.execute("""
+                SELECT d.id, d.file_path, d.file_hash, d.indexed_at, COUNT(c.id) as chunk_count
+                FROM documents d
+                LEFT JOIN chunks c ON d.id = c.document_id
+                WHERE d.file_path LIKE ?
+                GROUP BY d.id
+                ORDER BY d.indexed_at DESC
+            """, (f"%{pattern}%",))
+        else:
+            # List all documents
+            cursor = conn.execute("""
+                SELECT d.id, d.file_path, d.file_hash, d.indexed_at, COUNT(c.id) as chunk_count
+                FROM documents d
+                LEFT JOIN chunks c ON d.id = c.document_id
+                GROUP BY d.id
+                ORDER BY d.indexed_at DESC
+            """)
+
+        results = cursor.fetchall()
+        conn.close()
+
+        documents = [
+            {
+                "id": row[0],
+                "file_path": row[1],
+                "file_name": row[1].split('/')[-1],
+                "file_hash": row[2],
+                "indexed_at": row[3],
+                "chunk_count": row[4]
+            }
+            for row in results
+        ]
+
+        return {
+            "pattern": pattern,
+            "total_matches": len(documents),
+            "documents": documents
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to search documents: {str(e)}"
+        )
+
+
+@app.delete("/document/{file_path:path}")
+async def delete_document(file_path: str):
+    """Delete a document and all its chunks from the vector store
+
+    This removes:
+    - Document record from documents table
+    - All chunks from chunks table
+    - Processing progress from processing_progress table
+
+    Args:
+        file_path: Full path to the document (e.g., /app/knowledge_base/file.pdf)
+
+    Returns:
+        Deletion statistics including chunks deleted
+    """
+    try:
+        # Delete from vector store (documents + chunks)
+        result = state.vector_store.delete_document(file_path)
+
+        if not result['found']:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Document not found: {file_path}"
+            )
+
+        # Delete from processing progress
+        if state.progress_tracker:
+            progress_deleted = state.progress_tracker.delete_document(file_path)
+        else:
+            progress_deleted = False
+
+        return {
+            "success": True,
+            "file_path": file_path,
+            "chunks_deleted": result['chunks_deleted'],
+            "processing_progress_deleted": progress_deleted,
+            "message": f"Successfully deleted document with {result['chunks_deleted']} chunks"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete document: {str(e)}"
         )
 
 

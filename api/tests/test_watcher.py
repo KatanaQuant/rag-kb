@@ -194,6 +194,48 @@ class TestIndexingCoordinator:
 
         assert indexer.index_file.call_count == 2
 
+    def test_shows_processing_before_result(self, capsys):
+        """Test: Shows 'Processing...' message BEFORE showing success/failure"""
+        indexer = Mock()
+        indexer.index_file = Mock(return_value=(10, False))
+        collector = FileChangeCollector()
+        coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
+
+        file1 = Path("/test/document.pdf")
+        collector.add(file1)
+
+        coordinator.process_changes()
+
+        captured = capsys.readouterr()
+        output_lines = captured.out.strip().split('\n')
+
+        # Should have at least 3 lines: "Processing...", "  Processing document.pdf...", "  ✓ document.pdf: X chunks"
+        assert len(output_lines) >= 3
+        assert "Processing 1 changed file" in output_lines[0]
+        assert "Processing document.pdf" in output_lines[1]
+        assert "✓ document.pdf" in output_lines[2]
+
+    def test_shows_processing_before_error(self, capsys):
+        """Test: Shows 'Processing...' message BEFORE showing error"""
+        indexer = Mock()
+        indexer.index_file = Mock(side_effect=Exception("Test error"))
+        collector = FileChangeCollector()
+        coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
+
+        file1 = Path("/test/broken.epub")
+        collector.add(file1)
+
+        coordinator.process_changes()
+
+        captured = capsys.readouterr()
+        output_lines = captured.out.strip().split('\n')
+
+        # Should show processing before error
+        assert len(output_lines) >= 3
+        assert "Processing 1 changed file" in output_lines[0]
+        assert "Processing broken.epub" in output_lines[1]
+        assert "✗ broken.epub" in output_lines[2]
+
     def test_error_handling(self):
         """Test errors don't stop processing"""
         indexer = Mock()
