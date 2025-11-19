@@ -30,3 +30,17 @@ docling>=2.9.0
 # Code parsing with AST-based chunking
 # Note: Uses tree-sitter for language-agnostic AST parsing
 astchunk>=0.1.0
+
+# Tree-sitter language pack for R and other languages (160+ languages supported)
+# Note: Actively maintained replacement for tree-sitter-languages
+tree-sitter-language-pack>=0.10.0
+
+# Jupyter notebook processing
+# Note: nbformat is the official Jupyter format library
+nbformat>=5.9.0
+
+# Obsidian vault processing with Graph-RAG
+# Note: obsidiantools for wikilinks, tags, frontmatter parsing
+# Note: networkx for knowledge graph construction and traversal
+obsidiantools>=0.10.0
+networkx>=3.0

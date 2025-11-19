@@ -109,6 +109,7 @@ class SchemaManager:
         self._create_vector_table()
         self._create_fts_table()
         self._create_processing_progress_table()
+        self._create_graph_tables()
         self.conn.commit()
 
     def _create_documents_table(self):
@@ -196,6 +197,85 @@ class SchemaManager:
             )
         """)
 
+    def _create_graph_tables(self):
+        """Create knowledge graph tables for Obsidian Graph-RAG
+
+        GRACEFUL MIGRATION: Creates tables if they don't exist.
+        Does NOT touch existing data in documents/chunks/vectors.
+        """
+        # Graph nodes table (notes, tags, headers, concepts)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS graph_nodes (
+                node_id TEXT PRIMARY KEY,
+                node_type TEXT NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT,
+                metadata TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Graph edges table (wikilinks, tags, headers, concepts)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS graph_edges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_id TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                edge_type TEXT NOT NULL,
+                metadata TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (source_id) REFERENCES graph_nodes(node_id) ON DELETE CASCADE,
+                FOREIGN KEY (target_id) REFERENCES graph_nodes(node_id) ON DELETE CASCADE
+            )
+        """)
+
+        # Index for fast edge lookups
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_edges_source ON graph_edges(source_id)
+        """)
+
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_edges_target ON graph_edges(target_id)
+        """)
+
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_edges_type ON graph_edges(edge_type)
+        """)
+
+        # Graph metadata table (PageRank scores, etc.)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS graph_metadata (
+                node_id TEXT PRIMARY KEY,
+                pagerank_score REAL,
+                in_degree INTEGER,
+                out_degree INTEGER,
+                last_computed TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (node_id) REFERENCES graph_nodes(node_id) ON DELETE CASCADE
+            )
+        """)
+
+        # Chunk-to-graph mapping (connects chunks to graph nodes)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS chunk_graph_links (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chunk_id INTEGER NOT NULL,
+                node_id TEXT NOT NULL,
+                link_type TEXT DEFAULT 'primary',
+                FOREIGN KEY (chunk_id) REFERENCES chunks(id) ON DELETE CASCADE,
+                FOREIGN KEY (node_id) REFERENCES graph_nodes(node_id) ON DELETE CASCADE
+            )
+        """)
+
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_chunk_graph_chunk ON chunk_graph_links(chunk_id)
+        """)
+
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_chunk_graph_node ON chunk_graph_links(node_id)
+        """)
+
+        print("Graph-RAG tables initialized (existing data preserved)")
+
 
 class VectorRepository:
     """Handles vector CRUD operations"""
@@ -204,17 +284,85 @@ class VectorRepository:
         self.conn = conn
 
     def is_indexed(self, path: str, hash_val: str) -> bool:
-        """Check if document indexed"""
-        result = self._fetch_hash(path)
-        return result and result[0] == hash_val
+        """Check if document indexed by hash (allows file moves without reindex)
+
+        First checks if hash exists anywhere in database.
+        If hash found but path changed:
+        - If stored path still exists: This is a duplicate file, skip it
+        - If stored path missing: File was moved, update the path
+        Returns True if document with this hash is already indexed.
+        """
+        result = self._fetch_by_hash(hash_val)
+        if not result:
+            return False
+
+        # Hash exists - check if path changed
+        stored_path = result[0]
+        if stored_path != path:
+            # Check if stored path still exists (duplicate) or was moved
+            from pathlib import Path
+            if Path(stored_path).exists():
+                # Duplicate file - different path, same content
+                print(f"Skipping duplicate: {path} (same content as {stored_path})")
+            else:
+                # File was actually moved
+                self._update_path(hash_val, stored_path, path)
+                print(f"File moved: {stored_path} -> {path}")
+
+        return True
 
     def _fetch_hash(self, path: str):
-        """Fetch stored hash"""
+        """Fetch stored hash by path"""
         cursor = self.conn.execute(
             "SELECT file_hash FROM documents WHERE file_path = ?",
             (path,)
         )
         return cursor.fetchone()
+
+    def _fetch_by_hash(self, hash_val: str):
+        """Fetch stored path by hash"""
+        cursor = self.conn.execute(
+            "SELECT file_path FROM documents WHERE file_hash = ?",
+            (hash_val,)
+        )
+        return cursor.fetchone()
+
+    def _update_path(self, hash_val: str, old_path: str, new_path: str):
+        """Update file path after move (preserves chunks/embeddings)"""
+        try:
+            import uuid
+            temp_path = f"__temp_move_{uuid.uuid4().hex}__"
+
+            # Use temporary path to avoid UNIQUE constraint conflicts during swaps
+            # Step 1: Move to temp path
+            self.conn.execute(
+                "UPDATE documents SET file_path = ? WHERE file_hash = ?",
+                (temp_path, hash_val)
+            )
+            self.conn.execute(
+                "UPDATE processing_progress SET file_path = ? WHERE file_hash = ?",
+                (temp_path, hash_val)
+            )
+
+            # Step 2: Move to final path
+            self.conn.execute(
+                "UPDATE documents SET file_path = ? WHERE file_hash = ?",
+                (new_path, hash_val)
+            )
+            self.conn.execute(
+                "UPDATE processing_progress SET file_path = ? WHERE file_hash = ?",
+                (new_path, hash_val)
+            )
+
+            # Update graph nodes for Obsidian notes (if applicable)
+            from ingestion.graph_repository import GraphRepository
+            graph_repo = GraphRepository(self.conn)
+            graph_repo.update_note_path(old_path, new_path)
+
+            self.conn.commit()
+        except Exception as e:
+            print(f"Warning: Failed to update path after move: {e}")
+            self.conn.rollback()
 
     def get_extraction_method(self, path: str) -> str:
         """Get extraction method used for a document"""
@@ -240,7 +388,22 @@ class VectorRepository:
         return doc_id
 
     def _delete_old(self, path: str):
-        """Remove existing document"""
+        """Remove existing document AND clean up graph nodes
+
+        For Obsidian notes: Cleans up graph nodes intelligently
+        - Deletes note-specific nodes (note, headers)
+        - Cleans up orphaned shared nodes (tags, placeholders)
+        - Preserves shared nodes still referenced by other notes
+
+        For other files: No graph impact
+        """
+        # Clean up graph nodes if this is an Obsidian note
+        # (GraphRepository handles the intelligence)
+        from ingestion.graph_repository import GraphRepository
+        graph_repo = GraphRepository(self.conn)
+        graph_repo.delete_note_nodes(path)
+
+        # Delete document (CASCADE deletes chunks, vectors, fts, chunk_graph_links)
         self.conn.execute(
             "DELETE FROM documents WHERE file_path = ?",
             (path,)

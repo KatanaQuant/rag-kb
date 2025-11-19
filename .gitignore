@@ -66,3 +66,7 @@ api/core.*
 marketing/
 data_test/
 knowledge_base_test/
+
+# Test scripts and staging areas
+test_graph_persist.py
+up next/

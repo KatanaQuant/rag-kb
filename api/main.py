@@ -319,7 +319,34 @@ class IndexOrchestrator:
         # Wait for all pending embeddings to complete
         self.indexer.wait_for_pending()
 
+        # Persist Obsidian knowledge graph if any Obsidian notes were indexed
+        self._persist_obsidian_graph()
+
         return indexed_files, total_chunks
+
+    def _persist_obsidian_graph(self):
+        """Persist Obsidian knowledge graph to database"""
+        try:
+            # Get the graph from the processor's extractor
+            obsidian_graph = self.indexer.processor.extractor.get_obsidian_graph()
+            graph_export = obsidian_graph.export_graph()
+
+            # Only persist if graph has content
+            if graph_export['stats']['total_nodes'] > 0:
+                from ingestion.graph_repository import GraphRepository
+                from ingestion.database import DatabaseConnection
+
+                db = DatabaseConnection()
+                conn = db.connect()
+                graph_repo = GraphRepository(conn)
+                graph_repo.persist_graph(graph_export)
+                graph_repo.commit()
+                db.close()
+
+                print(f"Graph persisted: {graph_export['stats']['total_nodes']} nodes, "
+                      f"{graph_export['stats']['total_edges']} edges")
+        except Exception as e:
+            print(f"Warning: Failed to persist graph: {e}")
 
 
 class QueryExecutor:
