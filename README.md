@@ -8,7 +8,7 @@
 
 Built with FastAPI, sqlite-vec, and sentence-transformers.
 
-**Current Version**: v0.7.0-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
+**Current Version**: v0.9.0-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
 
 > **CPU-Only Build**: This project is optimized exclusively for CPU processing. No GPU required or supported. Large knowledge bases may take significant time to index:
 >
@@ -39,13 +39,16 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 
 - **Semantic Chunking**: Token-aware chunking with HybridChunker preserves paragraphs, sections, and tables
 - **Advanced PDF Processing**: Docling integration with OCR support, table extraction, and layout preservation
+- **AST-Based Code Chunking**: Intelligent code parsing for Python, Java, TypeScript, C#, JavaScript and more
+- **Jupyter Notebook Support**: Cell-aware chunking with AST parsing for 160+ programming languages
+- **Obsidian Graph-RAG**: Full knowledge graph support for Obsidian vaults with bidirectional linking
 - **Resumable Processing**: Checkpoint-based processing resumes from last position after interruptions
 - **Hybrid Search**: Combines vector similarity + keyword search for 10-30% better accuracy
 - **Intelligent Caching**: LRU cache for instant repeat queries
 - **Semantic Search**: Natural language queries across all your documents
 - **100% Local**: No external APIs, complete privacy
 - **Auto-Sync**: Automatically detects and indexes new/modified files in real-time
-- **Multiple Formats**: PDF, DOCX (Docling + HybridChunker), Markdown, TXT (semantic chunking)
+- **Multiple Formats**: PDF, EPUB, DOCX, Markdown, Code, Jupyter notebooks, Obsidian vaults
 - **Token Efficient**: Returns only relevant chunks (~3-5K tokens vs 100K+ for full files)
 - **Docker-Based**: Runs anywhere Docker runs
 - **MCP Integration**: Built-in server for IDE integration

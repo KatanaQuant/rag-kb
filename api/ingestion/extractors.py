@@ -18,6 +18,10 @@ from config import default_config
 from hybrid_search import HybridSearcher
 from domain_models import ChunkData, DocumentFile, ExtractionResult
 from ingestion.helpers import GhostscriptHelper
+from ingestion.jupyter_extractor import JupyterExtractor
+from ingestion.obsidian_extractor import ObsidianExtractor
+from ingestion.obsidian_graph import ObsidianGraphBuilder
+from ingestion.obsidian_detector import get_obsidian_detector
 
 # Suppress verbose Docling/PDF warnings and errors
 logging.getLogger('pdfminer').setLevel(logging.CRITICAL)
@@ -630,19 +634,23 @@ class TextExtractor:
         self.config = config
         self.extractors = self._build_extractors()
         self.last_method = None  # Track which method was used
+        self.obsidian_graph = ObsidianGraphBuilder()  # Shared graph for vault
+        self.obsidian_detector = get_obsidian_detector()
 
     def extract(self, file_path: Path) -> ExtractionResult:
         """Extract text based on file extension"""
         ext = file_path.suffix.lower()
         self._validate_extension(ext)
 
+        # Special handling for markdown: detect Obsidian vs regular
+        if ext in ['.md', '.markdown']:
+            return self._extract_markdown_intelligently(file_path)
+
         # Track which extraction method is being used
         method_map = {
             '.pdf': 'docling_hybrid',
             '.docx': 'docling_hybrid',
             '.epub': 'epub_pandoc_docling',
-            '.md': 'docling_markdown',
-            '.markdown': 'docling_markdown',
             '.txt': 'semantic_text',
             '.py': 'ast_python',
             '.java': 'ast_java',
@@ -650,19 +658,33 @@ class TextExtractor:
             '.tsx': 'ast_tsx',
             '.js': 'ast_javascript',
             '.jsx': 'ast_jsx',
-            '.cs': 'ast_c_sharp'
+            '.cs': 'ast_c_sharp',
+            '.ipynb': 'jupyter_ast'
         }
         self.last_method = method_map.get(ext, 'unknown')
 
         return self.extractors[ext](file_path)
 
+    def _extract_markdown_intelligently(self, file_path: Path) -> ExtractionResult:
+        """Choose between Obsidian Graph-RAG or regular markdown extraction"""
+        if self.obsidian_detector.is_obsidian_note(file_path):
+            self.last_method = 'obsidian_graph_rag'
+            return ObsidianExtractor.extract(file_path, self.obsidian_graph)
+        else:
+            self.last_method = 'docling_markdown'
+            return MarkdownExtractor.extract(file_path)
+
     def get_last_method(self) -> str:
         """Get the last extraction method used"""
         return self.last_method or 'unknown'
 
+    def get_obsidian_graph(self) -> ObsidianGraphBuilder:
+        """Get the shared Obsidian graph (for persistence)"""
+        return self.obsidian_graph
+
     def _build_extractors(self) -> Dict:
-        """Map extensions to extractors - Docling for docs, AST for code"""
-        print("Using Docling + HybridChunker for PDF/DOCX/EPUB/MD, AST chunking for code, semantic for TXT")
+        """Map extensions to extractors - Docling for docs, AST for code, Jupyter for notebooks, Graph-RAG for Obsidian"""
+        print("Using Docling + HybridChunker for PDF/DOCX/EPUB, AST chunking for code, Jupyter for .ipynb, Graph-RAG for Obsidian vaults")
         return {
             # Documents
             '.pdf': DoclingExtractor.extract,
@@ -678,7 +700,9 @@ class TextExtractor:
             '.tsx': CodeExtractor.extract,
             '.js': CodeExtractor.extract,
             '.jsx': CodeExtractor.extract,
-            '.cs': CodeExtractor.extract
+            '.cs': CodeExtractor.extract,
+            # Jupyter notebooks (AST + cell-aware chunking)
+            '.ipynb': JupyterExtractor.extract
         }
 
     def _validate_extension(self, ext: str):

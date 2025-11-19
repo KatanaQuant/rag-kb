@@ -141,7 +141,9 @@ class DocumentProcessor:
         # Documents
         '.pdf', '.txt', '.md', '.markdown', '.docx', '.epub',
         # Code files
-        '.py', '.java', '.ts', '.tsx', '.js', '.jsx', '.cs'
+        '.py', '.java', '.ts', '.tsx', '.js', '.jsx', '.cs',
+        # Jupyter notebooks
+        '.ipynb'
     }
 
     def __init__(self, progress_tracker: Optional[ProcessingProgressTracker] = None):
