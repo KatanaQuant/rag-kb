@@ -1,14 +1,8 @@
-"""Metadata Repository - extracted from GraphRepository
 
-POODR Phase 2.3: Facade Pattern + Repository Decomposition
-- Extracted from GraphRepository
-- Single Responsibility: Graph metadata and chunk-node links
-"""
 
 import sqlite3
 import json
 from typing import List, Dict, Optional
-
 
 class MetadataRepository:
     """Handles graph metadata and chunk-node link operations

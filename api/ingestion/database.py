@@ -17,6 +17,9 @@ import numpy as np
 from config import default_config
 from hybrid_search import HybridSearcher
 from domain_models import ChunkData, DocumentFile, ExtractionResult
+from ingestion.document_repository import DocumentRepository
+from ingestion.chunk_repository import ChunkRepository, VectorChunkRepository, FTSChunkRepository
+from ingestion.search_repository import SearchRepository
 
 # Suppress verbose Docling/PDF warnings and errors
 logging.getLogger('pdfminer').setLevel(logging.CRITICAL)
@@ -45,9 +48,7 @@ except ImportError as e:
     if DOCLING_AVAILABLE:
         print(f"Warning: Docling HybridChunker not available ({e}), using fixed-size chunking")
 
-
 @dataclass
-
 
 class DatabaseConnection:
     """Manages SQLite connection and extensions"""
@@ -59,6 +60,9 @@ class DatabaseConnection:
     def connect(self) -> sqlite3.Connection:
         """Establish database connection"""
         self.conn = self._create_connection()
+        # Enable WAL mode for better concurrency (allows concurrent reads during writes)
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA busy_timeout=5000")  # Wait up to 5s for locks
         self._load_extension()
         return self.conn
 
@@ -71,8 +75,17 @@ class DatabaseConnection:
 
     def _load_extension(self):
         """Load vector extension"""
-        self.conn.enable_load_extension(True)
-        self._try_load()
+        if not self.config.require_vec_extension:
+            return
+        if self._has_extension_support():
+            self.conn.enable_load_extension(True)
+            self._try_load()
+        else:
+            self._load_python_bindings()
+
+    def _has_extension_support(self) -> bool:
+        """Check if sqlite3 supports loadable extensions"""
+        return hasattr(self.conn, 'enable_load_extension')
 
     def _try_load(self):
         """Try loading extension"""
@@ -93,7 +106,6 @@ class DatabaseConnection:
         """Close connection"""
         if self.conn:
             self.conn.close()
-
 
 class SchemaManager:
     """Manages database schema"""
@@ -198,12 +210,16 @@ class SchemaManager:
         """)
 
     def _create_graph_tables(self):
-        """Create knowledge graph tables for Obsidian Graph-RAG
+        """Create knowledge graph tables for Obsidian Graph-RAG"""
+        self._create_graph_nodes_table()
+        self._create_graph_edges_table()
+        self._create_edge_indices()
+        self._create_graph_metadata_table()
+        self._create_chunk_graph_links_table()
+        print("Graph-RAG tables initialized (existing data preserved)")
 
-        GRACEFUL MIGRATION: Creates tables if they don't exist.
-        Does NOT touch existing data in documents/chunks/vectors.
-        """
-        # Graph nodes table (notes, tags, headers, concepts)
+    def _create_graph_nodes_table(self):
+        """Create table for graph nodes (notes, tags, headers, concepts)"""
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS graph_nodes (
                 node_id TEXT PRIMARY KEY,
@@ -215,7 +231,8 @@ class SchemaManager:
             )
         """)
 
-        # Graph edges table (wikilinks, tags, headers, concepts)
+    def _create_graph_edges_table(self):
+        """Create table for graph edges (wikilinks, tags, headers)"""
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS graph_edges (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -229,20 +246,14 @@ class SchemaManager:
             )
         """)
 
-        # Index for fast edge lookups
-        self.conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_edges_source ON graph_edges(source_id)
-        """)
+    def _create_edge_indices(self):
+        """Create indices for fast edge lookups"""
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_edges_source ON graph_edges(source_id)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_edges_target ON graph_edges(target_id)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_edges_type ON graph_edges(edge_type)")
 
-        self.conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_edges_target ON graph_edges(target_id)
-        """)
-
-        self.conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_edges_type ON graph_edges(edge_type)
-        """)
-
-        # Graph metadata table (PageRank scores, etc.)
+    def _create_graph_metadata_table(self):
+        """Create table for graph metrics (PageRank, degree)"""
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS graph_metadata (
                 node_id TEXT PRIMARY KEY,
@@ -254,7 +265,8 @@ class SchemaManager:
             )
         """)
 
-        # Chunk-to-graph mapping (connects chunks to graph nodes)
+    def _create_chunk_graph_links_table(self):
+        """Create table linking chunks to graph nodes"""
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS chunk_graph_links (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -265,96 +277,59 @@ class SchemaManager:
                 FOREIGN KEY (node_id) REFERENCES graph_nodes(node_id) ON DELETE CASCADE
             )
         """)
-
-        self.conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_chunk_graph_chunk ON chunk_graph_links(chunk_id)
-        """)
-
-        self.conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_chunk_graph_node ON chunk_graph_links(node_id)
-        """)
-
-        print("Graph-RAG tables initialized (existing data preserved)")
-
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_chunk_graph_chunk ON chunk_graph_links(chunk_id)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS idx_chunk_graph_node ON chunk_graph_links(node_id)")
 
 class VectorRepository:
-    """Handles vector CRUD operations"""
+    """Facade that delegates to focused repositories.
+
+    LEGACY COMPATIBILITY: Maintains old interface while delegating to new repositories.
+    This allows incremental migration of call sites.
+    """
 
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
+        self.documents = DocumentRepository(conn)
+        self.chunks = ChunkRepository(conn)
+        self.vectors = VectorChunkRepository(conn)
+        self.fts = FTSChunkRepository(conn)
+        self.search_repo = SearchRepository(conn)
 
     def is_indexed(self, path: str, hash_val: str) -> bool:
-        """Check if document indexed by hash (allows file moves without reindex)
-
-        First checks if hash exists anywhere in database.
-        If hash found but path changed:
-        - If stored path still exists: This is a duplicate file, skip it
-        - If stored path missing: File was moved, update the path
-        Returns True if document with this hash is already indexed.
-        """
-        result = self._fetch_by_hash(hash_val)
-        if not result:
+        """Check if document indexed by hash (allows file moves without reindex)"""
+        doc = self.documents.find_by_hash(hash_val)
+        if not doc:
             return False
 
-        # Hash exists - check if path changed
-        stored_path = result[0]
+        stored_path = doc['file_path']
         if stored_path != path:
-            # Check if stored path still exists (duplicate) or was moved
             from pathlib import Path
             if Path(stored_path).exists():
-                # Duplicate file - different path, same content (silent to avoid spam)
-                pass
+                pass  # Duplicate file
             else:
-                # File was actually moved
-                self._update_path(hash_val, stored_path, path)
+                self._update_path_after_move(hash_val, stored_path, path)
                 print(f"File moved: {stored_path} -> {path}")
 
         return True
 
-    def _fetch_hash(self, path: str):
-        """Fetch stored hash by path"""
-        cursor = self.conn.execute(
-            "SELECT file_hash FROM documents WHERE file_path = ?",
-            (path,)
-        )
-        return cursor.fetchone()
-
-    def _fetch_by_hash(self, hash_val: str):
-        """Fetch stored path by hash"""
-        cursor = self.conn.execute(
-            "SELECT file_path FROM documents WHERE file_hash = ?",
-            (hash_val,)
-        )
-        return cursor.fetchone()
-
-    def _update_path(self, hash_val: str, old_path: str, new_path: str):
+    def _update_path_after_move(self, hash_val: str, old_path: str, new_path: str):
         """Update file path after move (preserves chunks/embeddings)"""
         try:
             import uuid
             temp_path = f"__temp_move_{uuid.uuid4().hex}__"
 
-            # Use temporary path to avoid UNIQUE constraint conflicts during swaps
-            # Step 1: Move to temp path
-            self.conn.execute(
-                "UPDATE documents SET file_path = ? WHERE file_hash = ?",
-                (temp_path, hash_val)
-            )
+            self.documents.update_path_by_hash(hash_val, temp_path)
             self.conn.execute(
                 "UPDATE processing_progress SET file_path = ? WHERE file_hash = ?",
                 (temp_path, hash_val)
             )
 
-            # Step 2: Move to final path
-            self.conn.execute(
-                "UPDATE documents SET file_path = ? WHERE file_hash = ?",
-                (new_path, hash_val)
-            )
+            self.documents.update_path_by_hash(hash_val, new_path)
             self.conn.execute(
                 "UPDATE processing_progress SET file_path = ? WHERE file_hash = ?",
                 (new_path, hash_val)
             )
 
-            # Update graph nodes for Obsidian notes (if applicable)
             from ingestion.graph_repository import GraphRepository
             graph_repo = GraphRepository(self.conn)
             graph_repo.update_note_path(old_path, new_path)
@@ -366,163 +341,46 @@ class VectorRepository:
 
     def get_extraction_method(self, path: str) -> str:
         """Get extraction method used for a document"""
-        cursor = self.conn.execute(
-            "SELECT extraction_method FROM documents WHERE file_path = ?",
-            (path,)
-        )
-        result = cursor.fetchone()
-        return result[0] if result and result[0] else 'unknown'
+        return self.documents.get_extraction_method(path)
 
     def add_document(self, path: str, hash_val: str,
                     chunks: List[Dict], embeddings: List) -> int:
-        """Add document with chunks"""
-        # Extract extraction_method from first chunk if available
+        """Add document with chunks - delegates to repositories"""
         extraction_method = None
         if chunks and '_extraction_method' in chunks[0]:
             extraction_method = chunks[0]['_extraction_method']
 
         self._delete_old(path)
-        doc_id = self._insert_doc(path, hash_val, extraction_method)
-        self._insert_chunks(doc_id, chunks, embeddings)
+        doc_id = self.documents.add(path, hash_val, extraction_method)
+        self._insert_chunks_delegated(doc_id, chunks, embeddings)
         self.conn.commit()
         return doc_id
 
     def _delete_old(self, path: str):
-        """Remove existing document AND clean up graph nodes
-
-        For Obsidian notes: Cleans up graph nodes intelligently
-        - Deletes note-specific nodes (note, headers)
-        - Cleans up orphaned shared nodes (tags, placeholders)
-        - Preserves shared nodes still referenced by other notes
-
-        For other files: No graph impact
-        """
-        # Clean up graph nodes if this is an Obsidian note
-        # (GraphRepository handles the intelligence)
+        """Remove existing document AND clean up graph nodes"""
         from ingestion.graph_repository import GraphRepository
         graph_repo = GraphRepository(self.conn)
         graph_repo.delete_note_nodes(path)
+        self.documents.delete(path)
 
-        # Delete document (CASCADE deletes chunks, vectors, fts, chunk_graph_links)
-        self.conn.execute(
-            "DELETE FROM documents WHERE file_path = ?",
-            (path,)
-        )
-
-    def _insert_doc(self, path: str, hash_val: str, extraction_method: str = None) -> int:
-        """Insert document record"""
-        cursor = self.conn.execute(
-            "INSERT INTO documents (file_path, file_hash, extraction_method) VALUES (?, ?, ?)",
-            (path, hash_val, extraction_method)
-        )
-        return cursor.lastrowid
-
-    def _insert_chunks(self, doc_id: int, chunks: List[Dict],
-                      embeddings: List):
-        """Insert all chunks and vectors"""
+    def _insert_chunks_delegated(self, doc_id: int, chunks: List[Dict], embeddings: List):
+        """Insert chunks using new repositories"""
         for idx, (chunk, emb) in enumerate(zip(chunks, embeddings)):
-            self._insert_chunk_pair(doc_id, chunk, emb, idx)
-
-    def _insert_chunk_pair(self, doc_id, chunk, emb, idx):
-        """Insert chunk and its vector"""
-        chunk_id = self._insert_chunk(doc_id, chunk, idx)
-        self._insert_vector(chunk_id, emb)
-        self._insert_fts(chunk_id, chunk['content'])
-
-    def _insert_chunk(self, doc_id: int, chunk: Dict, idx: int) -> int:
-        """Insert single chunk"""
-        cursor = self.conn.execute(
-            """INSERT INTO chunks
-               (document_id, content, page, chunk_index)
-               VALUES (?, ?, ?, ?)""",
-            (doc_id, chunk['content'], chunk.get('page'), idx)
-        )
-        return cursor.lastrowid
-
-    def _insert_vector(self, chunk_id: int, embedding: List):
-        """Insert vector embedding"""
-        blob = self._to_blob(embedding)
-        self.conn.execute(
-            "INSERT INTO vec_chunks (chunk_id, embedding) VALUES (?, ?)",
-            (chunk_id, blob)
-        )
-
-    def _insert_fts(self, chunk_id: int, content: str):
-        """Insert into FTS5 index"""
-        try:
-            self.conn.execute(
-                "INSERT INTO fts_chunks (chunk_id, content) VALUES (?, ?)",
-                (chunk_id, content)
-            )
-        except Exception:
-            pass
-
-    @staticmethod
-    def _to_blob(embedding: List) -> bytes:
-        """Convert embedding to binary"""
-        arr = np.array(embedding, dtype=np.float32)
-        return arr.tobytes()
+            chunk_id = self.chunks.add(doc_id, chunk['content'], chunk.get('page'), idx)
+            self.vectors.add(chunk_id, emb)
+            self.fts.add(chunk_id, chunk['content'])
 
     def search(self, embedding: List, top_k: int,
               threshold: float = None) -> List[Dict]:
-        """Search for similar vectors"""
-        blob = self._to_blob(embedding)
-        results = self._execute_search(blob, top_k)
-        return self._format_results(results, threshold)
-
-    def _execute_search(self, blob: bytes, top_k: int):
-        """Execute vector search"""
-        cursor = self.conn.execute("""
-            SELECT c.content, d.file_path, c.page,
-                   vec_distance_cosine(v.embedding, ?) as dist
-            FROM vec_chunks v
-            JOIN chunks c ON v.chunk_id = c.id
-            JOIN documents d ON c.document_id = d.id
-            ORDER BY dist ASC
-            LIMIT ?
-        """, (blob, top_k))
-        return cursor.fetchall()
-
-    def _format_results(self, rows, threshold: float) -> List[Dict]:
-        """Format search results"""
-        results = []
-        for row in rows:
-            self._add_if_valid(results, row, threshold)
-        return results
-
-    def _add_if_valid(self, results, row, threshold):
-        """Add result if meets threshold"""
-        score = 1 - row[3]
-        if threshold is None or score >= threshold:
-            results.append(self._make_result(row, score))
-
-    @staticmethod
-    def _make_result(row, score: float) -> Dict:
-        """Create result dictionary"""
-        return {
-            'content': row[0],
-            'source': Path(row[1]).name,
-            'page': row[2],
-            'score': float(score)
-        }
+        """Search for similar vectors - delegates to SearchRepository"""
+        return self.search_repo.vector_search(embedding, top_k, threshold)
 
     def get_stats(self) -> Dict:
-        """Get database statistics"""
+        """Get database statistics - delegates to repositories"""
         return {
-            'indexed_documents': self._count_docs(),
-            'total_chunks': self._count_chunks()
+            'indexed_documents': self.documents.count(),
+            'total_chunks': self.chunks.count()
         }
-
-    def _count_docs(self) -> int:
-        """Count total documents"""
-        cursor = self.conn.execute("SELECT COUNT(*) FROM documents")
-        return cursor.fetchone()[0]
-
-    def _count_chunks(self) -> int:
-        """Count total chunks"""
-        cursor = self.conn.execute("SELECT COUNT(*) FROM chunks")
-        return cursor.fetchone()[0]
-
 
 class VectorStore:
     """Facade for vector storage operations"""
@@ -584,58 +442,58 @@ class VectorStore:
         }
 
     def delete_document(self, file_path: str) -> Dict:
-        """Delete a document and all its chunks from the vector store
+        """Delete a document and all its chunks from the vector store"""
+        doc_id = self._find_document_id(file_path)
+        if not doc_id:
+            return self._document_not_found_result()
 
-        This is a complete deletion that removes:
-        1. All chunks from the chunks table
-        2. The document record from the documents table
-        3. Vector embeddings (if vec_chunks table is accessible)
+        chunk_count = self._count_document_chunks(doc_id)
+        self._delete_document_data(doc_id)
+        self.conn.commit()
+        return self._deletion_success_result(doc_id, chunk_count)
 
-        Note: Processing progress must be deleted separately via ProcessingProgressTracker
-
-        Args:
-            file_path: Full path to the document file
-
-        Returns:
-            Dict with deletion statistics
-        """
-        # Find document ID
-        cursor = self.conn.execute(
-            "SELECT id FROM documents WHERE file_path = ?",
-            (file_path,)
-        )
+    def _find_document_id(self, file_path: str):
+        """Find document ID by file path"""
+        cursor = self.conn.execute("SELECT id FROM documents WHERE file_path = ?", (file_path,))
         result = cursor.fetchone()
+        return result[0] if result else None
 
-        if not result:
-            return {
-                'found': False,
-                'chunks_deleted': 0,
-                'document_deleted': False
-            }
+    def _document_not_found_result(self) -> Dict:
+        """Return result for document not found"""
+        return {'found': False, 'chunks_deleted': 0, 'document_deleted': False}
 
-        doc_id = result[0]
+    def _count_document_chunks(self, doc_id: int) -> int:
+        """Count chunks for document"""
+        cursor = self.conn.execute("SELECT COUNT(*) FROM chunks WHERE document_id = ?", (doc_id,))
+        return cursor.fetchone()[0]
 
-        # Count chunks before deletion
-        cursor = self.conn.execute(
-            "SELECT COUNT(*) FROM chunks WHERE document_id = ?",
-            (doc_id,)
-        )
-        chunk_count = cursor.fetchone()[0]
-
-        # Delete chunks
+    def _delete_document_data(self, doc_id: int):
+        """Delete chunks and document record"""
         self.conn.execute("DELETE FROM chunks WHERE document_id = ?", (doc_id,))
-
-        # Delete document
         self.conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
 
-        self.conn.commit()
-
+    def _deletion_success_result(self, doc_id: int, chunk_count: int) -> Dict:
+        """Return success result for deletion"""
         return {
             'found': True,
             'document_id': doc_id,
             'chunks_deleted': chunk_count,
             'document_deleted': True
         }
+
+    def query_documents_with_chunks(self):
+        """Query all documents with chunk counts.
+
+        Delegation method to avoid Law of Demeter violation.
+        Returns cursor for documents joined with chunk counts.
+        """
+        return self.conn.execute("""
+            SELECT d.file_path, d.indexed_at, COUNT(c.id)
+            FROM documents d
+            LEFT JOIN chunks c ON d.id = c.document_id
+            GROUP BY d.id
+            ORDER BY d.indexed_at DESC
+        """)
 
     def close(self):
         """Close connection"""

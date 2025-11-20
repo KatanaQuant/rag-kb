@@ -18,7 +18,6 @@ import re
 
 from domain_models import ExtractionResult
 
-
 @dataclass
 class NotebookCell:
     """Represents a parsed notebook cell"""
@@ -29,237 +28,161 @@ class NotebookCell:
     metadata: Dict
     execution_count: Optional[int] = None
 
-
 class JupyterExtractor:
-    """Orchestrates Jupyter notebook extraction pipeline
-
-    ORCHESTRATOR PATTERN (Phase 2 Complete!):
-    This class coordinates specialized components - it doesn't do the work itself.
-    Each responsibility delegated to a focused class:
-
-    - NotebookOutputParser: Parse cell outputs (CC 17 → isolated)
-    - KernelLanguageDetector: Map kernel names to languages
-    - ChunkerFactory: Create language-specific chunkers (Phase 1)
-    - MarkdownCellChunker: Process markdown cells
-    - CellCombiner: Smart combination of adjacent cells (CC 10 → isolated)
-
-    Features:
-    - AST-based chunking for Python (via astchunk) and R (via tree-sitter)
-    - Smart cell combining (adjacent same-type cells)
-    - Markdown header boundaries separate chunks
-    - Image/output preservation as metadata
-    - Cell execution context preservation
-
-    POODR Compliance:
-    - Phase 1: Dependency injection, depends on abstractions
-    - Phase 2: God Class decomposition (447 → 237 lines, -47%)
-    - Single Responsibility: Orchestrate, don't implement
-    - Open/Closed: Extend via new specialized classes
-    - Composition over inheritance: Uses helper classes, not subclasses
-
-    Metrics Journey:
-    - Before: 447 lines, CC 17 highest, MI 49.85
-    - After: 237 lines, CC 8 highest, MI 65.10 (+31% maintainability!)
-    """
+    
 
     def __init__(self, chunker_factory=None):
-        """Initialize extractor with optional chunker factory
-
-        Args:
-            chunker_factory: Factory for creating language-specific chunkers
-                           If None, uses default ChunkerFactory()
-
-        POODR Pattern: Dependency Injection
-        - Testable: Can inject mock factory
-        - Flexible: Can swap chunking strategies
-        - Decoupled: No direct dependency on ASTChunkBuilder, TreeSitterChunker
-        """
+        
         from ingestion.chunker_factory import ChunkerFactory
         self.chunker_factory = chunker_factory or ChunkerFactory()
 
     @staticmethod
     def _parse_notebook(path: Path) -> Tuple[Dict, List[NotebookCell]]:
-        """Parse notebook file into cells
+        """Parse notebook file into cells"""
+        nbformat = JupyterExtractor._import_nbformat()
+        notebook = JupyterExtractor._read_notebook_file(path, nbformat)
 
-        Args:
-            path: Path to .ipynb file
+        nb_metadata = JupyterExtractor._extract_notebook_metadata(notebook)
+        cells = JupyterExtractor._parse_notebook_cells(notebook)
 
-        Returns:
-            Tuple of (notebook_metadata, list of parsed cells)
+        return nb_metadata, cells
 
-        Raises:
-            ImportError: If nbformat not available
-            Exception: If notebook parsing fails
-        """
+    @staticmethod
+    def _import_nbformat():
+        """Import nbformat with helpful error message"""
         try:
             import nbformat
+            return nbformat
         except ImportError as e:
             raise ImportError(
                 f"nbformat not available: {e}\n"
                 "Install with: pip install nbformat>=5.9.0"
             )
 
-        # Read notebook
+    @staticmethod
+    def _read_notebook_file(path: Path, nbformat):
+        """Read notebook file using nbformat"""
         with open(path, 'r', encoding='utf-8') as f:
-            notebook = nbformat.read(f, as_version=nbformat.NO_CONVERT)
+            return nbformat.read(f, as_version=nbformat.NO_CONVERT)
 
-        # Extract notebook-level metadata
-        nb_metadata = {
+    @staticmethod
+    def _extract_notebook_metadata(notebook) -> Dict:
+        """Extract notebook-level metadata"""
+        return {
             'kernel': notebook.metadata.get('kernelspec', {}).get('name', 'unknown'),
             'language': notebook.metadata.get('kernelspec', {}).get('language', 'unknown'),
             'nbformat': notebook.nbformat,
             'nbformat_minor': notebook.nbformat_minor,
         }
 
-        # Parse cells
-        cells = []
-        for i, cell in enumerate(notebook.cells):
-            # Get cell source (might be list of strings)
-            source = cell.source if isinstance(cell.source, str) else ''.join(cell.source)
+    @staticmethod
+    def _parse_notebook_cells(notebook) -> List[NotebookCell]:
+        """Parse all cells in notebook"""
+        return [JupyterExtractor._parse_single_notebook_cell(cell, i)
+                for i, cell in enumerate(notebook.cells)]
 
-            # Get outputs (only for code cells)
-            outputs = []
-            if cell.cell_type == 'code' and hasattr(cell, 'outputs'):
-                from ingestion.jupyter.output_parser import NotebookOutputParser
-                outputs = NotebookOutputParser.parse_outputs(cell.outputs)
+    @staticmethod
+    def _parse_single_notebook_cell(cell, cell_number: int) -> NotebookCell:
+        """Parse single notebook cell"""
+        source = JupyterExtractor._get_cell_source(cell)
+        outputs = JupyterExtractor._get_cell_outputs(cell)
 
-            # Create parsed cell
-            parsed_cell = NotebookCell(
-                cell_type=cell.cell_type,
-                source=source,
-                cell_number=i,
-                outputs=outputs,
-                metadata=dict(cell.metadata) if hasattr(cell, 'metadata') else {},
-                execution_count=cell.execution_count if hasattr(cell, 'execution_count') else None
-            )
-            cells.append(parsed_cell)
+        return NotebookCell(
+            cell_type=cell.cell_type,
+            source=source,
+            cell_number=cell_number,
+            outputs=outputs,
+            metadata=dict(cell.metadata) if hasattr(cell, 'metadata') else {},
+            execution_count=cell.execution_count if hasattr(cell, 'execution_count') else None
+        )
 
-        return nb_metadata, cells
+    @staticmethod
+    def _get_cell_source(cell) -> str:
+        """Get cell source as string"""
+        return cell.source if isinstance(cell.source, str) else ''.join(cell.source)
 
-    def _chunk_code_cell(self, cell: NotebookCell, language: str, filepath: str) -> List[Dict]:
-        """Chunk code cell using injected chunker factory (POODR refactored!)
-
-        BEFORE (Phase 0): Direct dependencies on ASTChunkBuilder, TreeSitterChunker
-        AFTER (Phase 1): Depends on ChunkerInterface abstraction
-
-        Strategy:
-        - Delegate to chunker_factory (injected dependency)
-        - Factory selects appropriate chunker based on language and size
-        - This method focuses on enriching chunks with cell metadata
-
-        Args:
-            cell: Notebook cell to chunk
-            language: Programming language ('python', 'r', etc.)
-            filepath: Notebook filepath for metadata
-
-        Returns:
-            List of code chunks with metadata
-
-        POODR Benefits:
-        - Testable: Can inject mock factory
-        - Open/Closed: Add new languages by extending factory, not this method
-        - Single Responsibility: This method only enriches chunks, doesn't chunk
-        """
-        if not cell.source or not cell.source.strip():
+    @staticmethod
+    def _get_cell_outputs(cell) -> list:
+        """Get cell outputs if code cell"""
+        if cell.cell_type != 'code' or not hasattr(cell, 'outputs'):
             return []
 
-        # POODR: Delegate to injected dependency (abstraction, not concretion)
-        cell_size = len(cell.source)
-        chunker = self.chunker_factory.create_chunker(language, cell_size)
-        code_chunks = chunker.chunkify(cell.source, filepath=filepath)
-
-        # Enrich chunks with cell metadata
-        enriched_chunks = []
-        for chunk in code_chunks:
-            enriched_chunks.append({
-                'content': chunk['content'],
-                'type': 'code',
-                'language': language,
-                'cell_number': cell.cell_number,
-                'cell_type': 'code',
-                'execution_count': cell.execution_count,
-                'has_output': len(cell.outputs) > 0,
-                'outputs': cell.outputs,
-                'metadata': chunk.get('metadata', {}),
-                'filepath': filepath,
-            })
-
-        return enriched_chunks
+        from ingestion.jupyter.output_parser import NotebookOutputParser
+        return NotebookOutputParser.parse_outputs(cell.outputs)
 
     def extract(self, path: Path) -> ExtractionResult:
-        """Extract and chunk Jupyter notebook (POODR refactored!)
-
-        Main entry point. Processes notebook cells with AST-aware chunking
-        and smart cell combining.
-
-        POODR Change (Phase 1):
-        - No longer static (needs access to self.chunker_factory)
-        - Enables dependency injection pattern
-
-        Args:
-            path: Path to .ipynb file
-
-        Returns:
-            ExtractionResult with notebook chunks as pages
-
-        Raises:
-            ImportError: If nbformat not available
-            Exception: If notebook processing fails
-        """
-        # Parse notebook
+        """Extract and chunk Jupyter notebook with AST-aware chunking"""
         nb_metadata, cells = JupyterExtractor._parse_notebook(path)
+        language = self._detect_language(nb_metadata)
 
-        # Detect language from kernel
+        all_chunks = self._process_cells(cells, language, path)
+        combined_chunks = self._combine_adjacent_cells(all_chunks, path)
+        pages = self._format_pages(combined_chunks)
+
+        return ExtractionResult(pages=pages, method=f'jupyter_{language}')
+
+    def _detect_language(self, nb_metadata: dict) -> str:
+        """Detect programming language from kernel metadata"""
         from ingestion.jupyter.language_detector import KernelLanguageDetector
-        language = KernelLanguageDetector.detect_language(nb_metadata['kernel'])
+        return KernelLanguageDetector.detect_language(nb_metadata['kernel'])
 
-        # Process each cell with duck typing (POODR Phase 3!)
-        # BEFORE: if/elif cell_type conditionals
-        # AFTER: Dictionary dispatch + polymorphic duck typing
+    def _process_cells(self, cells: list, language: str, path: Path) -> list:
+        """Process all notebook cells with appropriate chunkers"""
+        chunkers = self._create_chunker_registry()
         all_chunks = []
+
+        for cell in cells:
+            chunks = self._process_single_cell(cell, chunkers, language, str(path))
+            all_chunks.extend(chunks)
+
+        return all_chunks
+
+    def _create_chunker_registry(self) -> dict:
+        """Create dictionary of cell type chunkers"""
         from ingestion.jupyter.code_cell_chunker import CodeCellChunker
         from ingestion.jupyter.markdown_chunker import MarkdownCellChunker
 
-        # Create chunker registry (duck typing: all respond to chunk(cell, path))
-        chunkers = {
+        return {
             'code': CodeCellChunker(self.chunker_factory),
             'markdown': MarkdownCellChunker(),
         }
 
-        for cell in cells:
-            # POODR Duck Typing: Polymorphic dispatch without if/elif!
-            # Trust chunkers to respond to chunk() message
-            chunker = chunkers.get(cell.cell_type)
-            if chunker:
-                # Enrich code cells with language
-                if cell.cell_type == 'code':
-                    cell.language = language
-                chunks = chunker.chunk(cell, str(path))
-                all_chunks.extend(chunks)
+    def _process_single_cell(self, cell, chunkers: dict, language: str, path: str) -> list:
+        """Process single cell with appropriate chunker"""
+        chunker = chunkers.get(cell.cell_type)
+        if not chunker:
+            return []
 
-        # Smart combination of adjacent cells
+        if cell.cell_type == 'code':
+            cell.language = language
+
+        return chunker.chunk(cell, path)
+
+    def _combine_adjacent_cells(self, chunks: list, path: Path) -> list:
+        """Combine adjacent cells for better context"""
         from ingestion.jupyter.cell_combiner import CellCombiner
-        combined_chunks = CellCombiner.combine_adjacent(all_chunks, str(path))
+        return CellCombiner.combine_adjacent(chunks, str(path))
 
-        # Convert to ExtractionResult format (pages as (text, page_num) tuples)
-        pages = []
-        for i, chunk in enumerate(combined_chunks):
-            # Format page text with metadata header
-            page_text = f"[Jupyter Notebook Chunk {i+1}]\n"
-            page_text += f"Cells: {chunk.get('cell_number_range', chunk.get('cell_number', 'unknown'))}\n"
-            page_text += f"Type: {chunk.get('type', 'unknown')}\n"
+    def _format_pages(self, chunks: list) -> list:
+        """Format chunks as pages with metadata headers"""
+        return [(self._format_page_text(chunk, i), i) for i, chunk in enumerate(chunks)]
 
-            if chunk.get('type') == 'code':
-                page_text += f"Language: {chunk.get('language', 'unknown')}\n"
-                if chunk.get('has_output'):
-                    page_text += f"Has Output: Yes ({len(chunk.get('outputs', []))} outputs)\n"
+    def _format_page_text(self, chunk: dict, index: int) -> str:
+        """Format single chunk as page text with metadata"""
+        header = self._create_chunk_header(chunk, index)
+        return header + "\n" + chunk['content']
 
-            page_text += "\n" + chunk['content']
+    def _create_chunk_header(self, chunk: dict, index: int) -> str:
+        """Create metadata header for chunk"""
+        lines = [
+            f"[Jupyter Notebook Chunk {index+1}]",
+            f"Cells: {chunk.get('cell_number_range', chunk.get('cell_number', 'unknown'))}",
+            f"Type: {chunk.get('type', 'unknown')}"
+        ]
 
-            # Add as (text, page_num) tuple - use chunk index as page number
-            pages.append((page_text, i))
+        if chunk.get('type') == 'code':
+            lines.append(f"Language: {chunk.get('language', 'unknown')}")
+            if chunk.get('has_output'):
+                lines.append(f"Has Output: Yes ({len(chunk.get('outputs', []))} outputs)")
 
-        return ExtractionResult(
-            pages=pages,
-            method=f'jupyter_{language}'
-        )
+        return '\n'.join(lines)

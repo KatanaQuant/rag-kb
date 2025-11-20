@@ -45,9 +45,7 @@ except ImportError as e:
     if DOCLING_AVAILABLE:
         print(f"Warning: Docling HybridChunker not available ({e}), using fixed-size chunking")
 
-
 @dataclass
-
 
 class ChunkingStrategy:
     """Base protocol for chunking strategies"""
@@ -66,7 +64,6 @@ class ChunkingStrategy:
     def _make_chunk(self, content: str, page: int) -> ChunkData:
         """Create chunk data object"""
         return ChunkData(content=content, page=page)
-
 
 class SemanticChunkingStrategy(ChunkingStrategy):
     """Semantic chunking: split on paragraphs/sentences, preserve structure"""
@@ -116,7 +113,6 @@ class SemanticChunkingStrategy(ChunkingStrategy):
             return FixedChunkingStrategy(self.config).chunk(text, page)
         return chunks
 
-
 class FixedChunkingStrategy(ChunkingStrategy):
     """Fixed-size chunking with overlap"""
 
@@ -139,7 +135,6 @@ class FixedChunkingStrategy(ChunkingStrategy):
     def _next_position(self, current: int) -> int:
         """Calculate next chunk start"""
         return current + self.config.size - self.config.overlap
-
 
 class TextChunker:
     """Splits text into chunks (semantic or fixed-size)"""

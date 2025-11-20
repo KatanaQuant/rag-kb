@@ -5,10 +5,12 @@ TDD approach: Write tests first to specify expected behavior
 import pytest
 from pathlib import Path
 from ingestion.extractors import DoclingExtractor
+from ingestion.database import DOCLING_AVAILABLE
 
 class TestDoclingExtractor:
     """Test Docling-based document extraction with OCR"""
 
+    @pytest.mark.skipif(not DOCLING_AVAILABLE, reason="Docling not available")
     def test_get_converter_creates_singleton(self):
         """Should create converter only once (singleton pattern)"""
         converter1 = DoclingExtractor.get_converter()
@@ -17,6 +19,7 @@ class TestDoclingExtractor:
         assert converter1 is not None
         assert converter1 is converter2  # Same instance
 
+    @pytest.mark.skipif(not DOCLING_AVAILABLE, reason="Docling not available")
     def test_converter_supports_ocr_for_images(self):
         """Should have OCR enabled to extract text from images in PDFs
 
@@ -32,6 +35,7 @@ class TestDoclingExtractor:
         # Note: We can't directly test OCR without processing a PDF,
         # but we verify the converter is created successfully
 
+    @pytest.mark.skipif(not DOCLING_AVAILABLE, reason="Docling not available")
     def test_extracts_text_based_pdf_without_ocr_slowdown(self, tmp_path):
         """Should extract text-based PDFs efficiently
 
@@ -42,6 +46,7 @@ class TestDoclingExtractor:
         # For now, we verify the extractor can be initialized
         assert DoclingExtractor.get_converter() is not None
 
+    @pytest.mark.skipif(not DOCLING_AVAILABLE, reason="Docling not available")
     def test_chunker_uses_hybrid_strategy(self):
         """Should use HybridChunker for token-aware chunking"""
         chunker = DoclingExtractor.get_chunker(max_tokens=512)
@@ -64,6 +69,7 @@ class TestDoclingExtractor:
 class TestDoclingOCRConfiguration:
     """Test OCR configuration for different PDF types"""
 
+    @pytest.mark.skipif(not DOCLING_AVAILABLE, reason="Docling not available")
     def test_supports_text_based_pdfs(self):
         """Should extract from PDFs with embedded text layer
 
@@ -72,6 +78,7 @@ class TestDoclingOCRConfiguration:
         converter = DoclingExtractor.get_converter()
         assert converter is not None
 
+    @pytest.mark.skipif(not DOCLING_AVAILABLE, reason="Docling not available")
     def test_supports_scanned_pdfs_with_ocr(self):
         """Should use OCR for scanned/image-only PDFs
 
@@ -80,6 +87,7 @@ class TestDoclingOCRConfiguration:
         converter = DoclingExtractor.get_converter()
         assert converter is not None
 
+    @pytest.mark.skipif(not DOCLING_AVAILABLE, reason="Docling not available")
     def test_supports_hybrid_pdfs_with_images(self):
         """Should extract both text AND use OCR for images
 

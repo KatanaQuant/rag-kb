@@ -1,28 +1,10 @@
-"""Cell Chunker Interface - Duck Type for POODR
-
-POODR Phase 3: Duck Typing
-- Replaces if/elif cell_type conditionals
-- Polymorphism via behavior, not type checking
-- "If it chunks like a cell, it's a cell chunker"
-
-Duck Type: Chunkable
-- Responds to: chunk(cell, path) -> List[Dict]
-- Implementation: CodeCellChunker, MarkdownCellChunker
-"""
+"""Cell chunker interface using duck typing"""
 
 from typing import List, Dict, Protocol
 
-
 class ChunkableCell(Protocol):
-    """Duck type for objects that can be chunked
-
-    POODR Pattern: Duck Typing (Chapter 5)
-    - Trust objects to respond to messages
-    - Don't check types, check behavior
-    - Polymorphism through shared interface
-
-    Any class that implements chunk(cell, path) is Chunkable!
-    """
+    """Protocol for cell chunkers"""
+    
 
     @staticmethod
     def chunk(cell, path: str) -> List[Dict]:
@@ -37,15 +19,8 @@ class ChunkableCell(Protocol):
         """
         ...
 
-
 class CellChunkerFactory:
-    """Factory for creating cell chunkers based on cell type
-
-    POODR Pattern: Factory + Duck Typing
-    - Creates appropriate chunker based on cell_type
-    - Returns objects that respond to chunk() message
-    - Caller doesn't need to know which chunker it got
-    """
+    
 
     @staticmethod
     def create_chunker(cell_type: str) -> ChunkableCell:

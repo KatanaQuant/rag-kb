@@ -1,13 +1,6 @@
-"""Notebook output parser - extracted from JupyterExtractor
 
-POODR Phase 2: God Class Decomposition
-- Extracted from JupyterExtractor (CC 17 method - highest complexity!)
-- Single Responsibility: Parse notebook cell outputs
-- Reduces JupyterExtractor complexity
-"""
 
 from typing import List, Dict
-
 
 class NotebookOutputParser:
     """Parse notebook cell outputs (text, images, errors)

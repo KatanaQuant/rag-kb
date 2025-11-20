@@ -1,14 +1,8 @@
-"""Edge Repository - extracted from GraphRepository
 
-POODR Phase 2.3: Facade Pattern + Repository Decomposition
-- Extracted from GraphRepository
-- Single Responsibility: Edge CRUD operations
-"""
 
 import sqlite3
 import json
 from typing import List, Dict, Optional, Tuple
-
 
 class EdgeRepository:
     """Handles CRUD operations for graph edges

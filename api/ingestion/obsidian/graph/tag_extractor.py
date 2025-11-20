@@ -1,13 +1,7 @@
-"""Tag Extractor - extracted from ObsidianGraphBuilder
 
-POODR Phase 2.4: God Class Decomposition
-- Extracted from ObsidianGraphBuilder
-- Single Responsibility: Extract tags and build tag nodes
-"""
 
 import re
 import networkx as nx
-
 
 class TagExtractor:
     """Extract tags from markdown and build graph nodes

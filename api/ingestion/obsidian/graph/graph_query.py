@@ -1,13 +1,7 @@
-"""Graph Query Helper - extracted from ObsidianGraphBuilder
 
-POODR Phase 2.4: God Class Decomposition
-- Extracted from ObsidianGraphBuilder
-- Single Responsibility: Graph traversal and query operations
-"""
 
 import networkx as nx
 from typing import List, Dict, Set, Optional
-
 
 class GraphQuery:
     """Query operations for Obsidian knowledge graph

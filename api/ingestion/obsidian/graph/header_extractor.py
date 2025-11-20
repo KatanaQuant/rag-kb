@@ -1,14 +1,8 @@
-"""Header Extractor - extracted from ObsidianGraphBuilder
 
-POODR Phase 2.4: God Class Decomposition
-- Extracted from ObsidianGraphBuilder (CC 5)
-- Single Responsibility: Extract headers and build hierarchical nodes
-"""
 
 import re
 import networkx as nx
 from typing import List, Tuple
-
 
 class HeaderExtractor:
     """Extract markdown headers and build hierarchical graph nodes

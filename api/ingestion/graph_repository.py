@@ -1,23 +1,4 @@
-"""Graph Repository Facade for Obsidian Knowledge Graph Database Operations
 
-POODR Phase 2.3 Complete: Facade Pattern + Repository Decomposition
-- Delegates to specialized repositories (NodeRepository, EdgeRepository, etc.)
-- Single Responsibility: Coordinate graph operations
-- Thin facade layer over specialized repositories
-
-Architecture:
-- NodeRepository: Node CRUD operations
-- EdgeRepository: Edge CRUD operations
-- MetadataRepository: PageRank scores, chunk-node links
-- CleanupService: Graph maintenance and cleanup
-
-This class provides a unified interface while keeping each repository focused
-on a single responsibility.
-
-Metrics Journey:
-- Before: 398 lines, CC 8, MI 52.11
-- After: ~150 lines (facade only), CC <5, MI >70 (estimated)
-"""
 
 import sqlite3
 from typing import List, Dict, Optional
@@ -28,24 +9,8 @@ from ingestion.graph.edge_repository import EdgeRepository
 from ingestion.graph.metadata_repository import MetadataRepository
 from ingestion.graph.cleanup_service import CleanupService
 
-
 class GraphRepository:
-    """Facade for knowledge graph database operations
-
-    FACADE PATTERN (Phase 2.3):
-    This class coordinates specialized repositories - it doesn't do the work itself.
-
-    Delegates to:
-    - NodeRepository: Node persistence
-    - EdgeRepository: Edge persistence
-    - MetadataRepository: PageRank, chunk links
-    - CleanupService: Maintenance operations
-
-    POODR Compliance:
-    - Dependency Injection: All repositories injected or created
-    - Single Responsibility: Coordinate, don't implement
-    - Composition: Uses specialized repositories
-    """
+    
 
     def __init__(self, conn: sqlite3.Connection):
         """Initialize with database connection

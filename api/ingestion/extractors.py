@@ -52,9 +52,7 @@ except ImportError as e:
     if DOCLING_AVAILABLE:
         print(f"Warning: Docling HybridChunker not available ({e}), using fixed-size chunking")
 
-
 @dataclass
-
 
 class DoclingExtractor:
     """Extracts text from documents using Docling (advanced parsing)"""
@@ -188,7 +186,6 @@ class DoclingExtractor:
 
         return chunks_list
 
-
 class PDFExtractor:
     """Extracts text from PDF files (fallback when Docling fails)"""
 
@@ -214,7 +211,6 @@ class PDFExtractor:
         if text.strip():
             results.append((text, num))
 
-
 class DOCXExtractor:
     """Extracts text from DOCX files"""
 
@@ -230,7 +226,6 @@ class DOCXExtractor:
         """Join all paragraphs"""
         return '\n'.join([p.text for p in doc.paragraphs])
 
-
 class TextFileExtractor:
     """Extracts text from plain text files"""
 
@@ -240,7 +235,6 @@ class TextFileExtractor:
         with open(path, 'r', encoding='utf-8', errors='ignore') as f:
             text = f.read()
         return ExtractionResult(pages=[(text, None)], method='text')
-
 
 class MarkdownExtractor:
     """Extracts text from Markdown files using Docling HybridChunker
@@ -280,7 +274,6 @@ class MarkdownExtractor:
         document = result.document
         pages = DoclingExtractor._extract_hybrid_chunks(document)
         return ExtractionResult(pages=pages, method='docling_markdown')
-
 
 class EpubExtractor:
     """Converts EPUB to PDF using Pandoc, keeps PDF, moves EPUB to original/
@@ -404,31 +397,44 @@ class EpubExtractor:
         "Forbidden control sequence found while scanning use of \\LT@nofcols" errors.
         The workaround is to use HTML as an intermediate format with wkhtmltopdf.
         """
-        import subprocess
+        result = EpubExtractor._try_direct_conversion(epub_path, pdf_path)
+        if result.returncode == 0:
+            return
 
-        # Attempt 1: Direct conversion with xelatex
-        result = subprocess.run(
+        EpubExtractor._handle_conversion_failure(epub_path, pdf_path, result)
+
+    @staticmethod
+    def _try_direct_conversion(epub_path: Path, pdf_path: Path):
+        """Attempt direct EPUB to PDF conversion with xelatex"""
+        import subprocess
+        return subprocess.run(
             ['pandoc', str(epub_path), '-o', str(pdf_path), '--pdf-engine=xelatex'],
             capture_output=True,
             text=True,
             timeout=300
         )
 
-        # Check if it succeeded
-        if result.returncode == 0:
-            return
-
-        # Check if it's the known longtable error
-        if 'LT@nofcols' in result.stderr or 'longtable' in result.stderr.lower():
+    @staticmethod
+    def _handle_conversion_failure(epub_path: Path, pdf_path: Path, result):
+        """Handle pandoc conversion failure"""
+        if EpubExtractor._is_longtable_error(result.stderr):
             print(f"  → Detected longtable error, retrying with wkhtmltopdf...")
             EpubExtractor._convert_via_html_fallback(epub_path, pdf_path)
-            return
+        else:
+            EpubExtractor._raise_conversion_error(epub_path, result.stderr)
 
-        # Other error - raise it
+    @staticmethod
+    def _is_longtable_error(stderr: str) -> bool:
+        """Check if error is known longtable issue"""
+        return 'LT@nofcols' in stderr or 'longtable' in stderr.lower()
+
+    @staticmethod
+    def _raise_conversion_error(epub_path: Path, stderr: str):
+        """Raise conversion error with details"""
         raise RuntimeError(
             f"Pandoc EPUB conversion failed.\n"
             f"  File: {epub_path.name}\n"
-            f"  Error: {result.stderr}\n"
+            f"  Error: {stderr}\n"
             f"  Install pandoc and texlive if missing."
         )
 
@@ -439,47 +445,58 @@ class EpubExtractor:
         This avoids LaTeX longtable issues by using HTML-based PDF generation.
         Uses Chromium in headless mode as wkhtmltopdf is unmaintained.
         """
-        import subprocess
-        import tempfile
-
-        # Step 1: EPUB → HTML
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
-            html_path = f.name
-
+        html_path = EpubExtractor._create_temp_html()
         try:
-            result = subprocess.run(
-                ['pandoc', str(epub_path), '-o', html_path, '-s', '--self-contained'],
-                capture_output=True,
-                text=True,
-                timeout=300
-            )
-
-            if result.returncode != 0:
-                raise RuntimeError(f"EPUB to HTML conversion failed: {result.stderr}")
-
-            # Step 2: HTML → PDF with Chromium headless
-            result = subprocess.run(
-                [
-                    'chromium',
-                    '--headless',
-                    '--disable-gpu',
-                    '--no-sandbox',
-                    '--print-to-pdf=' + str(pdf_path),
-                    'file://' + html_path
-                ],
-                capture_output=True,
-                text=True,
-                timeout=300
-            )
-
-            if result.returncode != 0:
-                raise RuntimeError(f"HTML to PDF conversion failed: {result.stderr}")
-
+            EpubExtractor._convert_epub_to_html(epub_path, html_path)
+            EpubExtractor._convert_html_to_pdf(html_path, pdf_path)
             print(f"  → Successfully converted via HTML fallback (Chromium)")
-
         finally:
-            # Clean up temp HTML file
-            Path(html_path).unlink(missing_ok=True)
+            EpubExtractor._cleanup_temp_file(html_path)
+
+    @staticmethod
+    def _create_temp_html() -> str:
+        """Create temporary HTML file"""
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
+            return f.name
+
+    @staticmethod
+    def _convert_epub_to_html(epub_path: Path, html_path: str):
+        """Convert EPUB to HTML using pandoc"""
+        import subprocess
+        result = subprocess.run(
+            ['pandoc', str(epub_path), '-o', html_path, '-s', '--self-contained'],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"EPUB to HTML conversion failed: {result.stderr}")
+
+    @staticmethod
+    def _convert_html_to_pdf(html_path: str, pdf_path: Path):
+        """Convert HTML to PDF using Chromium headless"""
+        import subprocess
+        result = subprocess.run(
+            [
+                'chromium',
+                '--headless',
+                '--disable-gpu',
+                '--no-sandbox',
+                '--print-to-pdf=' + str(pdf_path),
+                'file://' + html_path
+            ],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"HTML to PDF conversion failed: {result.stderr}")
+
+    @staticmethod
+    def _cleanup_temp_file(html_path: str):
+        """Clean up temporary HTML file"""
+        Path(html_path).unlink(missing_ok=True)
 
     @staticmethod
     def _embed_fonts_with_ghostscript(pdf_path: Path):
@@ -531,7 +548,6 @@ class EpubExtractor:
         if isinstance(error, RuntimeError) and "Pandoc" in str(error):
             if pdf_path.exists():
                 pdf_path.unlink()
-
 
 class CodeExtractor:
     """Extracts code with AST-based chunking using astchunk
@@ -625,7 +641,6 @@ class CodeExtractor:
         pages = [(chunk, None) for chunk in chunks]
 
         return ExtractionResult(pages=pages, method=f'ast_{language}')
-
 
 class TextExtractor:
     """Extracts text from various file formats"""

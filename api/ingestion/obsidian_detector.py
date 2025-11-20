@@ -7,7 +7,6 @@ Uses heuristics: .obsidian folder, wikilinks, tags, frontmatter.
 from pathlib import Path
 import re
 
-
 class ObsidianDetector:
     """Detects Obsidian vaults and notes
 
@@ -85,10 +84,8 @@ class ObsidianDetector:
         except Exception:
             return False
 
-
 # Global singleton
 _detector = None
-
 
 def get_obsidian_detector() -> ObsidianDetector:
     """Get or create singleton detector"""

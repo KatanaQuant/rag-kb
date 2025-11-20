@@ -1,14 +1,8 @@
-"""Node Repository - extracted from GraphRepository
 
-POODR Phase 2.3: Facade Pattern + Repository Decomposition
-- Extracted from GraphRepository
-- Single Responsibility: Node CRUD operations
-"""
 
 import sqlite3
 import json
 from typing import Dict, Optional, Tuple
-
 
 class NodeRepository:
     """Handles CRUD operations for graph nodes

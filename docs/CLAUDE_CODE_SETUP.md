@@ -46,7 +46,7 @@ Use mcp__rag-kb__query_knowledge_base with:
 **After RAG results**:
 - If relevant chunks found: Base answer on KB content, cite sources
 - If no relevant chunks: State "no relevant content in KB" then use general knowledge
-- 🤔 If uncertain: Show user the chunks and ask if they're relevant
+-  If uncertain: Show user the chunks and ask if they're relevant
 
 **Example**:
 User: "How does the VIX work in trading?"

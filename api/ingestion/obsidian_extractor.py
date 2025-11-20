@@ -27,49 +27,11 @@ try:
 except ImportError:
     OBSIDIANTOOLS_AVAILABLE = False
 
-
 class ObsidianExtractor:
-    """Orchestrates Obsidian note extraction with graph enrichment
-
-    ORCHESTRATOR PATTERN (Phase 2.2 Complete!):
-    This class coordinates specialized components - it doesn't do the work itself.
-    Each responsibility delegated to a focused class:
-
-    - FrontmatterParser: Parse YAML frontmatter from markdown
-    - SemanticChunker: Chunk markdown with header/code awareness (CC 16 → isolated)
-    - GraphEnricher: Add graph metadata to chunks (CC 8 → isolated)
-    - ObsidianGraphBuilder: Build knowledge graph (Phase 1 - already injected)
-
-    Architecture (orchestrated):
-    1. Parse note content (FrontmatterParser)
-    2. Build knowledge graph (ObsidianGraphBuilder)
-    3. Chunk semantically (SemanticChunker)
-    4. Enrich chunks with graph metadata (GraphEnricher)
-
-    POODR Compliance:
-    - Phase 1: Dependency injection (graph_builder)
-    - Phase 2.2: God Class decomposition (332 → 190 lines, -43%)
-    - Single Responsibility: Orchestrate, don't implement
-    - Composition over inheritance: Uses helper classes
-
-    Metrics Journey:
-    - Before: 332 lines, CC 16 highest, MI 53.63
-    - After: 190 lines, CC 3 highest, MI 73.37 (+37% maintainability!)
-    """
+    
 
     def __init__(self, graph_builder: Optional[ObsidianGraphBuilder] = None):
-        """Initialize extractor with optional graph builder
-
-        Args:
-            graph_builder: Optional shared graph builder (for vault-wide graphs)
-                          If None, creates per-note graphs
-
-        POODR Pattern: Dependency Injection + Default Factory
-        - Injection: Accepts graph_builder parameter
-        - Default: Creates ObsidianGraphBuilder() if None
-        - Testable: Can inject mock for testing
-        - Flexible: Can share graph across vault
-        """
+        
         self.graph_builder = graph_builder or ObsidianGraphBuilder()
         self.frontmatter_parser = FrontmatterParser()
         self.semantic_chunker = SemanticChunker()
@@ -143,7 +105,6 @@ class ObsidianExtractor:
         """Extract wikilink targets from content"""
         matches = self.wikilink_pattern.findall(content)
         return [target.strip() for target, _ in matches]
-
 
 class ObsidianVaultExtractor:
     """Extracts entire Obsidian vault with shared knowledge graph

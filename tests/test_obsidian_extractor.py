@@ -16,6 +16,7 @@ from unittest.mock import Mock, MagicMock, patch
 
 from ingestion.obsidian_extractor import ObsidianExtractor, ObsidianVaultExtractor
 from ingestion.obsidian_graph import ObsidianGraphBuilder
+from domain_models import ExtractionResult
 
 
 class TestObsidianExtractorBasics:
@@ -27,21 +28,20 @@ class TestObsidianExtractorBasics:
         return Path(__file__).parent / "fixtures" / "obsidian_vault"
 
     @pytest.fixture
-    def extractor(self, vault_path):
-        """Create ObsidianExtractor with mock graph builder"""
-        graph_builder = ObsidianGraphBuilder()
-        return ObsidianExtractor(str(vault_path), graph_builder=graph_builder)
+    def graph_builder(self):
+        """Create mock graph builder"""
+        return ObsidianGraphBuilder()
 
-    def test_extract_note_basic(self, extractor, vault_path):
+    def test_extract_note_basic(self, vault_path, graph_builder):
         """Test: Extract simple Obsidian note"""
         note_path = vault_path / "Note1.md"
 
-        result = extractor.extract(str(note_path))
+        result = ObsidianExtractor.extract(note_path, graph_builder=graph_builder)
 
-        assert isinstance(result, list)
-        assert len(result) > 0
-        # Should be markdown type
-        assert all(chunk.get('type') == 'markdown' for chunk in result)
+        assert isinstance(result, ExtractionResult)
+        assert result.success
+        assert result.page_count > 0
+        assert result.method == 'obsidian_graph_rag'
 
     def test_extract_note_includes_filepath(self, extractor, vault_path):
         """Test: Chunks include filepath metadata"""

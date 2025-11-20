@@ -1,10 +1,3 @@
-"""Kernel language detector - extracted from JupyterExtractor
-
-POODR Phase 2: God Class Decomposition
-- Extracted from JupyterExtractor
-- Single Responsibility: Map kernel names to programming languages
-- Reduces JupyterExtractor complexity
-"""
 
 
 class KernelLanguageDetector:

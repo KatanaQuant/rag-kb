@@ -16,7 +16,6 @@ from typing import List, Dict, Optional
 from pathlib import Path
 from dataclasses import dataclass
 
-
 @dataclass
 class CodeChunk:
     """Represents a chunk of code with metadata"""
@@ -27,7 +26,6 @@ class CodeChunk:
     end_line: int
     node_type: str
     metadata: Dict[str, any]
-
 
 class TreeSitterChunker:
     """Generic AST-based chunker using tree-sitter-languages
@@ -269,62 +267,53 @@ class TreeSitterChunker:
         return metadata
 
     def chunkify(self, code: str, filepath: Optional[str] = None) -> List[Dict]:
-        """Chunk code into AST-aware segments
-
-        Main entry point. Implements full split-then-merge algorithm.
-
-        Args:
-            code: Source code to chunk
-            filepath: Optional path for metadata
-
-        Returns:
-            List of chunk dictionaries with 'content' and 'metadata'
-        """
+        """Chunk code into AST-aware segments"""
         if not code or not code.strip():
             return []
 
-        # Parse code
         tree = self._parse_code(code)
         code_bytes = bytes(code, 'utf8')
-
-        # Walk tree to extract initial chunks
-        raw_chunks = self._walk_tree(tree.root_node, code_bytes)
-
-        # If no chunkable nodes found, treat entire code as one chunk
-        if not raw_chunks:
-            raw_chunks = [CodeChunk(
-                content=code,
-                start_byte=0,
-                end_byte=len(code_bytes),
-                start_line=1,
-                end_line=code.count('\n') + 1,
-                node_type='module',
-                metadata={'note': 'no chunkable nodes found'}
-            )]
-
-        # Merge small chunks
+        raw_chunks = self._extract_raw_chunks(tree, code_bytes, code)
         merged_chunks = self._merge_small_chunks(raw_chunks, code)
 
-        # Convert to output format
-        result = []
-        for i, chunk in enumerate(merged_chunks):
-            chunk_dict = {
-                'content': chunk.content,
-                'metadata': {
-                    **chunk.metadata,
-                    'chunk_index': i,
-                    'language': self.language,
-                }
+        return self._format_chunks_as_dicts(merged_chunks, filepath)
+
+    def _extract_raw_chunks(self, tree, code_bytes: bytes, code: str) -> List[CodeChunk]:
+        """Extract initial chunks from AST"""
+        raw_chunks = self._walk_tree(tree.root_node, code_bytes)
+        return raw_chunks if raw_chunks else self._create_fallback_chunk(code, code_bytes)
+
+    def _create_fallback_chunk(self, code: str, code_bytes: bytes) -> List[CodeChunk]:
+        """Create single chunk when no chunkable nodes found"""
+        return [CodeChunk(
+            content=code,
+            start_byte=0,
+            end_byte=len(code_bytes),
+            start_line=1,
+            end_line=code.count('\n') + 1,
+            node_type='module',
+            metadata={'note': 'no chunkable nodes found'}
+        )]
+
+    def _format_chunks_as_dicts(self, chunks: List[CodeChunk], filepath: Optional[str]) -> List[Dict]:
+        """Convert CodeChunk objects to dict format"""
+        return [self._format_single_chunk(chunk, i, filepath) for i, chunk in enumerate(chunks)]
+
+    def _format_single_chunk(self, chunk: CodeChunk, index: int, filepath: Optional[str]) -> Dict:
+        """Format single chunk as dictionary"""
+        chunk_dict = {
+            'content': chunk.content,
+            'metadata': {
+                **chunk.metadata,
+                'chunk_index': index,
+                'language': self.language,
             }
+        }
 
-            # Add filepath if provided
-            if filepath:
-                chunk_dict['metadata']['filepath'] = filepath
+        if filepath:
+            chunk_dict['metadata']['filepath'] = filepath
 
-            result.append(chunk_dict)
-
-        return result
-
+        return chunk_dict
 
 def chunk_code_with_treesitter(
     code: str,

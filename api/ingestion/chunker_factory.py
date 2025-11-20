@@ -1,14 +1,7 @@
-"""Chunker factory for creating language-specific chunkers
 
-POODR Pattern: Dependency Injection + Factory Pattern
-- Removes concrete dependencies from JupyterExtractor
-- Makes testing possible (inject mock factory)
-- Open/Closed: Add new languages without modifying extractor
-"""
 
 from typing import Dict, List
 from ingestion.chunker_interface import ChunkerInterface
-
 
 class PythonChunker(ChunkerInterface):
     """Python code chunker using AST-based chunking
@@ -47,7 +40,6 @@ class PythonChunker(ChunkerInterface):
                 'metadata': {'error': str(e), 'chunking': 'fallback'}
             }]
 
-
 class RChunker(ChunkerInterface):
     """R code chunker using TreeSitter-based chunking
 
@@ -78,7 +70,6 @@ class RChunker(ChunkerInterface):
                 'metadata': {'error': str(e), 'chunking': 'fallback'}
             }]
 
-
 class CellLevelChunker(ChunkerInterface):
     """Default chunker: Keep entire cell as one chunk
 
@@ -98,21 +89,8 @@ class CellLevelChunker(ChunkerInterface):
             'metadata': {'chunking': 'cell_level'}
         }]
 
-
 class ChunkerFactory:
-    """Factory for creating language-specific chunkers
-
-    POODR Pattern: Factory Pattern + Strategy Pattern
-    - Encapsulates chunker creation logic
-    - Returns correct chunker based on language and size
-    - Easy to test (inject mock factory)
-    - Easy to extend (add new languages)
-
-    Usage:
-        factory = ChunkerFactory()
-        chunker = factory.create_chunker('python', 3000)
-        chunks = chunker.chunkify(source_code)
-    """
+    
 
     def __init__(self, max_chunk_size: int = 2048):
         self.max_chunk_size = max_chunk_size

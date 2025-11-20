@@ -45,9 +45,7 @@ except ImportError as e:
     if DOCLING_AVAILABLE:
         print(f"Warning: Docling HybridChunker not available ({e}), using fixed-size chunking")
 
-
 @dataclass
-
 
 class FileHasher:
     """Generates file hashes for change detection"""
@@ -70,7 +68,6 @@ class FileHasher:
     def _read_chunks(file_handle):
         """Yield file chunks for hashing"""
         return iter(lambda: file_handle.read(8192), b'')
-
 
 class GhostscriptHelper:
     """Helper for PDF font embedding and structure fixes using Ghostscript"""

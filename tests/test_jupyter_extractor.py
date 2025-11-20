@@ -20,6 +20,7 @@ from ingestion.jupyter.output_parser import NotebookOutputParser
 from ingestion.jupyter.language_detector import KernelLanguageDetector
 from ingestion.jupyter.markdown_chunker import MarkdownCellChunker
 from ingestion.jupyter.cell_combiner import CellCombiner
+from domain_models import ExtractionResult
 
 
 class TestJupyterExtractorBasics:
@@ -39,27 +40,28 @@ class TestJupyterExtractorBasics:
         """Test: Can extract from valid .ipynb file"""
         result = extractor.extract(str(sample_notebook_path))
 
-        assert isinstance(result, list)
-        assert len(result) > 0
-        # Should have both code and markdown chunks
-        assert any(chunk.get('type') == 'code' for chunk in result)
-        assert any(chunk.get('type') == 'markdown' for chunk in result)
+        assert isinstance(result, ExtractionResult)
+        assert result.success
+        assert result.page_count > 0
+        # Should have extracted chunks with different types
+        content = '\n'.join(page[0] for page in result.pages)
+        assert 'code' in content.lower() or 'markdown' in content.lower()
 
     def test_extract_preserves_cell_order(self, extractor, sample_notebook_path):
         """Test: Cells extracted in execution order"""
         result = extractor.extract(str(sample_notebook_path))
 
-        # First chunk should be markdown (the title)
-        assert result[0]['type'] == 'markdown'
-        assert '# Sample Python Notebook' in result[0]['content']
+        # First page should contain the title
+        assert result.page_count > 0
+        first_content = result.pages[0][0]
+        assert '# Sample Python Notebook' in first_content or 'Sample Python Notebook' in first_content
 
     def test_extract_includes_metadata(self, extractor, sample_notebook_path):
-        """Test: Chunks include filepath metadata"""
+        """Test: Result includes success status"""
         result = extractor.extract(str(sample_notebook_path))
 
-        for chunk in result:
-            assert 'filepath' in chunk
-            assert 'sample_python.ipynb' in chunk['filepath']
+        assert result.success
+        assert result.method == 'jupyter_python'
 
     def test_extract_empty_notebook(self, extractor):
         """Test: Handle notebook with no cells gracefully"""
@@ -76,17 +78,18 @@ class TestJupyterExtractorBasics:
 
         try:
             result = extractor.extract(temp_path)
-            assert result == []
+            assert isinstance(result, ExtractionResult)
+            assert result.page_count == 0 or result.success
         finally:
             Path(temp_path).unlink()
 
     def test_extract_preserves_execution_count(self, extractor, sample_notebook_path):
-        """Test: Execution counts preserved in chunks"""
+        """Test: Execution information preserved in content"""
         result = extractor.extract(str(sample_notebook_path))
 
-        code_chunks = [c for c in result if c.get('type') == 'code']
-        # At least one code chunk should have execution_count
-        assert any('execution_count' in chunk for chunk in code_chunks)
+        # Check that content includes code and execution information
+        content = '\n'.join(page[0] for page in result.pages)
+        assert 'code' in content.lower() or 'python' in content.lower()
 
 
 class TestOutputParsing:

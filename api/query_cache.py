@@ -6,7 +6,6 @@ from functools import lru_cache
 import hashlib
 import json
 
-
 class QueryCache:
     """LRU cache for query results"""
 

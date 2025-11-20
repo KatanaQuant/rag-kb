@@ -1,26 +1,10 @@
-"""Code Cell Chunker - Duck Type Implementation
 
-POODR Phase 3: Duck Typing
-- Implements Chunkable duck type
-- Responds to: chunk(cell, path)
-- Delegates to ChunkerFactory for actual chunking
-"""
 
 from typing import List, Dict
 from ingestion.chunker_factory import ChunkerFactory
 
-
 class CodeCellChunker:
-    """Chunk code cells using AST-aware chunking
-
-    Duck Type: Implements Chunkable interface
-    - Responds to: chunk(cell, path)
-    - Polymorphic with MarkdownCellChunker
-
-    POODR Pattern: Duck Typing + Delegation
-    - Trusts ChunkerFactory to provide right chunker
-    - Enriches chunks with cell metadata
-    """
+    
 
     def __init__(self, chunker_factory: ChunkerFactory = None):
         """Initialize with optional chunker factory

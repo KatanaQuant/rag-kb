@@ -1,13 +1,6 @@
-"""Cell combiner - extracted from JupyterExtractor
 
-POODR Phase 2: God Class Decomposition
-- Extracted from JupyterExtractor (CC 10 method)
-- Single Responsibility: Combine adjacent cells intelligently
-- Reduces JupyterExtractor complexity
-"""
 
 from typing import List, Dict
-
 
 class CellCombiner:
     """Smart combination of adjacent notebook cells

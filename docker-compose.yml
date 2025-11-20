@@ -7,7 +7,6 @@ services:
     ports:
       - "${RAG_PORT:-8000}:8000"
     volumes:
-      - ./api:/app  # Hot reload for development
       - ./knowledge_base:/app/knowledge_base
       - ./data:/app/data
       - ./.cache/deepsearch_glm:/app/.cache/deepsearch_glm  # DeepSearch GLM cache
@@ -17,12 +16,19 @@ services:
       - ./.cache/rapidocr:/usr/local/lib/python3.11/site-packages/rapidocr/models  # RapidOCR model cache (OCR models)
     environment:
       - PYTHONUNBUFFERED=1
-      - MODEL_NAME=${MODEL_NAME:-sentence-transformers/all-MiniLM-L6-v2}
+      - MODEL_NAME=${MODEL_NAME:-Snowflake/snowflake-arctic-embed-l-v2.0}
       - BATCH_SIZE=${BATCH_SIZE:-5}
       - BATCH_DELAY=${BATCH_DELAY:-0.5}
       - USE_DOCLING=${USE_DOCLING:-true}  # Enable Docling PDF extraction (default)
       - SEMANTIC_CHUNKING=${SEMANTIC_CHUNKING:-true}  # Enable semantic chunking (default)
       - CHUNK_MAX_TOKENS=${CHUNK_MAX_TOKENS:-512}  # Max tokens per semantic chunk
+      - AUTO_REPAIR_ORPHANS=${AUTO_REPAIR_ORPHANS:-true}  # Auto-repair orphaned files on startup
+      - EMBEDDING_WORKERS=${EMBEDDING_WORKERS:-3}  # Concurrent embedding threads
+      - MAX_PENDING_EMBEDDINGS=${MAX_PENDING_EMBEDDINGS:-6}  # Max queued embeddings before throttling
+      - OMP_NUM_THREADS=2  # Limit OpenMP threads to prevent deadlock
+      - MKL_NUM_THREADS=2  # Limit MKL threads
+      - OPENBLAS_NUM_THREADS=2  # Limit OpenBLAS threads
+      - NUMEXPR_NUM_THREADS=2  # Limit NumExpr threads
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

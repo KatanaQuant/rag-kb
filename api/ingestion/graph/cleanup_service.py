@@ -1,13 +1,7 @@
-"""Cleanup Service - extracted from GraphRepository
 
-POODR Phase 2.3: Facade Pattern + Repository Decomposition
-- Extracted from GraphRepository
-- Single Responsibility: Graph cleanup and maintenance operations
-"""
 
 import sqlite3
 from typing import Dict
-
 
 class CleanupService:
     """Handles graph cleanup and maintenance operations

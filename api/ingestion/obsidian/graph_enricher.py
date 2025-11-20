@@ -1,14 +1,7 @@
-"""Graph enricher - extracted from ObsidianExtractor
 
-POODR Phase 2.2: God Class Decomposition
-- Extracted from ObsidianExtractor (CC 8)
-- Single Responsibility: Enrich chunks with graph metadata
-- Reduces ObsidianExtractor complexity
-"""
 
 from pathlib import Path
 from typing import List, Tuple, Dict, Optional
-
 
 class GraphEnricher:
     """Enrich chunks with knowledge graph metadata
