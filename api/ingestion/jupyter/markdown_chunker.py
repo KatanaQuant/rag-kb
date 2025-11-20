@@ -1,14 +1,7 @@
-"""Markdown cell chunker - extracted from JupyterExtractor
 
-POODR Phase 2: God Class Decomposition
-- Extracted from JupyterExtractor
-- Single Responsibility: Process markdown cells
-- Reduces JupyterExtractor complexity
-"""
 
 from typing import List, Dict
 from ingestion.jupyter_extractor import NotebookCell
-
 
 class MarkdownCellChunker:
     """Process markdown cells from Jupyter notebooks

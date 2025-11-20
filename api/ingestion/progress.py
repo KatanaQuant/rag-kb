@@ -45,9 +45,7 @@ except ImportError as e:
     if DOCLING_AVAILABLE:
         print(f"Warning: Docling HybridChunker not available ({e}), using fixed-size chunking")
 
-
 @dataclass
-
 
 class ProcessingProgress:
     """Processing progress for a document"""
@@ -62,7 +60,6 @@ class ProcessingProgress:
     last_updated: Optional[str] = None
     completed_at: Optional[str] = None
 
-
 class ProcessingProgressTracker:
     """Manages processing progress persistence"""
 
@@ -74,6 +71,9 @@ class ProcessingProgressTracker:
     def _connect(self):
         """Connect to database"""
         self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        # Enable WAL mode for better concurrency
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA busy_timeout=5000")  # Wait up to 5s for locks
 
     def start_processing(self, file_path: str, file_hash: str) -> ProcessingProgress:
         """Initialize or resume processing"""
@@ -181,6 +181,13 @@ class ProcessingProgressTracker:
         )
         self.conn.commit()
         return cursor.rowcount > 0
+
+    def get_db_path(self) -> str:
+        """Get database path.
+
+        Delegation method to avoid Law of Demeter violation.
+        """
+        return self.db_path
 
     def close(self):
         """Close connection"""

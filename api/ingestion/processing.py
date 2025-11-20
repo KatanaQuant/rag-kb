@@ -51,9 +51,7 @@ except ImportError as e:
     if DOCLING_AVAILABLE:
         print(f"Warning: Docling HybridChunker not available ({e}), using fixed-size chunking")
 
-
 @dataclass
-
 
 class ChunkedTextProcessor:
     """Processes text in resumable chunks"""
@@ -114,7 +112,6 @@ class ChunkedTextProcessor:
         chunk_end = progress.last_chunk_end + sum(len(c.content) for c in batch)
         self.tracker.update_progress(path, processed, chunk_end)
 
-
 class MetadataEnricher:
     """Enriches chunks with file metadata"""
 
@@ -132,7 +129,6 @@ class MetadataEnricher:
             chunk['file_hash'] = file_hash
 
         return chunks
-
 
 class DocumentProcessor:
     """Coordinates document processing"""
@@ -161,6 +157,21 @@ class DocumentProcessor:
     def get_file_hash(self, path: Path) -> str:
         """Get file hash"""
         return self.hasher.hash_file(path)
+
+    def delete_from_tracker(self, file_path: str):
+        """Delete document from progress tracker.
+
+        Delegation method to avoid Law of Demeter violation.
+        """
+        if self.tracker:
+            self.tracker.delete_document(file_path)
+
+    def get_obsidian_graph(self):
+        """Get Obsidian knowledge graph from extractor.
+
+        Delegation method to avoid Law of Demeter violation.
+        """
+        return self.extractor.get_obsidian_graph()
 
     def process_file(self, doc_file: DocumentFile) -> List[Dict]:
         """Process file into chunks"""
@@ -200,14 +211,24 @@ class DocumentProcessor:
     def _handle_processing_error(self, doc_file: DocumentFile, error: Exception) -> List[Dict]:
         """Handle processing errors with cleanup and logging"""
         error_msg = str(error)
-        self.tracker.mark_failed(str(doc_file.path), error_msg)
-
-        if self._is_pdf_conversion_error(error, error_msg):
-            self._move_to_problematic(doc_file.path)
-
-        self._print_error(doc_file.name, error_msg)
-        self._print_traceback_if_needed(error)
+        self._mark_as_failed(doc_file.path, error_msg)
+        self._handle_problematic_file(error, error_msg, doc_file.path)
+        self._log_error(doc_file.name, error_msg, error)
         return []
+
+    def _mark_as_failed(self, path: Path, error_msg: str):
+        """Mark file as failed in tracker"""
+        self.tracker.mark_failed(str(path), error_msg)
+
+    def _handle_problematic_file(self, error: Exception, error_msg: str, path: Path):
+        """Move problematic files to problematic/ directory"""
+        if self._is_pdf_conversion_error(error, error_msg):
+            self._move_to_problematic(path)
+
+    def _log_error(self, filename: str, error_msg: str, error: Exception):
+        """Log error with traceback if needed"""
+        self._print_error(filename, error_msg)
+        self._print_traceback_if_needed(error)
 
     def _is_pdf_conversion_error(self, error: Exception, error_msg: str) -> bool:
         """Check if error is a PDF conversion failure or invalid EPUB"""
@@ -252,14 +273,24 @@ class DocumentProcessor:
     def _do_resumable_process(self, doc_file: DocumentFile) -> List[Dict]:
         """Process with resume capability"""
         print(f"Processing: {doc_file.name}")
+        result = self._extract_text(doc_file)
+        all_chunks = self._create_chunks(doc_file, result)
+        print(f"Chunking complete: {doc_file.name} - {len(all_chunks)} chunks created")
+        return all_chunks
+
+    def _extract_text(self, doc_file: DocumentFile):
+        """Extract text from file"""
         result = self.extractor.extract(doc_file.path)
         extraction_method = self.extractor.get_last_method()
-        print(f"Extraction complete ({extraction_method}): {doc_file.name} - {result.total_chars:,} chars extracted")
+        print(f"Extraction complete ({extraction_method}): {doc_file.name} - "
+              f"{result.total_chars:,} chars extracted")
+        return result
 
+    def _create_chunks(self, doc_file: DocumentFile, result):
+        """Create and annotate chunks"""
         all_chunks = self._chunk_and_enrich_pages(doc_file, result.pages)
+        extraction_method = self.extractor.get_last_method()
         self._annotate_extraction_method(all_chunks, extraction_method)
-
-        print(f"Chunking complete: {doc_file.name} - {len(all_chunks)} chunks created")
         return all_chunks
 
     def _chunk_and_enrich_pages(self, doc_file: DocumentFile, pages: List) -> List[Dict]:

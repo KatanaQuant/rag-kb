@@ -121,6 +121,68 @@ Rename to `ExtractionRouter` or `ExtractorCoordinator` to make intent clear
 
 ---
 
+## 3. Extraction Method Logging Shows Incorrect Method
+
+**Issue:** The extraction method logged in processing output can show the wrong method. For example, a PDF processed with Docling may be logged as `obsidian_graph_rag`.
+
+**Example:**
+```
+Extraction complete (obsidian_graph_rag): UNIX and Linux System Administration.pdf - 2,870,514 chars extracted
+```
+
+**Root Cause:**
+The `TextExtractor.last_method` instance variable ([extractors.py:635](../api/ingestion/extractors.py#L635)) persists between file processing calls. If a markdown file sets `last_method = 'obsidian_graph_rag'` and the next file is a PDF, the old value may be displayed even though the PDF actually used Docling.
+
+The method tracking happens at [extractors.py:665](../api/ingestion/extractors.py#L665):
+```python
+self.last_method = method_map.get(ext, 'unknown')
+return self.extractors[ext](file_path)
+```
+
+However, the special markdown handling path ([extractors.py:647-648](../api/ingestion/extractors.py#L647-L648)) calls `_extract_markdown_intelligently()` which may set `last_method` differently, and this value can persist.
+
+**Current Impact:**
+- ⚠️ **Cosmetic only**: Only affects log output
+- **No functional impact**: The correct extractor is always called
+- **No data corruption**: Chunks are processed correctly regardless of log message
+- Can confuse developers debugging extraction issues
+
+**Evidence of Correct Behavior:**
+- File extension routing always calls correct extractor ([extractors.py:691](../api/ingestion/extractors.py#L691))
+- Processing time matches expected method (2.5 hours for 54MB PDF is Docling-typical)
+- Character counts match expected extraction method
+
+**Ideal Solution:**
+Reset `self.last_method = None` at the start of each `extract()` call, or better yet, return the method name directly from the extraction result instead of using instance state:
+
+```python
+def extract(self, file_path: Path) -> ExtractionResult:
+    ext = file_path.suffix.lower()
+    # Determine method first
+    if ext in ['.md', '.markdown']:
+        return self._extract_markdown_intelligently(file_path)
+
+    method = self.method_map.get(ext, 'unknown')
+    result = self.extractors[ext](file_path)
+    result.method = method  # Set method in result, not instance var
+    return result
+```
+
+**Current Workaround:**
+Be aware that logged extraction methods may not match actual methods used. Cross-reference with:
+- File extension (`.pdf` → docling, `.md` → markdown/obsidian, `.py` → AST)
+- Processing time (hours → Docling, seconds/minutes → markdown/code)
+- Character count patterns
+
+**Status:** Low priority cosmetic bug - does not affect functionality
+
+**Related:**
+- [extractors.py:635](../api/ingestion/extractors.py#L635) - TextExtractor.last_method declaration
+- [extractors.py:641-667](../api/ingestion/extractors.py#L641-L667) - extract() method with method tracking
+- [processing.py:255-257](../api/ingestion/processing.py#L255-L257) - Log output using get_last_method()
+
+---
+
 ## Contributing
 
 Found a new issue? Please document it here with:

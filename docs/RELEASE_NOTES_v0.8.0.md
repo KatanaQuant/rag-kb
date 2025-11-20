@@ -66,7 +66,6 @@ curl -X POST http://localhost:8000/query \
 
 ---
 
-## 🐛 Bug Fixes
 
 ### EPUB Processing
 
@@ -166,7 +165,6 @@ When indexing codebases, automatically excludes:
 
 ---
 
-## 📚 Documentation
 
 ### Updated README
 
@@ -183,7 +181,6 @@ When indexing codebases, automatically excludes:
 
 ---
 
-## 🧹 Cleanup
 
 ### Removed Obsolete Scripts
 
@@ -200,7 +197,6 @@ Removed custom shell scripts now superseded by cleaner UX:
 
 ---
 
-## 🔄 Migration Guide
 
 No breaking changes. This is a feature-additive release.
 
@@ -212,7 +208,6 @@ No breaking changes. This is a feature-additive release.
 
 ---
 
-## 🙏 Contributors
 
 - Development: horoshi@katanaquant.com
 - Research: cAST paper authors, astchunk library maintainers
@@ -220,7 +215,6 @@ No breaking changes. This is a feature-additive release.
 
 ---
 
-## 📖 References
 
 - [ROADMAP.md](ROADMAP.md) - Detailed Code RAG architecture
 - [cAST Paper](https://arxiv.org/html/2506.15655v1) - AST-based chunking research

@@ -8,7 +8,6 @@ Following Sandi Metz principles:
 from pathlib import Path
 from typing import Set
 
-
 class FileFilterPolicy:
     """Determines which files should be excluded from processing
 
@@ -36,6 +35,9 @@ class FileFilterPolicy:
         '*.so', '*.dylib', '*.dll',  # Shared libraries
         '*.class', '*.jar', '*.war',  # Java compiled
         '*.min.js', '*.min.css',  # Minified assets
+        '__init__.py', '__pycache__.py',  # Python empty/cache files
+        'package-lock.json', 'yarn.lock', 'poetry.lock',  # Lock files (large, no value)
+        '.gitignore', '.dockerignore', '.eslintrc',  # Config files (usually empty)
     ]
 
     EXCLUDED_SUBDIRS = {'problematic', 'original'}

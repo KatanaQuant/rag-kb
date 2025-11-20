@@ -1,14 +1,8 @@
-"""Wikilink Extractor - extracted from ObsidianGraphBuilder
 
-POODR Phase 2.4: God Class Decomposition
-- Extracted from ObsidianGraphBuilder
-- Single Responsibility: Extract wikilinks and build edges
-"""
 
 import re
 import networkx as nx
 from typing import Optional
-
 
 class WikilinkExtractor:
     """Extract wikilinks from markdown and build graph edges

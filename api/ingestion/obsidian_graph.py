@@ -1,23 +1,4 @@
-"""Obsidian Knowledge Graph Builder and Manager
 
-POODR Phase 2.4 Complete: Orchestrator Pattern + Component Decomposition
-- Delegates to specialized extractors and query helpers
-- Single Responsibility: Coordinate graph building
-- Thin orchestration layer over specialized components
-
-Architecture:
-- WikilinkExtractor: Extract wikilinks and build edges
-- TagExtractor: Extract tags and build tag nodes
-- HeaderExtractor: Extract headers and build hierarchy
-- GraphQuery: Graph traversal and query operations
-
-This class coordinates graph building while keeping each component focused
-on a single responsibility.
-
-Metrics Journey:
-- Before: 367 lines, CC 5, MI 46.33
-- After: ~180 lines (orchestrator only), CC <3, MI >65 (estimated)
-"""
 
 import networkx as nx
 from pathlib import Path
@@ -29,7 +10,6 @@ from ingestion.obsidian.graph.wikilink_extractor import WikilinkExtractor
 from ingestion.obsidian.graph.tag_extractor import TagExtractor
 from ingestion.obsidian.graph.header_extractor import HeaderExtractor
 from ingestion.obsidian.graph.graph_query import GraphQuery
-
 
 @dataclass
 class ObsidianNode:
@@ -44,7 +24,6 @@ class ObsidianNode:
         """Convert to dictionary for storage"""
         return asdict(self)
 
-
 @dataclass
 class ObsidianEdge:
     """Represents an edge in the Obsidian knowledge graph"""
@@ -57,42 +36,14 @@ class ObsidianEdge:
         """Convert to dictionary for storage"""
         return asdict(self)
 
-
 class ObsidianGraphBuilder:
-    """Builds knowledge graph from Obsidian vault structure
-
-    ORCHESTRATOR PATTERN (Phase 2.4 Complete!):
-    This class coordinates specialized components - it doesn't do the work itself.
-    Each responsibility delegated to a focused class:
-
-    - WikilinkExtractor: Wikilink extraction and edge creation
-    - TagExtractor: Tag extraction and node creation
-    - HeaderExtractor: Header extraction and hierarchy building
-    - GraphQuery: Graph traversal and query operations
-
-    Architecture (orchestrated):
-    1. Add note to graph (note node creation)
-    2. Extract wikilinks (WikilinkExtractor)
-    3. Extract tags (TagExtractor)
-    4. Extract headers (HeaderExtractor)
-    5. Query graph (GraphQuery)
-
-    POODR Compliance:
-    - Phase 2.4: Component decomposition
-    - Single Responsibility: Orchestrate, don't implement
-    - Composition over inheritance: Uses helper classes
-    """
+    
 
     def __init__(self):
-        """Initialize graph builder with specialized extractors
-
-        POODR Pattern: Dependency Injection + Default Factory
-        - Creates all extractors internally (could be injected for testing)
-        """
+        
         self.graph = nx.MultiDiGraph()  # Supports multiple edges between nodes
         self.note_paths: Dict[str, Path] = {}  # title -> path mapping
 
-        # Specialized extractors (Phase 2.4 decomposition)
         self.wikilink_extractor = WikilinkExtractor()
         self.tag_extractor = TagExtractor()
         self.header_extractor = HeaderExtractor()

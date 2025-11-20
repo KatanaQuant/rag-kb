@@ -5,7 +5,6 @@ import sqlite3
 from typing import List, Dict, Tuple
 from collections import defaultdict
 
-
 class KeywordSearcher:
     """Handles FTS5 keyword search"""
 
@@ -25,7 +24,6 @@ class KeywordSearcher:
             LIMIT ?
         """, (query, top_k))
         return cursor.fetchall()
-
 
 class RankFusion:
     """Reciprocal Rank Fusion algorithm"""
@@ -85,7 +83,6 @@ class RankFusion:
             result['score'] = float(scores[key])
             results.append(result)
         return results
-
 
 class HybridSearcher:
     """Combines vector and keyword search"""

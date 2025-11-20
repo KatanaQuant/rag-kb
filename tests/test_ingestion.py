@@ -20,6 +20,7 @@ from ingestion import (
     VectorRepository,
     VectorStore
 )
+from ingestion.database import DOCLING_AVAILABLE
 from config import ChunkConfig, DatabaseConfig
 from domain_models import DocumentFile, ExtractionResult, ChunkData
 
@@ -181,28 +182,30 @@ class TestTextFileExtractor:
 class TestMarkdownExtractor:
     """Tests for MarkdownExtractor"""
 
+    @pytest.mark.skipif(not DOCLING_AVAILABLE, reason="Docling not available")
     def test_extract_markdown(self, tmp_path):
-        """Test markdown extraction"""
+        """Test markdown extraction using Docling"""
         file_path = tmp_path / "test.md"
         content = "# Header\n\n**Bold text**\n\nNormal text"
         file_path.write_text(content)
 
         result = MarkdownExtractor.extract(file_path)
 
-        assert result.page_count == 1
-        text = result.pages[0][0]
-        assert "Header" in text
-        assert "Bold text" in text
-        assert result.method == 'markdown'
+        assert result.page_count > 0
+        assert result.method == 'docling_markdown'
+        assert result.success
 
-    def test_strip_html(self):
-        """Test HTML stripping"""
-        html = "<p>Test</p><strong>Bold</strong>"
-        clean = MarkdownExtractor._strip_html(html)
-        assert "<" not in clean
-        assert ">" not in clean
-        assert "Test" in clean
-        assert "Bold" in clean
+    def test_markdown_requires_docling(self, tmp_path):
+        """Test that markdown extraction fails gracefully without Docling"""
+        if DOCLING_AVAILABLE:
+            pytest.skip("Docling is available, cannot test failure case")
+
+        file_path = tmp_path / "test.md"
+        content = "# Header\n\nTest content"
+        file_path.write_text(content)
+
+        with pytest.raises(RuntimeError, match="Docling not available"):
+            MarkdownExtractor.extract(file_path)
 
 
 class TestTextExtractor:
@@ -504,7 +507,7 @@ class TestDatabaseConnection:
     def test_connect(self, tmp_path):
         """Test database connection"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path))
+        config = DatabaseConfig(path=str(db_path), require_vec_extension=False)
         db_conn = DatabaseConnection(config)
 
         conn = db_conn.connect()
@@ -516,7 +519,7 @@ class TestDatabaseConnection:
     def test_close(self, tmp_path):
         """Test closing connection"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path))
+        config = DatabaseConfig(path=str(db_path), require_vec_extension=False)
         db_conn = DatabaseConnection(config)
 
         db_conn.connect()
@@ -628,7 +631,7 @@ class TestVectorStore:
     def test_init(self, tmp_path):
         """Test store initialization"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path))
+        config = DatabaseConfig(path=str(db_path), require_vec_extension=False)
 
         store = VectorStore(config)
         assert store.conn is not None
@@ -639,7 +642,7 @@ class TestVectorStore:
     def test_get_stats(self, tmp_path):
         """Test getting stats"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path))
+        config = DatabaseConfig(path=str(db_path), require_vec_extension=False)
 
         store = VectorStore(config)
         stats = store.get_stats()

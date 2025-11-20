@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Dict, List, Optional
 import yaml
 
-
 class ObsidianFileMapper:
     """Maps note names to file paths in vault"""
 
@@ -57,7 +56,6 @@ class ObsidianFileMapper:
         """Resolve note name to file path"""
         return self.file_map.get(note_name)
 
-
 class FrontmatterExtractor:
     """Extracts YAML frontmatter from markdown"""
 
@@ -82,7 +80,6 @@ class FrontmatterExtractor:
         except yaml.YAMLError:
             return None, content
 
-
 class WikiLinkResolver:
     """Resolves Obsidian wiki-style links"""
 
@@ -106,7 +103,6 @@ class WikiLinkResolver:
         target = parts[0].split('#')[0]
         display = parts[-1] if len(parts) > 1 else target
         return target, display
-
 
 class SyntaxTransformer:
     """Transforms Obsidian syntax to plain markdown"""
@@ -248,7 +244,6 @@ class SyntaxTransformer:
         """Convert ==highlight== to **bold**"""
         return re.sub(r'==([^=]+)==', r'**\1**', content)
 
-
 class NoteProcessor:
     """Processes individual Obsidian notes"""
 
@@ -288,7 +283,6 @@ class NoteProcessor:
             'content': content.strip()
         }
 
-
 class VaultScanner:
     """Scans vault and processes all notes"""
 
@@ -326,7 +320,6 @@ class VaultScanner:
         except Exception as e:
             print(f"Error processing file: {file_path.name}")
             return None
-
 
 class VaultExporter:
     """Exports vault to markdown file"""
@@ -378,7 +371,6 @@ class VaultExporter:
             file.write(f"- {key}: {value}\n")
         file.write("\n")
 
-
 class ObsidianProcessor:
     """Main facade for Obsidian vault processing"""
 
@@ -417,7 +409,6 @@ class ObsidianProcessor:
         """Export vault to markdown file"""
         exclude = exclude or self._default_excludes()
         return self.exporter.export(output, exclude)
-
 
 if __name__ == "__main__":
     import sys

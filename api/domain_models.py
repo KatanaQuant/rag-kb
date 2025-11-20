@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-
 @dataclass
 class ChunkData:
     """Represents a single chunk of text with metadata"""
@@ -22,7 +21,6 @@ class ChunkData:
             'page': self.page,
             'token_count': self.token_count
         }
-
 
 @dataclass
 class DocumentFile:
@@ -63,7 +61,6 @@ class DocumentFile:
 
     def exists(self) -> bool:
         return self.path.exists()
-
 
 @dataclass
 class ExtractionResult:

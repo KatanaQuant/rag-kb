@@ -8,7 +8,6 @@ from typing import Set, Callable, Optional
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
-
 class DebounceTimer:
     """Manages debounce timing for file events"""
 
@@ -37,7 +36,6 @@ class DebounceTimer:
                 self.timer.cancel()
                 self.timer = None
 
-
 class FileChangeCollector:
     """Collects and deduplicates file change events"""
 
@@ -61,7 +59,6 @@ class FileChangeCollector:
         """Get count of pending changes"""
         with self.lock:
             return len(self.changed_files)
-
 
 class DocumentEventHandler(FileSystemEventHandler):
     """Handles file system events for documents"""
@@ -117,57 +114,50 @@ class DocumentEventHandler(FileSystemEventHandler):
             return True
         return False
 
-
 class IndexingCoordinator:
-    """Coordinates the indexing process"""
+    """Coordinates the indexing process via queue
 
-    def __init__(self, indexer, collector: FileChangeCollector, batch_size: int):
-        self.indexer = indexer
+    Routes all file changes through IndexingQueue for concurrent pipeline processing.
+    """
+
+    def __init__(self, queue, collector: FileChangeCollector, batch_size: int):
+        self.queue = queue
         self.collector = collector
         self.batch_size = batch_size
 
     def process_changes(self):
-        """Process all collected file changes"""
+        """Add all collected file changes to queue for processing"""
         files = self.collector.get_and_clear()
         if not files:
             return
 
-        print(f"Processing {len(files)} changed file(s)")
-        self._index_files(files)
+        print(f"Queueing {len(files)} changed file(s) for processing")
+        self._queue_files(files)
 
-    def _index_files(self, files: Set[Path]):
-        """Index a set of files"""
+    def _queue_files(self, files: Set[Path]):
+        """Add files to indexing queue"""
+        from services import Priority
+
         files_list = list(files)[:self.batch_size]
 
-        success_count = 0
-        error_count = 0
-        skipped_count = 0
-
+        queued_count = 0
         for file_path in files_list:
-            # Show processing message BEFORE starting
-            print(f"  Processing {file_path.name}...")
             try:
-                chunks, was_skipped = self.indexer.index_file(file_path, force=False)
-                if was_skipped:
-                    skipped_count += 1
-                elif chunks > 0:
-                    success_count += 1
-                    print(f"  ✓ {file_path.name}: {chunks} chunks")
+                self.queue.add(file_path, priority=Priority.NORMAL, force=False)
+                queued_count += 1
+                print(f"  Queued: {file_path.name}")
             except Exception as e:
-                error_count += 1
-                print(f"  ✗ {file_path.name}: indexing failed")
+                print(f"  ✗ Failed to queue {file_path.name}: {e}")
 
-        if success_count > 0 or error_count > 0:
-            print(f"Indexed: {success_count} success, {error_count} errors, {skipped_count} skipped")
-
+        print(f"Queued {queued_count} file(s) for concurrent pipeline processing")
 
 class FileWatcherService:
-    """Main file watcher service"""
+    """Main file watcher service - routes files to queue"""
 
-    def __init__(self, watch_path: Path, indexer, debounce_seconds: float, batch_size: int):
+    def __init__(self, watch_path: Path, queue, debounce_seconds: float, batch_size: int):
         self.watch_path = watch_path
         self.collector = FileChangeCollector()
-        self.coordinator = IndexingCoordinator(indexer, self.collector, batch_size)
+        self.coordinator = IndexingCoordinator(queue, self.collector, batch_size)
         self.timer = DebounceTimer(debounce_seconds, self._on_debounce)
         self.handler = DocumentEventHandler(self.collector, self.timer)
         self.observer: Optional[Observer] = None

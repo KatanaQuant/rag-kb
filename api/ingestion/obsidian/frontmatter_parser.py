@@ -1,15 +1,8 @@
-"""Frontmatter parser - extracted from ObsidianExtractor
 
-POODR Phase 2.2: God Class Decomposition
-- Extracted from ObsidianExtractor
-- Single Responsibility: Parse YAML frontmatter from markdown
-- Reduces ObsidianExtractor complexity
-"""
 
 import re
 import yaml
 from typing import Optional, Dict
-
 
 class FrontmatterParser:
     """Parse YAML frontmatter from markdown files

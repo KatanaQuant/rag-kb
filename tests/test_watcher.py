@@ -196,8 +196,9 @@ class TestIndexingCoordinator:
 
     def test_shows_processing_before_result(self, capsys):
         """Test: Shows 'Processing...' message BEFORE showing success/failure"""
+        from value_objects import ProcessingResult
         indexer = Mock()
-        indexer.index_file = Mock(return_value=(10, False))
+        indexer.index_file = Mock(return_value=ProcessingResult.success(10))
         collector = FileChangeCollector()
         coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
 
@@ -312,10 +313,11 @@ class TestIndexingCoordinatorWithTupleReturn:
     """Test coordinator handles tuple return from index_file correctly"""
 
     def test_index_file_returns_tuple_success(self, capsys):
-        """Test coordinator handles (chunks, was_skipped) tuple correctly"""
+        """Test coordinator handles ProcessingResult correctly"""
+        from value_objects import ProcessingResult
         indexer = Mock()
-        # Real index_file returns (chunks, was_skipped)
-        indexer.index_file = Mock(return_value=(10, False))
+        # Real index_file returns ProcessingResult
+        indexer.index_file = Mock(return_value=ProcessingResult.success(10))
         collector = FileChangeCollector()
         coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
 
@@ -333,10 +335,11 @@ class TestIndexingCoordinatorWithTupleReturn:
         assert indexer.index_file.call_count == 1
 
     def test_index_file_returns_tuple_skipped(self, capsys):
-        """Test coordinator handles skipped file (0 chunks, was_skipped=True)"""
+        """Test coordinator handles skipped file (ProcessingResult.skipped())"""
+        from value_objects import ProcessingResult
         indexer = Mock()
         # File was skipped (already indexed)
-        indexer.index_file = Mock(return_value=(0, True))
+        indexer.index_file = Mock(return_value=ProcessingResult.skipped())
         collector = FileChangeCollector()
         coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
 
@@ -351,10 +354,11 @@ class TestIndexingCoordinatorWithTupleReturn:
         assert indexer.index_file.call_count == 1
 
     def test_index_file_returns_tuple_no_chunks(self, capsys):
-        """Test coordinator handles file with no chunks (0 chunks, was_skipped=False)"""
+        """Test coordinator handles file with no chunks (empty file)"""
+        from value_objects import ProcessingResult
         indexer = Mock()
         # File was processed but had no chunks (e.g., empty file)
-        indexer.index_file = Mock(return_value=(0, False))
+        indexer.index_file = Mock(return_value=ProcessingResult.success(0))
         collector = FileChangeCollector()
         coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
 
