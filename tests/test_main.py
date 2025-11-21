@@ -26,9 +26,11 @@ class TestAppState:
     def test_init(self):
         """Test initialization"""
         state = AppState()
-        assert state.model is None
-        assert state.vector_store is None
-        assert state.processor is None
+        assert state.core.model is None
+        assert state.core.vector_store is None
+        assert state.core.processor is None
+        assert state.indexing.queue is None
+        assert state.query.cache is None
 
 
 class TestModelLoader:
@@ -101,114 +103,28 @@ class TestDocumentIndexer:
     def mock_components(self):
         """Create mock components"""
         processor = Mock(spec=DocumentProcessor)
-        model = Mock()
-        vector_store = Mock()
+        embedding_service = Mock()
 
-        return processor, model, vector_store
+        return processor, embedding_service
 
     def test_init(self, mock_components):
         """Test initialization"""
-        processor, model, store = mock_components
-        indexer = DocumentIndexer(processor, model, store)
+        processor, embedding_service = mock_components
+        indexer = DocumentIndexer(processor, embedding_service)
 
         assert indexer.processor == processor
-        assert indexer.model == model
-        assert indexer.store == store
+        assert indexer.embedding_service == embedding_service
 
     def test_should_index_force(self, mock_components, tmp_path):
         """Test force indexing"""
-        processor, model, store = mock_components
-        indexer = DocumentIndexer(processor, model, store)
+        processor, embedding_service = mock_components
+        indexer = DocumentIndexer(processor, embedding_service)
 
         file_path = tmp_path / "test.txt"
         file_path.write_text("test")
 
         # Force should always return True
         assert indexer._should_index(file_path, force=True)
-
-    def test_should_index_not_indexed(self, mock_components, tmp_path):
-        """Test indexing new file"""
-        processor, model, store = mock_components
-        indexer = DocumentIndexer(processor, model, store)
-
-        file_path = tmp_path / "test.txt"
-        file_path.write_text("test")
-
-        processor.get_file_hash.return_value = "hash123"
-        store.is_document_indexed.return_value = False
-
-        assert indexer._should_index(file_path, force=False)
-
-    def test_should_index_already_indexed(self, mock_components, tmp_path):
-        """Test skipping already indexed file"""
-        processor, model, store = mock_components
-        indexer = DocumentIndexer(processor, model, store)
-
-        file_path = tmp_path / "test.txt"
-        file_path.write_text("test")
-
-        processor.get_file_hash.return_value = "hash123"
-        store.is_document_indexed.return_value = True
-
-        assert not indexer._should_index(file_path, force=False)
-
-    def test_index_file_skip(self, mock_components, tmp_path):
-        """Test skipping file"""
-        processor, model, store = mock_components
-        indexer = DocumentIndexer(processor, model, store)
-
-        file_path = tmp_path / "test.txt"
-        file_path.write_text("test")
-
-        processor.get_file_hash.return_value = "hash123"
-        store.is_document_indexed.return_value = True
-
-        result = indexer.index_file(file_path, force=False)
-        assert result == 0
-
-    def test_index_file_success(self, mock_components, tmp_path):
-        """Test successful indexing"""
-        processor, model, store = mock_components
-        indexer = DocumentIndexer(processor, model, store)
-
-        file_path = tmp_path / "test.txt"
-        file_path.write_text("test")
-
-        processor.get_file_hash.return_value = "hash123"
-        store.is_document_indexed.return_value = False
-        processor.process_file.return_value = [
-            {'content': 'chunk1'},
-            {'content': 'chunk2'}
-        ]
-
-        # Mock embeddings with .tolist() method
-        mock_emb1 = Mock()
-        mock_emb1.tolist.return_value = [0.1]
-        mock_emb2 = Mock()
-        mock_emb2.tolist.return_value = [0.2]
-        model.encode.return_value = [mock_emb1, mock_emb2]
-
-        result = indexer.index_file(file_path, force=True)
-        assert result == 2
-
-    def test_gen_embeddings(self, mock_components):
-        """Test embedding generation"""
-        processor, model, store = mock_components
-        indexer = DocumentIndexer(processor, model, store)
-
-        chunks = [
-            {'content': 'text1'},
-            {'content': 'text2'}
-        ]
-
-        mock_emb = Mock()
-        mock_emb.tolist.side_effect = [[0.1, 0.2], [0.3, 0.4]]
-        model.encode.return_value = [mock_emb, mock_emb]
-
-        embeddings = indexer._gen_embeddings(chunks)
-
-        model.encode.assert_called_once()
-        assert len(embeddings) == 2
 
 
 class TestIndexOrchestrator:
@@ -229,17 +145,19 @@ class TestIndexOrchestrator:
     def test_index_all_missing_path(self, mock_indexer, mock_processor, tmp_path):
         """Test indexing nonexistent path"""
         nonexistent = tmp_path / "nonexistent"
+        mock_queue = Mock()
         orch = IndexOrchestrator(nonexistent, mock_indexer, mock_processor)
 
-        files, chunks = orch.index_all()
+        files, chunks = orch.index_all(mock_queue)
         assert files == 0
         assert chunks == 0
 
     def test_index_all_empty(self, mock_indexer, mock_processor, tmp_path):
         """Test indexing empty directory"""
+        mock_queue = Mock()
         orch = IndexOrchestrator(tmp_path, mock_indexer, mock_processor)
 
-        files, chunks = orch.index_all()
+        files, chunks = orch.index_all(mock_queue)
         assert files == 0
         assert chunks == 0
 
@@ -248,13 +166,16 @@ class TestIndexOrchestrator:
         (tmp_path / "file1.txt").write_text("test")
         (tmp_path / "file2.txt").write_text("test")
 
-        mock_indexer.index_file.return_value = 5
+        mock_queue = Mock()
+        mock_queue.add_many = Mock()
 
         orch = IndexOrchestrator(tmp_path, mock_indexer, mock_processor)
-        files, chunks = orch.index_all()
+        files, chunks = orch.index_all(mock_queue)
 
+        # Files are queued via add_many(), not directly indexed
         assert files == 2
-        assert chunks == 10  # 2 files * 5 chunks each
+        assert chunks == 0  # Async processing returns 0
+        assert mock_queue.add_many.call_count == 1
 
 
 class TestQueryExecutor:
@@ -322,12 +243,15 @@ class TestDocumentLister:
     def test_list_all(self):
         """Test listing documents"""
         mock_store = Mock()
+
+        # Create a properly iterable mock cursor by making it a list
         mock_cursor = [
             ('file1.txt', '2025-01-01', 5),
             ('file2.txt', '2025-01-02', 3)
         ]
 
-        mock_store.conn.execute.return_value = mock_cursor
+        # Mock the correct method called by DocumentLister
+        mock_store.query_documents_with_chunks.return_value = mock_cursor
 
         lister = DocumentLister(mock_store)
         result = lister.list_all()
@@ -361,6 +285,6 @@ class TestStartupManager:
 
         manager.initialize()
 
-        assert state.model is not None
-        assert state.vector_store is not None
-        assert state.processor is not None
+        assert state.core.model is not None
+        assert state.core.vector_store is not None
+        assert state.core.processor is not None

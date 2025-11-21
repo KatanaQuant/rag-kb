@@ -24,6 +24,9 @@ class TestObsidianGraphCleanup:
         """Create in-memory database with schema"""
         conn = sqlite3.connect(':memory:')
 
+        # Enable foreign keys (required for CASCADE DELETE)
+        conn.execute("PRAGMA foreign_keys = ON")
+
         # Load sqlite-vec
         try:
             import sqlite_vec
@@ -151,6 +154,8 @@ class TestObsidianGraphCleanup:
         new_path = "/vault/NewName.md"
         new_node_id = f"note:{new_path}"
         graph_repo.save_node(new_node_id, "note", "NewName", "Content")
+        # Tag was deleted with old note, need to recreate it
+        graph_repo.save_node(tag_id, "tag", "#python")
         graph_repo.save_edge(new_node_id, tag_id, "tag")  # Re-tag in new note
         graph_repo.commit()
 

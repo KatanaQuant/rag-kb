@@ -87,6 +87,13 @@ class DocumentEventHandler(FileSystemEventHandler):
         if not event.is_directory:
             self._handle_change(event.src_path)
 
+    def on_moved(self, event: FileSystemEvent):
+        """Handle file move/rename"""
+        if not event.is_directory:
+            # When files are moved INTO the watched directory,
+            # treat them as new files and queue for processing
+            self._handle_change(event.dest_path)
+
     def on_deleted(self, event: FileSystemEvent):
         """Handle file deletion"""
         # For deletions, we might want to remove from DB

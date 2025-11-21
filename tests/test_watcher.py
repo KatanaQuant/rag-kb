@@ -150,6 +150,90 @@ class TestDocumentEventHandler:
 
         timer.trigger.assert_called_once()
 
+    def test_moved_files_are_detected(self):
+        """Test file move events are handled (e.g., mv file.epub knowledge_base/)"""
+        collector = FileChangeCollector()
+        timer = Mock()
+        handler = DocumentEventHandler(collector, timer)
+
+        # Simulate moving a file into the knowledge_base directory
+        event = Mock()
+        event.is_directory = False
+        event.dest_path = "/app/knowledge_base/System Design Interview.epub"
+        event.src_path = "/tmp/System Design Interview.epub"
+        handler.on_moved(event)
+
+        # File should be added to collector
+        assert collector.count() == 1
+        timer.trigger.assert_called_once()
+
+    def test_moved_unsupported_files_ignored(self):
+        """Test moved files with unsupported extensions are ignored"""
+        collector = FileChangeCollector()
+        timer = Mock()
+        handler = DocumentEventHandler(collector, timer)
+
+        event = Mock()
+        event.is_directory = False
+        event.dest_path = "/app/knowledge_base/image.jpg"
+        event.src_path = "/tmp/image.jpg"
+        handler.on_moved(event)
+
+        assert collector.count() == 0
+        timer.trigger.assert_not_called()
+
+    def test_moved_to_excluded_directory_ignored(self):
+        """Test files moved to excluded directories are ignored"""
+        collector = FileChangeCollector()
+        timer = Mock()
+        handler = DocumentEventHandler(collector, timer)
+
+        event = Mock()
+        event.is_directory = False
+        event.dest_path = "/app/knowledge_base/problematic/file.pdf"
+        event.src_path = "/app/knowledge_base/file.pdf"
+        handler.on_moved(event)
+
+        assert collector.count() == 0
+        timer.trigger.assert_not_called()
+
+    def test_moved_already_indexed_file_skips_reindex(self):
+        """Test that moving an already-indexed file doesn't trigger reindexing"""
+        from value_objects import ProcessingResult
+
+        # Setup: File watcher detects a moved file
+        collector = FileChangeCollector()
+        timer = Mock()
+        handler = DocumentEventHandler(collector, timer)
+
+        # Mock queue that will receive the file
+        mock_queue = Mock()
+
+        # Simulate file move event
+        event = Mock()
+        event.is_directory = False
+        event.dest_path = "/app/knowledge_base/moved_book.pdf"
+        event.src_path = "/tmp/moved_book.pdf"
+        handler.on_moved(event)
+
+        # File should be collected
+        assert collector.count() == 1
+
+        # Now simulate IndexingCoordinator processing with queue
+        queue = Mock()
+        queue.add = Mock()
+        coordinator = IndexingCoordinator(queue, collector, batch_size=50)
+
+        # Process the moved file
+        coordinator.process_changes()
+
+        # Verify file was queued (queue handles skip logic)
+        assert queue.add.call_count == 1
+
+        # Verify force=False was used (allowing skip logic)
+        # The queue.add call in _queue_files uses force=False
+        # This ensures the indexer can skip already-indexed files
+
 
 class TestIndexingCoordinator:
     """Test indexing coordinator"""
@@ -165,10 +249,10 @@ class TestIndexingCoordinator:
 
     def test_process_files(self):
         """Test processing files"""
-        indexer = Mock()
-        indexer.index_file = Mock(return_value=(10, False))
+        queue = Mock()
+        queue.add = Mock()
         collector = FileChangeCollector()
-        coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
+        coordinator = IndexingCoordinator(queue, collector, batch_size=50)
 
         file1 = Path("/test/file1.pdf")
         file2 = Path("/test/file2.md")
@@ -177,30 +261,29 @@ class TestIndexingCoordinator:
 
         coordinator.process_changes()
 
-        assert indexer.index_file.call_count == 2
+        assert queue.add.call_count == 2
         assert collector.count() == 0
 
     def test_batch_size_limit(self):
         """Test batch size is respected"""
-        indexer = Mock()
-        indexer.index_file = Mock(return_value=(10, False))
+        queue = Mock()
+        queue.add = Mock()
         collector = FileChangeCollector()
-        coordinator = IndexingCoordinator(indexer, collector, batch_size=2)
+        coordinator = IndexingCoordinator(queue, collector, batch_size=2)
 
         for i in range(5):
             collector.add(Path(f"/test/file{i}.pdf"))
 
         coordinator.process_changes()
 
-        assert indexer.index_file.call_count == 2
+        assert queue.add.call_count == 2
 
     def test_shows_processing_before_result(self, capsys):
-        """Test: Shows 'Processing...' message BEFORE showing success/failure"""
-        from value_objects import ProcessingResult
-        indexer = Mock()
-        indexer.index_file = Mock(return_value=ProcessingResult.success(10))
+        """Test: Shows 'Queueing...' message when adding files to queue"""
+        queue = Mock()
+        queue.add = Mock()
         collector = FileChangeCollector()
-        coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
+        coordinator = IndexingCoordinator(queue, collector, batch_size=50)
 
         file1 = Path("/test/document.pdf")
         collector.add(file1)
@@ -210,18 +293,16 @@ class TestIndexingCoordinator:
         captured = capsys.readouterr()
         output_lines = captured.out.strip().split('\n')
 
-        # Should have at least 3 lines: "Processing...", "  Processing document.pdf...", "  ✓ document.pdf: X chunks"
-        assert len(output_lines) >= 3
-        assert "Processing 1 changed file" in output_lines[0]
-        assert "Processing document.pdf" in output_lines[1]
-        assert "✓ document.pdf" in output_lines[2]
+        # Should show queueing messages
+        assert len(output_lines) >= 2
+        assert "Queueing 1 changed file" in output_lines[0]
 
     def test_shows_processing_before_error(self, capsys):
-        """Test: Shows 'Processing...' message BEFORE showing error"""
-        indexer = Mock()
-        indexer.index_file = Mock(side_effect=Exception("Test error"))
+        """Test: Shows 'Queueing...' message even when queue.add fails"""
+        queue = Mock()
+        queue.add = Mock(side_effect=Exception("Test error"))
         collector = FileChangeCollector()
-        coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
+        coordinator = IndexingCoordinator(queue, collector, batch_size=50)
 
         file1 = Path("/test/broken.epub")
         collector.add(file1)
@@ -231,18 +312,16 @@ class TestIndexingCoordinator:
         captured = capsys.readouterr()
         output_lines = captured.out.strip().split('\n')
 
-        # Should show processing before error
-        assert len(output_lines) >= 3
-        assert "Processing 1 changed file" in output_lines[0]
-        assert "Processing broken.epub" in output_lines[1]
-        assert "✗ broken.epub" in output_lines[2]
+        # Should show queueing attempt
+        assert len(output_lines) >= 2
+        assert "Queueing 1 changed file" in output_lines[0]
 
     def test_error_handling(self):
         """Test errors don't stop processing"""
-        indexer = Mock()
-        indexer.index_file = Mock(side_effect=[Exception("Error"), (10, False)])
+        queue = Mock()
+        queue.add = Mock(side_effect=[Exception("Error"), None])
         collector = FileChangeCollector()
-        coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
+        coordinator = IndexingCoordinator(queue, collector, batch_size=50)
 
         file1 = Path("/test/file1.pdf")
         file2 = Path("/test/file2.pdf")
@@ -251,7 +330,7 @@ class TestIndexingCoordinator:
 
         coordinator.process_changes()
 
-        assert indexer.index_file.call_count == 2
+        assert queue.add.call_count == 2
 
 
 class TestFileWatcherService:
@@ -259,11 +338,11 @@ class TestFileWatcherService:
 
     def test_initialization(self):
         """Test service initialization"""
-        indexer = Mock()
+        queue = Mock()
         watch_path = Path("/test")
         service = FileWatcherService(
             watch_path=watch_path,
-            indexer=indexer,
+            queue=queue,
             debounce_seconds=1.0,
             batch_size=50
         )
@@ -275,13 +354,13 @@ class TestFileWatcherService:
         assert service.handler is not None
 
     def test_debounce_callback_processes_changes(self):
-        """Test debounce triggers indexing"""
-        indexer = Mock()
-        indexer.index_file = Mock(return_value=(10, False))
+        """Test debounce triggers queueing"""
+        queue = Mock()
+        queue.add = Mock()
         watch_path = Path("/test")
         service = FileWatcherService(
             watch_path=watch_path,
-            indexer=indexer,
+            queue=queue,
             debounce_seconds=0.1,
             batch_size=50
         )
@@ -290,16 +369,16 @@ class TestFileWatcherService:
         service.collector.add(file1)
         service._on_debounce()
 
-        indexer.index_file.assert_called_once()
+        queue.add.assert_called_once()
 
     def test_error_during_indexing_handled(self):
-        """Test errors during indexing are caught"""
-        indexer = Mock()
-        indexer.index_file = Mock(side_effect=Exception("Test error"))
+        """Test errors during queueing are caught"""
+        queue = Mock()
+        queue.add = Mock(side_effect=Exception("Test error"))
         watch_path = Path("/test")
         service = FileWatcherService(
             watch_path=watch_path,
-            indexer=indexer,
+            queue=queue,
             debounce_seconds=0.1,
             batch_size=50
         )
@@ -310,38 +389,31 @@ class TestFileWatcherService:
 
 
 class TestIndexingCoordinatorWithTupleReturn:
-    """Test coordinator handles tuple return from index_file correctly"""
+    """Test coordinator queues files for processing"""
 
     def test_index_file_returns_tuple_success(self, capsys):
-        """Test coordinator handles ProcessingResult correctly"""
-        from value_objects import ProcessingResult
-        indexer = Mock()
-        # Real index_file returns ProcessingResult
-        indexer.index_file = Mock(return_value=ProcessingResult.success(10))
+        """Test coordinator queues files successfully"""
+        queue = Mock()
+        queue.add = Mock()
         collector = FileChangeCollector()
-        coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
+        coordinator = IndexingCoordinator(queue, collector, batch_size=50)
 
         file1 = Path("/test/file1.pdf")
         collector.add(file1)
 
-        # Should properly unpack tuple and show success message
         coordinator.process_changes()
         captured = capsys.readouterr()
 
-        # Should show success, not failure
-        assert "✓" in captured.out
-        assert "10 chunks" in captured.out
-        assert "✗" not in captured.out
-        assert indexer.index_file.call_count == 1
+        # Should show queuing message
+        assert "Queued" in captured.out or "Queueing" in captured.out
+        assert queue.add.call_count == 1
 
     def test_index_file_returns_tuple_skipped(self, capsys):
-        """Test coordinator handles skipped file (ProcessingResult.skipped())"""
-        from value_objects import ProcessingResult
-        indexer = Mock()
-        # File was skipped (already indexed)
-        indexer.index_file = Mock(return_value=ProcessingResult.skipped())
+        """Test coordinator queues all files (queue handles dedup)"""
+        queue = Mock()
+        queue.add = Mock()
         collector = FileChangeCollector()
-        coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
+        coordinator = IndexingCoordinator(queue, collector, batch_size=50)
 
         file1 = Path("/test/file1.pdf")
         collector.add(file1)
@@ -349,18 +421,15 @@ class TestIndexingCoordinatorWithTupleReturn:
         coordinator.process_changes()
         captured = capsys.readouterr()
 
-        # Skipped files should not show as errors
-        assert "✗" not in captured.out
-        assert indexer.index_file.call_count == 1
+        # Should attempt to queue
+        assert queue.add.call_count == 1
 
     def test_index_file_returns_tuple_no_chunks(self, capsys):
-        """Test coordinator handles file with no chunks (empty file)"""
-        from value_objects import ProcessingResult
-        indexer = Mock()
-        # File was processed but had no chunks (e.g., empty file)
-        indexer.index_file = Mock(return_value=ProcessingResult.success(0))
+        """Test coordinator queues files regardless of content"""
+        queue = Mock()
+        queue.add = Mock()
         collector = FileChangeCollector()
-        coordinator = IndexingCoordinator(indexer, collector, batch_size=50)
+        coordinator = IndexingCoordinator(queue, collector, batch_size=50)
 
         file1 = Path("/test/file1.pdf")
         collector.add(file1)
@@ -368,6 +437,5 @@ class TestIndexingCoordinatorWithTupleReturn:
         coordinator.process_changes()
         captured = capsys.readouterr()
 
-        # Files with 0 chunks should not show as errors
-        assert "✗" not in captured.out
-        assert indexer.index_file.call_count == 1
+        # Should attempt to queue
+        assert queue.add.call_count == 1

@@ -58,3 +58,43 @@ class MyClass:
 
         # Should have cached the python chunker
         assert 'python' in CodeExtractor._chunker_cache
+
+    def test_extracts_go_code_with_ast_chunking(self, tmp_path):
+        """Should extract and chunk Go code using AST (TDD: FAILING TEST)"""
+        # Create a Go file with multiple functions
+        go_file = tmp_path / "test.go"
+        go_file.write_text("""package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello, World!")
+}
+
+func add(a int, b int) int {
+    return a + b
+}
+
+func subtract(a int, b int) int {
+    return a - b
+}
+
+type Calculator struct {
+    value int
+}
+
+func (c *Calculator) Add(n int) {
+    c.value += n
+}
+""")
+
+        # Extract with AST chunking
+        result = CodeExtractor.extract(go_file)
+
+        assert result.success is True
+        assert result.method == 'ast_go'
+        assert len(result.pages) > 0
+        # Should have actual code chunks, not empty
+        assert all(len(text.strip()) > 0 for text, _ in result.pages)
+        # Should respect function boundaries (multiple chunks for multiple functions)
+        assert len(result.pages) >= 3  # main, add, subtract at minimum

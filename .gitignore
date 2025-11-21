@@ -20,6 +20,8 @@ data_new/
 data_old/
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 
 # Model caches
 .cache/
@@ -41,6 +43,7 @@ data_backup/
 data_test/
 knowledge_base_test/
 up next/
+up_next/
 
 # Agent session files
 .agent/
@@ -61,3 +64,4 @@ Thumbs.db
 .local-scripts/
 api/core.*
 core.*
+internal_planning/

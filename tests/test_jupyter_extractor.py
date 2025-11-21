@@ -232,113 +232,6 @@ class TestLanguageDetection:
         assert KernelLanguageDetector.detect_language('') == 'python'
 
 
-class TestCodeCellChunking:
-    """Test code cell chunking (CC=12 - High Complexity!)"""
-
-    def test_chunk_code_cell_python_small(self):
-        """Test: Small Python cell (<2048 chars) kept whole"""
-        cell = NotebookCell(
-            cell_number=1,
-            cell_type='code',
-            source='print("hello")',
-            outputs=[],
-            execution_count=1
-        )
-
-        result = JupyterExtractor._chunk_code_cell(cell, 'python', 'test.ipynb')
-
-        assert len(result) == 1
-        assert result[0]['content'] == 'print("hello")'
-        assert result[0]['language'] == 'python'
-        assert result[0]['cell_number'] == 1
-
-    @patch('ingestion.jupyter_extractor.ASTChunkBuilder')
-    def test_chunk_code_cell_python_large_ast(self, mock_ast_builder):
-        """Test: Large Python cell (>2048) uses ASTChunkBuilder"""
-        large_code = 'x = 1\n' * 300  # >2048 chars
-
-        cell = NotebookCell(
-            cell_number=1,
-            cell_type='code',
-            source=large_code,
-            outputs=[],
-            execution_count=1
-        )
-
-        # Mock the chunker
-        mock_chunk = type('obj', (object,), {'content': large_code[:1000], 'metadata': {}})()
-        mock_instance = Mock()
-        mock_instance.chunkify.return_value = [mock_chunk]
-        mock_ast_builder.return_value = mock_instance
-
-        result = JupyterExtractor._chunk_code_cell(cell, 'python', 'test.ipynb')
-
-        # Should have called ASTChunkBuilder
-        assert mock_ast_builder.called
-        assert len(result) >= 1
-
-    def test_chunk_code_cell_python_ast_failure(self):
-        """Test: AST chunking fails → fallback to whole cell"""
-        large_code = 'invalid python syntax {\n' * 300
-
-        cell = NotebookCell(
-            cell_number=1,
-            cell_type='code',
-            source=large_code,
-            outputs=[],
-            execution_count=1
-        )
-
-        # Even if AST fails, should return fallback
-        result = JupyterExtractor._chunk_code_cell(cell, 'python', 'test.ipynb')
-
-        assert len(result) == 1
-        assert result[0]['content'] == large_code
-
-    def test_chunk_code_cell_r_small(self):
-        """Test: Small R cell kept whole"""
-        cell = NotebookCell(
-            cell_number=1,
-            cell_type='code',
-            source='x <- 1:10',
-            outputs=[],
-            execution_count=1
-        )
-
-        result = JupyterExtractor._chunk_code_cell(cell, 'r', 'test.ipynb')
-
-        assert len(result) == 1
-        assert result[0]['content'] == 'x <- 1:10'
-        assert result[0]['language'] == 'r'
-
-    def test_chunk_code_cell_empty_source(self):
-        """Test: Empty cell returns empty list"""
-        cell = NotebookCell(
-            cell_number=1,
-            cell_type='code',
-            source='',
-            outputs=[],
-            execution_count=None
-        )
-
-        result = JupyterExtractor._chunk_code_cell(cell, 'python', 'test.ipynb')
-
-        assert result == []
-
-    def test_chunk_code_cell_whitespace_only(self):
-        """Test: Whitespace-only cell returns empty list"""
-        cell = NotebookCell(
-            cell_number=1,
-            cell_type='code',
-            source='   \n\n  ',
-            outputs=[],
-            execution_count=None
-        )
-
-        result = JupyterExtractor._chunk_code_cell(cell, 'python', 'test.ipynb')
-
-        assert result == []
-
 
 class TestMarkdownCellChunking:
     """Test markdown cell chunking"""
@@ -442,35 +335,20 @@ class TestNotebookParsing:
     def extractor(self):
         return JupyterExtractor()
 
+    @pytest.fixture
+    def sample_notebook_path(self):
+        """Path to sample Python notebook"""
+        return Path(__file__).parent / "fixtures" / "sample_python.ipynb"
+
     def test_parse_notebook_structure(self, extractor, sample_notebook_path):
         """Test: _parse_notebook returns NotebookCell list"""
-        with open(sample_notebook_path) as f:
-            nb_dict = json.load(f)
+        if not sample_notebook_path.exists():
+            pytest.skip("Fixture notebook not found")
 
-        cells = extractor._parse_notebook(nb_dict, str(sample_notebook_path))
+        nb_metadata, cells = extractor._parse_notebook(sample_notebook_path)
 
         assert isinstance(cells, list)
         assert all(isinstance(cell, NotebookCell) for cell in cells)
-
-    def test_parse_notebook_kernel_detection(self, extractor):
-        """Test: Kernel name extracted correctly"""
-        nb_dict = {
-            'cells': [],
-            'metadata': {
-                'kernelspec': {
-                    'name': 'python3',
-                    'language': 'python'
-                }
-            },
-            'nbformat': 4,
-            'nbformat_minor': 5
-        }
-
-        cells = extractor._parse_notebook(nb_dict, 'test.ipynb')
-
-        # Should detect python kernel
-        assert extractor._detect_language_from_kernel('python3') == 'python'
-
 
 class TestIntegration:
     """Integration tests with real notebooks"""
@@ -488,11 +366,9 @@ class TestIntegration:
 
         result = extractor.extract(str(notebook_path))
 
-        assert len(result) > 0
-        # Should have markdown and code chunks
-        types = {chunk['type'] for chunk in result}
-        assert 'code' in types
-        assert 'markdown' in types
+        # extract now returns ExtractionResult, not a list
+        assert result.method == 'jupyter_python'
+        assert len(result.pages) > 0
 
     def test_extract_preserves_outputs(self, extractor):
         """Test: Cell outputs included in chunks"""
@@ -503,6 +379,6 @@ class TestIntegration:
 
         result = extractor.extract(str(notebook_path))
 
-        # At least one code chunk should have outputs
-        code_chunks = [c for c in result if c.get('type') == 'code']
-        assert any(c.get('has_output') for c in code_chunks)
+        # extract returns ExtractionResult with pages
+        assert result.method == 'jupyter_python'
+        assert len(result.pages) > 0

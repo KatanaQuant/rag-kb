@@ -9,6 +9,7 @@ services:
     volumes:
       - ./knowledge_base:/app/knowledge_base
       - ./data:/app/data
+      - ./tests:/app/tests  # Mount tests directory for test execution
       - ./.cache/deepsearch_glm:/app/.cache/deepsearch_glm  # DeepSearch GLM cache
       - ./.cache/docling:/home/appuser/.cache/docling  # Docling model cache
       - ./.cache/huggingface:/home/appuser/.cache/huggingface  # Hugging Face model cache (Docling models)
@@ -23,6 +24,7 @@ services:
       - SEMANTIC_CHUNKING=${SEMANTIC_CHUNKING:-true}  # Enable semantic chunking (default)
       - CHUNK_MAX_TOKENS=${CHUNK_MAX_TOKENS:-512}  # Max tokens per semantic chunk
       - AUTO_REPAIR_ORPHANS=${AUTO_REPAIR_ORPHANS:-true}  # Auto-repair orphaned files on startup
+      - CHUNK_WORKERS=${CHUNK_WORKERS:-1}  # Concurrent chunking threads
       - EMBEDDING_WORKERS=${EMBEDDING_WORKERS:-3}  # Concurrent embedding threads
       - MAX_PENDING_EMBEDDINGS=${MAX_PENDING_EMBEDDINGS:-6}  # Max queued embeddings before throttling
       - OMP_NUM_THREADS=2  # Limit OpenMP threads to prevent deadlock

@@ -137,7 +137,7 @@ class DocumentProcessor:
         # Documents
         '.pdf', '.txt', '.md', '.markdown', '.docx', '.epub',
         # Code files
-        '.py', '.java', '.ts', '.tsx', '.js', '.jsx', '.cs',
+        '.py', '.java', '.ts', '.tsx', '.js', '.jsx', '.cs', '.go',
         # Jupyter notebooks
         '.ipynb'
     }

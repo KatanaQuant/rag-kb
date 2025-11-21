@@ -37,15 +37,16 @@ class PipelineCoordinator:
         # Create pipeline queues
         self.queues = PipelineQueues()
 
-        # Get number of embed workers from environment (default: 3)
+        # Get number of workers from environment
+        num_chunk_workers = int(os.getenv('CHUNK_WORKERS', '1'))
         num_embed_workers = int(os.getenv('EMBED_WORKERS', '3'))
 
         # Create stage workers
-        self.chunk_worker = StageWorker(
-            name="ChunkWorker",
+        self.chunk_pool = EmbedWorkerPool(
+            num_workers=num_chunk_workers,
             input_queue=self.queues.chunk_queue,
             output_queue=self.queues.embed_queue,
-            process_fn=self._chunk_stage
+            embed_fn=self._chunk_stage
         )
 
         self.embed_pool = EmbedWorkerPool(
@@ -64,14 +65,14 @@ class PipelineCoordinator:
 
     def start(self):
         """Start all pipeline workers"""
-        print(f"Starting concurrent pipeline with {len(self.embed_pool.workers)} embedding workers...")
-        self.chunk_worker.start()
+        print(f"Starting concurrent pipeline with {len(self.chunk_pool.workers)} chunk workers, {len(self.embed_pool.workers)} embed workers...")
+        self.chunk_pool.start()
         self.embed_pool.start()
         self.store_worker.start()
 
     def stop(self):
         """Stop all pipeline workers"""
-        self.chunk_worker.stop()
+        self.chunk_pool.stop()
         self.embed_pool.stop()
         self.store_worker.stop()
 
@@ -85,12 +86,12 @@ class PipelineCoordinator:
         return {
             'queue_sizes': queue_stats,
             'active_jobs': {
-                'chunk': self.chunk_worker.get_current_item(),
+                'chunk': self.chunk_pool.get_active_jobs(),
                 'embed': self.embed_pool.get_active_jobs(),
                 'store': self.store_worker.get_current_item()
             },
             'workers_running': {
-                'chunk': self.chunk_worker.is_running(),
+                'chunk': self.chunk_pool.is_running(),
                 'embed': self.embed_pool.is_running(),
                 'store': self.store_worker.is_running()
             }
@@ -101,28 +102,23 @@ class PipelineCoordinator:
     def _chunk_stage(self, item: QueueItem) -> Optional[ChunkedDocument]:
         """Process file: extract text and chunk it"""
         try:
-            print(f"[Chunk] {item.path.name}")
-
             # Extract and chunk in one stage
             doc_file = DocumentFile.from_path(item.path)
 
             # Check if already indexed (unless force=True)
             if not item.force:
                 if self.embedding_service.store.is_document_indexed(str(item.path), doc_file.hash):
-                    print(f"[Chunk] {item.path.name} - already indexed, skipping")
+                    print(f"[Skip] {item.path.name} - already indexed")
                     return None
 
+            # File needs chunking
+            print(f"[Chunk] {item.path.name}")
             chunks = self.processor.process_file(doc_file)
 
             if not chunks:
                 print(f"[Chunk] {item.path.name} - no chunks extracted")
-                # Still mark as processed to avoid re-processing
-                self.embedding_service.store.add_document(
-                    file_path=str(doc_file.path),
-                    file_hash=doc_file.hash,
-                    chunks=[],
-                    embeddings=[]
-                )
+                # Don't mark as processed - file will be retried on next run
+                # This allows automatic pickup when support is added for new file types
                 return None
 
             print(f"[Chunk] {item.path.name} - {len(chunks)} chunks created")

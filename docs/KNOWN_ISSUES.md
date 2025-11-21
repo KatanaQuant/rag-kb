@@ -16,7 +16,7 @@ Token indices sequence length is longer than the specified maximum sequence leng
 - Long sentences or paragraphs remain unsplit even when they exceed the limit
 
 **Current Impact:**
-- ⚠️ **Minimal**: sentence-transformers automatically truncates oversized chunks
+- **Minimal**: sentence-transformers automatically truncates oversized chunks
 - Affects ~10-40 characters at the end of oversized chunks
 - System continues to function normally
 
@@ -142,7 +142,7 @@ return self.extractors[ext](file_path)
 However, the special markdown handling path ([extractors.py:647-648](../api/ingestion/extractors.py#L647-L648)) calls `_extract_markdown_intelligently()` which may set `last_method` differently, and this value can persist.
 
 **Current Impact:**
-- ⚠️ **Cosmetic only**: Only affects log output
+- **Cosmetic only**: Only affects log output
 - **No functional impact**: The correct extractor is always called
 - **No data corruption**: Chunks are processed correctly regardless of log message
 - Can confuse developers debugging extraction issues
@@ -180,6 +180,72 @@ Be aware that logged extraction methods may not match actual methods used. Cross
 - [extractors.py:635](../api/ingestion/extractors.py#L635) - TextExtractor.last_method declaration
 - [extractors.py:641-667](../api/ingestion/extractors.py#L641-L667) - extract() method with method tracking
 - [processing.py:255-257](../api/ingestion/processing.py#L255-L257) - Log output using get_last_method()
+
+---
+
+## 4. Test Limitations
+
+### 4.1 API Endpoint Mock Recursion
+
+**Issue:** The `test_delete_document_success` test in [tests/test_api_endpoints.py:410](../tests/test_api_endpoints.py#L410) cannot use Mock objects for `state.core.vector_store` because FastAPI's JSON encoder encounters circular references when serializing Mock objects.
+
+**Error:**
+```
+RecursionError: maximum recursion depth exceeded in comparison
+/usr/local/lib/python3.11/site-packages/fastapi/encoders.py:298: in jsonable_encoder
+```
+
+**Root Cause:**
+Mock objects have internal attributes that create circular references. When FastAPI tries to serialize the response (which may include state references), it recursively traverses the Mock object structure until hitting the recursion limit.
+
+**Current Status:** Test is marked with `@pytest.mark.skip`
+
+**Ideal Solution:**
+Use integration testing approach instead of mocking:
+```python
+def test_delete_document_success_integration(self, client, tmp_path):
+    """Integration test: Actually create and delete a document"""
+    # Setup: Add real document to database
+    # Action: Call DELETE endpoint
+    # Verify: Document removed from database
+```
+
+**Workaround:** Skip unit test and rely on manual/integration testing for this endpoint
+
+**Related:**
+- [tests/test_api_endpoints.py:410](../tests/test_api_endpoints.py#L410) - Skipped test
+
+---
+
+### 4.2 Database Transaction Tests
+
+**Issue:** Three tests in `TestDatabaseTransactions` class ([tests/test_database.py:587](../tests/test_database.py#L587)) are skipped because they require manual transaction control which conflicts with the auto-commit behavior of the VectorStore implementation.
+
+**Tests Affected:**
+- `test_commit_persists_changes`
+- `test_rollback_reverts_changes`
+- `test_concurrent_reads_work_with_wal_mode`
+
+**Root Cause:**
+The VectorStore and VectorRepository implementations use auto-commit for operations. The tests expect to manually call `conn.commit()` and `conn.rollback()`, but the actual implementation commits after each operation.
+
+**Current Status:** Entire `TestDatabaseTransactions` class marked with `@pytest.mark.skip`
+
+**Ideal Solution:**
+- Option A: Add explicit transaction context manager to VectorStore for testing:
+  ```python
+  with store.transaction():
+      store.add_document(...)
+      # Can test rollback here
+  ```
+- Option B: Test transaction behavior at integration level with actual concurrent operations
+- Option C: Accept that transaction semantics are implicit and tested through regular usage
+
+**Workaround:** Skip unit tests and rely on integration testing to verify data persistence
+
+**Related:**
+- [tests/test_database.py:587](../tests/test_database.py#L587) - Skipped test class
+- [ingestion/database.py](../api/ingestion/database.py) - VectorStore implementation
 
 ---
 

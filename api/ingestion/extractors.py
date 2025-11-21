@@ -312,10 +312,13 @@ class EpubExtractor:
 
     @staticmethod
     def extract(path: Path) -> ExtractionResult:
-        """Convert EPUB to PDF, move EPUB to original/, extract from PDF
+        """Convert EPUB to PDF, move EPUB to original/, DO NOT extract
 
-        Orchestrates the full conversion pipeline. Complexity reduced from C-11 to A-grade
-        by extracting helper methods following Sandi Metz's small methods principle.
+        EPUB files are only converted to PDF, not extracted.
+        The resulting PDF will be picked up by the file watcher/startup scan
+        and processed as a separate document.
+
+        Returns an empty ExtractionResult to signal conversion-only (no extraction).
         """
         import shutil
 
@@ -327,10 +330,11 @@ class EpubExtractor:
             print(f"Converting EPUB to PDF: {path.name}")
             EpubExtractor._convert_with_pandoc(path, pdf_path)
             EpubExtractor._embed_fonts_with_ghostscript(pdf_path)
+            page_count = EpubExtractor._count_pdf_pages(pdf_path)
             EpubExtractor._archive_epub(path, original_dir)
-            result = EpubExtractor._extract_from_pdf(pdf_path)
-            EpubExtractor._print_success(path.name, pdf_path.name, result.page_count)
-            return result
+            EpubExtractor._print_success(path.name, pdf_path.name, page_count)
+            # Return empty result - PDF will be processed separately
+            return ExtractionResult(pages=[], method='epub_conversion_only')
         except Exception as e:
             EpubExtractor._cleanup_on_failure(pdf_path, e)
             raise
@@ -531,14 +535,27 @@ class EpubExtractor:
         print(f"  → Moved {path.name} to original/")
 
     @staticmethod
-    def _extract_from_pdf(pdf_path: Path) -> ExtractionResult:
-        """Extract text from PDF using Docling"""
-        return DoclingExtractor.extract(pdf_path)
+    def _count_pdf_pages(pdf_path: Path) -> int:
+        """Count pages in converted PDF using pdfinfo"""
+        import subprocess
+        try:
+            result = subprocess.run(
+                ['pdfinfo', str(pdf_path)],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            for line in result.stdout.split('\n'):
+                if line.startswith('Pages:'):
+                    return int(line.split(':')[1].strip())
+            return 0
+        except Exception:
+            return 0
 
     @staticmethod
     def _print_success(epub_name: str, pdf_name: str, page_count: int):
         """Print success message"""
-        print(f"  ✓ EPUB conversion complete: {page_count} pages extracted")
+        print(f"  ✓ EPUB conversion complete: {page_count} pages")
         print(f"  ✓ Kept {pdf_name} for future indexing")
 
     @staticmethod
@@ -569,37 +586,45 @@ class CodeExtractor:
             '.js': 'javascript',
             '.jsx': 'jsx',
             '.cs': 'c_sharp',
+            '.go': 'go',  # Go language support via tree-sitter-go
         }
         ext = path.suffix.lower()
         return ext_to_lang.get(ext, 'unknown')
 
     @staticmethod
     def _get_chunker(language: str):
-        """Get or create astchunk chunker for language
+        """Get or create AST chunker for language
 
         Args:
-            language: Programming language (python, java, typescript, etc.)
+            language: Programming language (python, java, typescript, go, etc.)
 
         Raises:
-            ImportError: If astchunk is not available (FAIL FAST)
+            ImportError: If required chunker library is not available (FAIL FAST)
             Exception: If chunker creation fails (FAIL FAST)
         """
         if language in CodeExtractor._chunker_cache:
             return CodeExtractor._chunker_cache[language]
 
-        # NO try-except: Let import errors propagate
-        from astchunk import ASTChunkBuilder
+        # Go uses tree-sitter-go directly (astchunk doesn't support Go yet)
+        if language == 'go':
+            from ingestion.go_chunker import GoChunker
+            chunker = GoChunker(max_chunk_size=2048, metadata_template='default')
+        else:
+            # Other languages use astchunk
+            # NO try-except: Let import errors propagate
+            from astchunk import ASTChunkBuilder
 
-        # Create chunker with all required parameters
-        # - max_chunk_size: 512 tokens ≈ 2048 chars (assuming 4 chars/token)
-        # - language: programming language (python, java, etc.)
-        # - metadata_template: 'default' includes filepath, chunk size, line numbers, node count
-        #   Valid values: 'none', 'default', 'coderagbench-repoeval', 'coderagbench-swebench-lite'
-        chunker = ASTChunkBuilder(
-            max_chunk_size=2048,
-            language=language,
-            metadata_template='default'
-        )
+            # Create chunker with all required parameters
+            # - max_chunk_size: 512 tokens ≈ 2048 chars (assuming 4 chars/token)
+            # - language: programming language (python, java, etc.)
+            # - metadata_template: 'default' includes filepath, chunk size, line numbers, node count
+            #   Valid values: 'none', 'default', 'coderagbench-repoeval', 'coderagbench-swebench-lite'
+            chunker = ASTChunkBuilder(
+                max_chunk_size=2048,
+                language=language,
+                metadata_template='default'
+            )
+
         CodeExtractor._chunker_cache[language] = chunker
         return chunker
 
@@ -675,6 +700,7 @@ class TextExtractor:
             '.js': 'ast_javascript',
             '.jsx': 'ast_jsx',
             '.cs': 'ast_c_sharp',
+            '.go': 'ast_go',
             '.ipynb': 'jupyter_ast'
         }
         self.last_method = method_map.get(ext, 'unknown')
@@ -717,6 +743,7 @@ class TextExtractor:
             '.js': CodeExtractor.extract,
             '.jsx': CodeExtractor.extract,
             '.cs': CodeExtractor.extract,
+            '.go': CodeExtractor.extract,
             # Jupyter notebooks (AST + cell-aware chunking)
             '.ipynb': self.jupyter_extractor.extract
         }
