@@ -23,6 +23,7 @@ class FileFilterPolicy:
         'dist', 'build', '.eggs', '*.egg-info',  # Build artifacts
         '.cache', '.mypy_cache', '.ruff_cache',  # Tool caches
         'target', 'bin', 'obj',  # Compiled outputs (Java, C#, etc)
+        'vendor',  # Go dependencies (similar to node_modules)
         '.idea', '.vscode', '.vs',  # IDE directories
         'coverage', 'htmlcov', '.coverage',  # Test coverage
     }
@@ -30,13 +31,16 @@ class FileFilterPolicy:
     EXCLUDED_FILE_PATTERNS = [
         '.env', '.env.local', '.env.production',  # Environment files
         'secrets', 'credentials',  # Secret files
+        '*.pem', '*.key', '*.crt',  # Certificate/key files
         '.ds_store', 'thumbs.db',  # OS artifacts (lowercase for matching)
         '*.pyc', '*.pyo', '*.pyd',  # Python compiled
         '*.so', '*.dylib', '*.dll',  # Shared libraries
         '*.class', '*.jar', '*.war',  # Java compiled
+        '*.exe',  # Go/Windows binaries
         '*.min.js', '*.min.css',  # Minified assets
         '__init__.py', '__pycache__.py',  # Python empty/cache files
         'package-lock.json', 'yarn.lock', 'poetry.lock',  # Lock files (large, no value)
+        'go.mod', 'go.sum', 'go.work', 'go.work.sum',  # Go dependency/workspace files
         '.gitignore', '.dockerignore', '.eslintrc',  # Config files (usually empty)
     ]
 

@@ -8,7 +8,7 @@
 
 Built with FastAPI, sqlite-vec, and sentence-transformers.
 
-**Current Version**: v0.10.1-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
+**Current Version**: v0.11.0-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
 
 > **CPU-Only Build**: This project is optimized exclusively for CPU processing. No GPU required or supported. Large knowledge bases may take significant time to index:
 >
@@ -39,7 +39,7 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 
 - **Semantic Chunking**: Token-aware chunking with HybridChunker preserves paragraphs, sections, and tables
 - **Advanced PDF Processing**: Docling integration with OCR support, table extraction, and layout preservation
-- **AST-Based Code Chunking**: Intelligent code parsing for Python, Java, TypeScript, C#, JavaScript and more
+- **AST-Based Code Chunking**: Intelligent code parsing for Python, Java, TypeScript, C#, JavaScript, Go and more
 - **Jupyter Notebook Support**: Cell-aware chunking with AST parsing for 160+ programming languages
 - **Obsidian Graph-RAG**: Full knowledge graph support for Obsidian vaults with bidirectional linking
 - **Resumable Processing**: Checkpoint-based processing resumes from last position after interruptions

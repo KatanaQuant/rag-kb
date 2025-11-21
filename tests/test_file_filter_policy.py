@@ -113,3 +113,26 @@ class TestFileFilterPolicy:
         assert policy.should_exclude(Path("/project/.hidden_file")) is True
         # .. should not be excluded (it's a navigation element)
         # Note: This test verifies the existing behavior
+
+    def test_excludes_go_vendor_directory(self, policy):
+        """Should exclude Go vendor directory"""
+        assert policy.should_exclude(Path("/project/vendor/github.com/pkg/errors")) is True
+
+    def test_excludes_go_dependency_files(self, policy):
+        """Should exclude Go dependency management files"""
+        assert policy.should_exclude(Path("/project/go.mod")) is True
+        assert policy.should_exclude(Path("/project/go.sum")) is True
+
+    def test_excludes_go_workspace_files(self, policy):
+        """Should exclude Go workspace files"""
+        assert policy.should_exclude(Path("/project/go.work")) is True
+        assert policy.should_exclude(Path("/project/go.work.sum")) is True
+
+    def test_excludes_go_binaries(self, policy):
+        """Should exclude compiled Go binaries"""
+        assert policy.should_exclude(Path("/project/myapp.exe")) is True
+
+    def test_allows_go_source_files(self, policy):
+        """Should allow Go source files"""
+        assert policy.should_exclude(Path("/project/main.go")) is False
+        assert policy.should_exclude(Path("/project/pkg/server/server.go")) is False

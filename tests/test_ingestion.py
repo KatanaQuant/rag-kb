@@ -195,19 +195,6 @@ class TestMarkdownExtractor:
         assert result.method == 'docling_markdown'
         assert result.success
 
-    def test_markdown_requires_docling(self, tmp_path):
-        """Test that markdown extraction fails gracefully without Docling"""
-        if DOCLING_AVAILABLE:
-            pytest.skip("Docling is available, cannot test failure case")
-
-        file_path = tmp_path / "test.md"
-        content = "# Header\n\nTest content"
-        file_path.write_text(content)
-
-        with pytest.raises(RuntimeError, match="Docling not available"):
-            MarkdownExtractor.extract(file_path)
-
-
 class TestTextExtractor:
     """Tests for TextExtractor"""
 

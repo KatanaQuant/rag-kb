@@ -93,12 +93,18 @@ Pre-indexing validation and cleanup:
 
 ```bash
 # Concurrent processing
+CHUNK_WORKERS=1          # Number of parallel chunking threads (default: 1)
 EMBED_WORKERS=3          # Number of parallel embedding threads (default: 3)
 
 # Model configuration
 EMBEDDING_MODEL=Snowflake/snowflake-arctic-embed-l
 EMBEDDING_DIMENSION=1024
 ```
+
+**Performance Notes:**
+- Set `CHUNK_WORKERS=2` if processing many large PDFs with OCR
+- Single chunk worker prevents resource contention but may bottleneck on slow files
+- Multiple chunk workers split CPU resources but process files in parallel
 
 ## API Enhancements
 
