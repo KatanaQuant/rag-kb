@@ -13,11 +13,22 @@ from main import (
     IndexOrchestrator,
     QueryExecutor,
     StartupManager,
-    DocumentLister
+    DocumentLister,
+    app
 )
 from models import QueryRequest, QueryResponse
 from ingestion import DocumentProcessor
 from domain_models import ChunkData
+
+
+class TestAPIVersion:
+    """Tests for API version"""
+
+    def test_api_version_matches_release(self):
+        """Test that API version matches the current release version"""
+        expected_version = "0.11.0"
+        assert app.version == expected_version, \
+            f"API version mismatch: expected {expected_version}, got {app.version}"
 
 
 class TestAppState:

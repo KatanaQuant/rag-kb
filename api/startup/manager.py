@@ -17,6 +17,8 @@ from api_services.model_loader import ModelLoader
 from api_services.file_walker import FileWalker
 from api_services.document_indexer import DocumentIndexer
 from api_services.index_orchestrator import IndexOrchestrator
+from api_services.orphan_detector import OrphanDetector
+from startup.config_validator import ConfigValidator
 
 
 class StartupManager:
@@ -28,6 +30,7 @@ class StartupManager:
     def initialize(self):
         """Initialize all components"""
         print("Initializing RAG system...")
+        self._validate_config()
         self._load_model()
         self._init_store()
         self._init_progress_tracker()
@@ -36,6 +39,12 @@ class StartupManager:
         self._init_queue_and_worker()
         print("RAG system ready! Starting sanitization and indexing...")
         self._start_background_indexing()
+
+    def _validate_config(self):
+        """Validate configuration before startup"""
+        validator = ConfigValidator(default_config)
+        validator.validate()
+        print("Configuration validated")
 
     def _load_model(self):
         """Load embedding model"""

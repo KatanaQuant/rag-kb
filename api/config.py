@@ -82,6 +82,12 @@ class ProcessingConfig:
     cleanup_completed: bool = False
 
 @dataclass
+class FileValidationConfig:
+    """File type validation configuration"""
+    enabled: bool = True
+    action: str = "warn"  # reject|warn|skip
+
+@dataclass
 class Config:
     """Main configuration container"""
     chunks: ChunkConfig
@@ -93,6 +99,7 @@ class Config:
     batch: BatchConfig
     docling: DoclingConfig
     processing: ProcessingConfig
+    file_validation: FileValidationConfig
 
     @classmethod
     def from_env(cls) -> 'Config':

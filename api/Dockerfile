@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     texlive-latex-base \
     texlive-fonts-recommended \
     texlive-latex-extra \
+    texlive-plain-generic \
     texlive-xetex \
     lmodern \
     ghostscript \
