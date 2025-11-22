@@ -1,3 +1,4 @@
+from typing import List
 from models import QueryRequest, QueryResponse, SearchResult
 
 

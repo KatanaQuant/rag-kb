@@ -154,6 +154,12 @@ class DocumentProcessor:
                 self.chunker, self.tracker, batch_size=50
             )
 
+        # File type validator for security
+        from .file_type_validator import FileTypeValidator, ValidationAction
+        self.validator = FileTypeValidator()
+        self.validation_enabled = default_config.file_validation.enabled
+        self.validation_action = default_config.file_validation.action
+
     def get_file_hash(self, path: Path) -> str:
         """Get file hash"""
         return self.hasher.hash_file(path)
@@ -195,6 +201,21 @@ class DocumentProcessor:
         if not doc_file.exists():
             # Silent skip - file not found (avoid log spam)
             return False
+
+        # Validate file type for security
+        if self.validation_enabled:
+            validation_result = self.validator.validate(doc_file.path)
+            if not validation_result.is_valid:
+                # Handle validation failure based on action
+                if self.validation_action == 'reject':
+                    print(f"REJECTED (security): {doc_file.name} - {validation_result.reason}")
+                    return False
+                elif self.validation_action == 'warn':
+                    print(f"WARNING (security): {doc_file.name} - {validation_result.reason}")
+                    # Continue processing
+                elif self.validation_action == 'skip':
+                    # Silently skip invalid files
+                    return False
 
         progress = self.tracker.get_progress(str(doc_file.path))
         if self._is_completed(progress, doc_file.hash):

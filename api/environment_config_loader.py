@@ -5,9 +5,11 @@ Fixes Feature Envy: Logic for reading environment variables
 lives with the data source (environment) rather than in Config dataclass.
 """
 import os
+from pathlib import Path
 from config import (
     Config, ModelConfig, PathConfig, WatcherConfig, CacheConfig,
-    BatchConfig, DoclingConfig, ProcessingConfig, ChunkConfig
+    BatchConfig, DoclingConfig, ProcessingConfig, ChunkConfig,
+    FileValidationConfig
 )
 
 class EnvironmentConfigLoader:
@@ -25,17 +27,19 @@ class EnvironmentConfigLoader:
         docling = self._load_docling_config()
         processing = self._load_processing_config()
         chunks = self._load_chunk_config()
+        file_validation = self._load_file_validation_config()
 
         return Config(
             chunks=chunks,
             database=self._load_database_config(model.get_embedding_dim()),
             model=model,
-            paths=PathConfig(),
+            paths=self._load_path_config(),
             watcher=watcher,
             cache=cache,
             batch=batch,
             docling=docling,
-            processing=processing
+            processing=processing,
+            file_validation=file_validation
         )
 
     def _load_model_config(self) -> ModelConfig:
@@ -94,6 +98,18 @@ class EnvironmentConfigLoader:
         from config import DatabaseConfig
         return DatabaseConfig(embedding_dim=embedding_dim)
 
+    def _load_path_config(self) -> PathConfig:
+        """Load path configuration from environment"""
+        kb_path = self._get_path("KNOWLEDGE_BASE_PATH", Path("/app/knowledge_base"))
+        return PathConfig(knowledge_base=kb_path)
+
+    def _load_file_validation_config(self) -> FileValidationConfig:
+        """Load file validation configuration from environment"""
+        return FileValidationConfig(
+            enabled=self._get_bool("FILE_TYPE_VALIDATION_ENABLED", True),
+            action=self._get_optional("FILE_TYPE_VALIDATION_ACTION", "warn")
+        )
+
     def _get_optional(self, key: str, default: str) -> str:
         """Get optional string environment variable"""
         return os.getenv(key, default)
@@ -112,3 +128,18 @@ class EnvironmentConfigLoader:
         """Get float environment variable"""
         value = os.getenv(key, str(default))
         return float(value)
+
+    def _get_path(self, key: str, default: Path) -> Path:
+        """Get path environment variable, expanding ~ and converting to absolute path"""
+        value = os.getenv(key)
+        if value is None:
+            return default
+
+        # Create Path object and expand user home directory
+        path = Path(value).expanduser()
+
+        # Make absolute if not already
+        if not path.is_absolute():
+            path = path.resolve()
+
+        return path

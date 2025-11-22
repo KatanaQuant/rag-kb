@@ -60,7 +60,7 @@ def _cleanup():
 app = FastAPI(
     title="RAG Knowledge Base API",
     description="Local RAG system for querying your knowledge base",
-    version="0.1.0",
+    version="0.11.0",
     lifespan=lifespan
 )
 
@@ -431,6 +431,28 @@ async def resume_indexing():
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to resume indexing: {str(e)}")
+
+@app.post("/indexing/clear")
+async def clear_indexing_queue():
+    """Clear pending indexing queue
+
+    Removes all pending files from the indexing queue.
+    Files currently being processed will complete.
+    """
+    try:
+        if not state.indexing.queue:
+            raise HTTPException(status_code=400, detail="Indexing queue not initialized")
+
+        state.indexing.queue.clear()
+        return {
+            "status": "success",
+            "message": "Indexing queue cleared",
+            "queue_size": state.indexing.queue.size()
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to clear queue: {str(e)}")
 
 @app.post("/indexing/priority/{file_path:path}")
 async def add_priority_file(file_path: str, force: bool = False):

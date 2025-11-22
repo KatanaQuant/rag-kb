@@ -27,6 +27,7 @@ data_old/
 .cache/
 
 # Knowledge base (contains personal/copyrighted content)
+internal_planning/
 knowledge_base/*
 !knowledge_base/.gitkeep
 !knowledge_base/README.md
@@ -64,4 +65,3 @@ Thumbs.db
 .local-scripts/
 api/core.*
 core.*
-internal_planning/
