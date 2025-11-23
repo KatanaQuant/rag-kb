@@ -91,39 +91,26 @@ CHUNK_MAX_TOKENS=6000  # Leave buffer for merge_peers
 
 ---
 
-## 2. TextExtractor Naming is Misleading
+## 2. ~~TextExtractor Naming is Misleading~~ [RESOLVED in v0.13.0]
 
-**Issue:** The `TextExtractor` class ([api/ingestion/extractors.py:630](../api/ingestion/extractors.py#L630)) is named like a specific extractor, but it's actually a **router/coordinator** that delegates to specialized extractors.
+**Issue:** The `TextExtractor` class was named like a specific extractor, but it was actually a **router/coordinator** that delegates to specialized extractors.
 
-**Current Behavior:**
-```python
-TextExtractor routes to:
-├─→ DoclingExtractor      (PDF, DOCX)
-├─→ EpubExtractor         (EPUB)
-├─→ MarkdownExtractor     (regular .md)
-├─→ ObsidianExtractor     (Obsidian .md with wikilinks/tags)
-├─→ CodeExtractor         (code files with AST chunking)
-└─→ JupyterExtractor      (notebooks with cell-aware chunking)
-```
+**Resolution:** Renamed `TextExtractor` to `ExtractionRouter` in v0.13.0-alpha to clarify its purpose.
 
-**Impact:** Minor - naming confusion for developers reading the code
+**Changes Made:**
+- [extractors.py:660](../api/ingestion/extractors.py#L660) - Renamed class to `ExtractionRouter`
+- [processing.py:23](../api/ingestion/processing.py#L23) - Updated import
+- [processing.py:145](../api/ingestion/processing.py#L145) - Updated instantiation
+- [ingestion/__init__.py](../api/ingestion/__init__.py) - Updated exports
+- [tests/test_ingestion.py](../tests/test_ingestion.py) - Updated test class
 
-**Ideal Solution:**
-Rename to `ExtractionRouter` or `ExtractorCoordinator` to make intent clear
-
-**Current Workaround:** None needed - code functions correctly, just naming is misleading
-
-**Status:** Accepted cosmetic issue - low priority refactor
-
-**Related:**
-- [extractors.py:630](../api/ingestion/extractors.py#L630) - TextExtractor class definition
-- [processing.py:151](../api/ingestion/processing.py#L151) - DocumentProcessor uses TextExtractor
+**Status:** ** RESOLVED
 
 ---
 
-## 3. Extraction Method Logging Shows Incorrect Method
+## 3. ~~Extraction Method Logging Shows Incorrect Method~~ [RESOLVED in v0.13.0]
 
-**Issue:** The extraction method logged in processing output can show the wrong method. For example, a PDF processed with Docling may be logged as `obsidian_graph_rag`.
+**Issue:** The extraction method logged in processing output could show the wrong method. For example, a PDF processed with Docling could be logged as `obsidian_graph_rag`.
 
 **Example:**
 ```
@@ -141,49 +128,165 @@ return self.extractors[ext](file_path)
 
 However, the special markdown handling path ([extractors.py:647-648](../api/ingestion/extractors.py#L647-L648)) calls `_extract_markdown_intelligently()` which may set `last_method` differently, and this value can persist.
 
-**Current Impact:**
-- **Cosmetic only**: Only affects log output
-- **No functional impact**: The correct extractor is always called
-- **No data corruption**: Chunks are processed correctly regardless of log message
-- Can confuse developers debugging extraction issues
+**Resolution:** Fixed in v0.13.0-alpha by resetting `self.last_method = None` at the start of each `extract()` call.
 
-**Evidence of Correct Behavior:**
-- File extension routing always calls correct extractor ([extractors.py:691](../api/ingestion/extractors.py#L691))
-- Processing time matches expected method (2.5 hours for 54MB PDF is Docling-typical)
-- Character counts match expected extraction method
+**Changes Made:**
+- [extractors.py:673-674](../api/ingestion/extractors.py#L673-L674) - Added reset line at beginning of `extract()` method:
+  ```python
+  def extract(self, file_path: Path) -> ExtractionResult:
+      """Extract text based on file extension"""
+      # Reset last_method to prevent stale values from previous extractions
+      self.last_method = None
+      # ... rest of method
+  ```
 
-**Ideal Solution:**
-Reset `self.last_method = None` at the start of each `extract()` call, or better yet, return the method name directly from the extraction result instead of using instance state:
-
-```python
-def extract(self, file_path: Path) -> ExtractionResult:
-    ext = file_path.suffix.lower()
-    # Determine method first
-    if ext in ['.md', '.markdown']:
-        return self._extract_markdown_intelligently(file_path)
-
-    method = self.method_map.get(ext, 'unknown')
-    result = self.extractors[ext](file_path)
-    result.method = method  # Set method in result, not instance var
-    return result
-```
-
-**Current Workaround:**
-Be aware that logged extraction methods may not match actual methods used. Cross-reference with:
-- File extension (`.pdf` → docling, `.md` → markdown/obsidian, `.py` → AST)
-- Processing time (hours → Docling, seconds/minutes → markdown/code)
-- Character count patterns
-
-**Status:** Low priority cosmetic bug - does not affect functionality
-
-**Related:**
-- [extractors.py:635](../api/ingestion/extractors.py#L635) - TextExtractor.last_method declaration
-- [extractors.py:641-667](../api/ingestion/extractors.py#L641-L667) - extract() method with method tracking
-- [processing.py:255-257](../api/ingestion/processing.py#L255-L257) - Log output using get_last_method()
+**Status:** ** RESOLVED
 
 ---
 
-## 4. Test Limitations
+## 4. ~~EPUB Conversion Logs Appear as "Chunk" Stage~~ [RESOLVED in v0.13.0]
+
+**Issue:** EPUB files were logged as going through the "[Chunk]" stage when they actually go through conversion only. The logs showed:
+
+```
+[Chunk] The Data Science Design Manual - Steven S Skiena.epub
+Converting EPUB to PDF: The Data Science Design Manual - Steven S Skiena.epub
+[Chunk] The Data Science Design Manual - Steven S Skiena.epub - no chunks extracted
+[Chunk] The Data Science Design Manual - Steven S Skiena.epub - 0 chunks complete in 46.0s (0.0 chunks/s)
+```
+
+**Root Cause:**
+- EPUBs don't actually get "chunked" - they get **converted** to PDF via Pandoc
+- The pipeline coordinator ([pipeline_coordinator.py:117](../api/services/pipeline_coordinator.py#L117)) logs all files as "[Chunk]" regardless of operation type
+- EPUB extractor returns empty result ([extractors.py:310](../api/ingestion/extractors.py#L310)) with `method='epub_conversion_only'`
+- The converted PDF is saved and will be processed separately by the watcher/startup scan
+
+**Current Impact:**
+- **Cosmetic only**: Misleading log messages
+- **No functional impact**: EPUB conversion works correctly
+- Can confuse users monitoring logs (wondering why EPUBs show 0 chunks)
+
+**Correct Flow:**
+1. EPUB → Pandoc → PDF conversion
+2. Original EPUB moved to `original/` directory
+3. Converted PDF stays in `knowledge_base/`
+4. Watcher/startup picks up PDF for actual processing
+5. PDF goes through real Chunk → Embed → Store pipeline
+
+**Resolution:** Fixed in v0.13.0-alpha by detecting EPUB files and using "[Convert]" logging instead of "[Chunk]".
+
+**Changes Made:**
+- [pipeline_coordinator.py:116-120](../api/services/pipeline_coordinator.py#L116-L120) - Detect EPUB files and set stage name:
+  ```python
+  # File needs processing - determine stage name based on file type
+  # EPUB files are converted to PDF, not chunked
+  stage = "Convert" if item.path.suffix.lower() == '.epub' else "Chunk"
+
+  self.progress_logger.log_start(stage, item.path.name)
+  # ... rest of processing
+  ```
+
+**Status:** ** RESOLVED
+
+---
+
+## 5. API Endpoints Block During Indexing
+
+**Issue:** API endpoints (`/health`, `/search`, `/queue/jobs`) can take 10+ seconds to respond or timeout during heavy indexing operations.
+
+**Example:**
+```bash
+# During indexing, health check takes >10 seconds
+$ time curl http://localhost:8000/health
+# ... 10+ second delay ...
+{"status":"healthy",...}
+
+real    0m10.234s
+```
+
+**Root Cause:**
+- FastAPI uses async I/O, but database operations are **synchronous**
+- Synchronous database calls in VectorStore/VectorRepository block the event loop
+- During heavy indexing (thousands of chunks being stored), the single-threaded event loop is blocked
+- All API requests wait for database operations to complete before being served
+
+**Current Impact:**
+- **Medium severity**: Endpoints remain functional but very slow during indexing
+- Health checks may timeout in monitoring systems
+- Users may think the service is unresponsive
+- Cannot reliably query progress during large indexing jobs
+
+**Affected Code:**
+- [database.py](../api/ingestion/database.py) - VectorStore with synchronous SQLite operations
+- [routes.py](../api/routes.py) - All endpoints share the same event loop
+- Heavy indexing scenarios (processing hundreds of PDFs/ebooks)
+
+**Why This Happens:**
+
+FastAPI runs on a single async event loop. When you make a synchronous database call:
+```python
+# This blocks the entire event loop
+def store_embeddings(self, chunks):
+    conn = sqlite3.connect(self.db_path)  # Blocking I/O
+    cursor = conn.cursor()
+    cursor.executemany(...)  # Blocking I/O
+    conn.commit()  # Blocking I/O
+```
+
+All other requests (health checks, searches) must wait for this to finish.
+
+**Ideal Solution:**
+
+Migrate to async database operations using `aiosqlite`:
+
+```python
+# Non-blocking async version
+async def store_embeddings(self, chunks):
+    async with aiosqlite.connect(self.db_path) as conn:
+        async with conn.cursor() as cursor:
+            await cursor.executemany(...)
+            await conn.commit()
+```
+
+This allows FastAPI to interleave database operations with API requests, keeping endpoints responsive.
+
+**Alternative Solutions:**
+
+1. **Use run_in_executor** (temporary fix):
+   ```python
+   loop = asyncio.get_event_loop()
+   await loop.run_in_executor(None, self.store_embeddings, chunks)
+   ```
+   Offloads blocking calls to thread pool, but doesn't solve WAL mode locking issues
+
+2. **Separate read/write connections**:
+   - Read-only connection for queries (non-blocking with WAL mode)
+   - Write connection for indexing (can still block)
+   - Improves read performance but writes still block
+
+3. **Database connection pooling**:
+   - Reduces connection overhead
+   - Doesn't solve blocking issue
+
+**Current Workaround:**
+
+None required - endpoints remain functional, just slower during indexing. For production deployments with monitoring:
+
+1. Increase health check timeout to 30s
+2. Schedule large indexing jobs during off-hours
+3. Monitor indexing progress via logs instead of API
+
+**Status:** Known architectural limitation - fix planned for v0.13.0-alpha or v0.14.0-alpha
+
+**Related:**
+- [ROADMAP.md #13](ROADMAP.md) - Async Database Migration (planned fix)
+- [database.py](../api/ingestion/database.py) - VectorStore implementation
+- [routes.py](../api/routes.py) - API endpoints
+- [aiosqlite](https://github.com/omnilib/aiosqlite) - Async SQLite library
+
+---
+
+## 6. Test Limitations
 
 ### 4.1 API Endpoint Mock Recursion
 

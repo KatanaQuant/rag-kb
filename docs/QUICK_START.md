@@ -16,7 +16,7 @@ git clone https://github.com/KatanaQuant/rag-kb.git
 cd rag-kb
 
 # Checkout latest stable release
-git checkout v0.11.0-alpha
+git checkout v0.13.0-alpha
 
 # Optional: Change port if 8000 is in use
 echo "RAG_PORT=8001" > .env
@@ -67,13 +67,37 @@ The service automatically indexes all supported files when it starts.
 
 ## Step 2: Start the Service
 
+### Recommended: Enable BuildKit for Faster Builds (v0.13.0+)
+
 ```bash
+# Enable BuildKit for 60% faster rebuilds and 40% smaller images
+export DOCKER_BUILDKIT=1
+
 # Build and start
 docker-compose up --build -d
 
 # Wait ~30 seconds for indexing (longer for large knowledge bases)
 # Check status
 curl http://localhost:8000/health
+```
+
+**Make BuildKit Permanent** (recommended):
+```bash
+# Add to your shell profile for permanent use
+echo 'export DOCKER_BUILDKIT=1' >> ~/.bashrc  # or ~/.zshrc
+source ~/.bashrc
+```
+
+**Benefits**:
+- First build: 7-10 minutes
+- Rebuilds: 2-4 minutes (60% faster with cache)
+- Image size: ~2.0-2.5 GB (40-60% smaller)
+
+### Alternative: Standard Build
+
+```bash
+# Without BuildKit (slower, but still works)
+docker-compose up --build -d
 ```
 
 **Expected output:**
@@ -93,6 +117,64 @@ curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d '{"text": "What is machine learning?", "top_k": 3}'
 ```
+
+## Common Build Operations
+
+### Rebuilding After Changes
+
+When you update code or configuration:
+
+```bash
+# Stop the container
+docker-compose down
+
+# Rebuild with BuildKit
+export DOCKER_BUILDKIT=1
+docker-compose build
+
+# Start the container
+docker-compose up -d
+```
+
+**Quick rebuild (one-liner)**:
+```bash
+docker-compose down && export DOCKER_BUILDKIT=1 && docker-compose build && docker-compose up -d
+```
+
+### Clean Build (When Things Go Wrong)
+
+Force a complete rebuild without cache:
+
+```bash
+docker-compose down
+export DOCKER_BUILDKIT=1
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+**Note**: `--no-cache` rebuilds all Docker layers but still uses BuildKit package caches (2-4 min vs 7-10 min).
+
+### Cleaning Up Docker Resources
+
+```bash
+# Remove old unused images
+docker image prune -f
+
+# Check Docker disk usage
+docker system df
+
+# Clean BuildKit cache (if disk space is tight)
+docker builder prune
+```
+
+### Check Image Size
+
+```bash
+# See your image size (should be ~2.0-2.5 GB with v0.13.0)
+docker images | grep rag-api
+```
+
+---
 
 ## Next Steps
 

@@ -2,7 +2,13 @@ version: '3.8'
 
 services:
   rag-api:
-    build: ./api
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+      # Enable BuildKit for faster builds (requires DOCKER_BUILDKIT=1)
+      cache_from:
+        - rag-api:latest
+    image: rag-api:latest  # Tag the built image for cache_from to work
     container_name: rag-api
     ports:
       - "${RAG_PORT:-8000}:8000"

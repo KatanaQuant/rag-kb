@@ -14,12 +14,11 @@ from .helpers import FileHasher, GhostscriptHelper
 # Extractors
 from .extractors import (
     DoclingExtractor,
-    PDFExtractor,
     DOCXExtractor,
     TextFileExtractor,
     MarkdownExtractor,
     EpubExtractor,
-    TextExtractor
+    ExtractionRouter
 )
 
 # Chunking
@@ -57,12 +56,11 @@ __all__ = [
     'GhostscriptHelper',
     # Extractors
     'DoclingExtractor',
-    'PDFExtractor',
     'DOCXExtractor',
     'TextFileExtractor',
     'MarkdownExtractor',
     'EpubExtractor',
-    'TextExtractor',
+    'ExtractionRouter',
     # Chunking
     'ChunkingStrategy',
     'SemanticChunkingStrategy',

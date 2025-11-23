@@ -96,21 +96,23 @@ class EmbeddingService:
             embeddings=[]
         )
 
-    def embed_batch(self, texts: List[str]) -> List:
+    def embed_batch(self, texts: List[str], document_name: str = None, progress_logger=None) -> List:
         """Embed a batch of text chunks.
 
         Public method for pipeline to generate embeddings.
 
         Args:
             texts: List of text strings to embed
+            document_name: Optional document name for progress logging
+            progress_logger: Optional ProgressLogger instance
 
         Returns:
             List of embeddings (each is a list of floats)
         """
         result = []
         for i, text in enumerate(texts):
-            if i % 5 == 0:
-                print(f"  Encoding chunk {i+1}/{len(texts)}")
+            if progress_logger and document_name and i % 5 == 0:
+                progress_logger.log_progress("Embed", document_name, i + 1, len(texts))
             emb = self.model.encode([text], show_progress_bar=False, convert_to_numpy=True)
             result.append(emb[0].tolist())
         return result

@@ -2,9 +2,50 @@
 
 This document outlines planned features and improvements for the RAG Knowledge Base system.
 
-## Current Version: v0.12.0-alpha
+## Current Version: v0.13.0-alpha
 
-**Status**: Production-ready with configurable storage, file type validation, and improved security
+**Status**: Production-ready with structured progress logging, Docker build optimization, and improved developer experience
+
+---
+
+## Path to v1.0.0 Stable Release
+
+RAG-KB is approximately **70-80% ready** for a stable v1.0.0 release. The core system is production-ready with solid architecture, but a few critical issues need resolution before removing the alpha tag.
+
+### Roadmap Overview
+
+```
+v0.13.0-alpha (CURRENT)
+    └─ Docker optimization, bug fixes, structured logging **
+
+v0.14.0-alpha (Next - 4-8 weeks)
+    └─ Fix API blocking during indexing (async database migration)
+
+v0.15.0-beta (Feature Freeze - 6-10 weeks)
+    └─ Comprehensive testing, API stability review, documentation polish
+
+v1.0.0 (Stable Release - 2-4 weeks after beta)
+    └─ Production-ready, semantic versioning begins
+```
+
+### Critical Blockers for v1.0.0
+
+1. **Async Database Migration** - Fix API endpoints blocking 10+ seconds during indexing ([KNOWN_ISSUES.md #5](KNOWN_ISSUES.md))
+2. **Comprehensive Test Coverage** - Fix skipped tests, add integration test suite (>80% coverage)
+3. **API Stability Review** - Review all endpoints before committing to semantic versioning
+
+### What's NOT Required for v1.0.0
+
+These features will be added in v1.x.x releases after stable launch:
+- GPU support (v1.1.0+)
+- Video/audio transcription (v1.2.0+)
+- Web UI (v1.3.0+)
+- Python 3.13 upgrade (v1.4.0+)
+- Notion export, ClamAV scanning, advanced optimizations
+
+**Estimated Timeline**: 3-6 months to v1.0.0 stable
+
+**Details**: See [internal_planning/V1_RELEASE_PLAN.md](../internal_planning/V1_RELEASE_PLAN.md) for comprehensive release plan
 
 ---
 
@@ -14,399 +55,163 @@ This document outlines planned features and improvements for the RAG Knowledge B
 
 #### 1. Notion Export Support
 
-**Target**: v0.12.0-alpha
+**Target**: v0.14.0-alpha
 
-**Objective**: Add support for Notion export formats to enable indexing of Notion workspace content.
-
-**Current Limitation**:
-- Notion exports (.zip files containing markdown, HTML, CSV) are not automatically processed
-- Users must manually extract and organize exported content
-- Notion-specific features (databases, linked pages, embeds) are lost
-
-**Implementation Plan**:
-1. [ ] Add support for Notion export ZIP format detection
-2. [ ] Extract and parse Notion markdown exports (preserves hierarchy)
-3. [ ] Handle Notion-specific markdown extensions (callouts, toggles, databases)
-4. [ ] Map Notion page links to internal cross-references
-5. [ ] Support Notion database exports (CSV/inline databases)
-6. [ ] Preserve page metadata (creation date, author, tags)
-7. [ ] Test with real Notion workspace exports
-
-**Supported Export Formats**:
-- Markdown & CSV (recommended, preserves structure)
-- HTML (fallback, less structured)
-
-**Priority Rationale**: Notion is widely used for personal knowledge management and team wikis. Many users have extensive Notion workspaces they want to index locally.
+Support for Notion workspace exports (ZIP files with markdown, HTML, CSV) to enable indexing of Notion pages, databases, and hierarchies. Preserves page links and metadata.
 
 ---
 
 #### 2. Document Security & Malware Scanning
 
-**Target**: v0.12.0-alpha or v0.13.0-alpha
+**Target**: v0.14.0-alpha
 
-**Objective**: Add security validation for documents before indexing to prevent malicious files from being processed.
+ClamAV integration for scanning documents before indexing. Protects against malware in PDFs, ebooks, and documents from untrusted sources. Phase 1 (file type validation) completed in v0.12.0-alpha.
 
-**Current Limitation**:
-- No validation of file integrity or safety
-- Potentially dangerous files (malware, exploits) could be indexed
-- Users with pirated/untrusted content have no protection
+---
 
-**Use Cases**:
-- **Personal safety**: Scanning downloaded PDFs, ebooks from untrusted sources
-- **Pirated content**: Many users have digital copies of physical books (safe, but from untrusted sources)
-- **Shared drives**: Enterprise users indexing shared network drives
-- **Email attachments**: Documents from unknown senders
+#### 3. Advanced Docker Build Optimization (Phase 2)
 
-**Implementation Plan**:
+**Target**: v0.14.0-alpha or v0.15.0-alpha
 
-**Phase 1: File Type Validation** (COMPLETED in v0.12.0-alpha)
-1. [x] Add magic byte verification (ensure PDFs aren't executables)
-2. [x] Validate file extension matches actual file type
-3. [x] Check for suspicious file headers
-4. [x] Reject obviously tampered files
-5. [x] Log warnings for review
+Further Docker optimizations beyond v0.13.0 improvements:
 
-**Phase 2: ClamAV Integration** (Full Protection - 4-8 hours)
-1. [ ] Add ClamAV Docker sidecar container
-2. [ ] Integrate clamav-python or subprocess calls
-3. [ ] Scan files before indexing pipeline
-4. [ ] Quarantine/reject infected files
-5. [ ] Add MALWARE_SCAN_ENABLED environment variable
-6. [ ] Document setup and signature updates
+**Current State (v0.13.0)**:
+- ** BuildKit cache mounts (60% faster rebuilds)
+- ** Multi-stage build (40-60% smaller images)
+- ** .dockerignore optimization
 
-**Phase 3: Advanced Protection** (Optional - Future)
-1. [ ] YARA rules for custom malware patterns
-2. [ ] PDF exploit detection (malicious JavaScript, forms)
-3. [ ] Macro detection in Office documents
-4. [ ] File hash reputation checking (VirusTotal API)
+**Future Improvements**:
+- **Pre-built Base Image**: Push `rag-kb-base` image to ghcr.io with system packages pre-installed
+  - First builds: 7-10 min → 3-5 min (80-95% faster)
+  - Users skip apt-get entirely
+  - Requires: GitHub Container Registry, base image maintenance
 
-**Configuration**:
-```bash
-# .env
-MALWARE_SCAN_ENABLED=true          # Enable/disable scanning
-MALWARE_SCAN_ACTION=reject         # reject|quarantine|warn
-CLAMAV_HOST=clamav                 # ClamAV container hostname
-```
+- **Python Wheels**: Pre-compile heavy packages (torch, sentence-transformers, docling)
+  - Reduces pip install time by 20-30%
+  - Store in GitHub Releases
 
-**Performance Impact**:
-- File type validation: <1ms per file (negligible)
-- ClamAV scanning: 100-500ms per file (acceptable for batch indexing)
-- Optional: Skip scanning for trusted directories
+**Combined Result** (Phase 1 + Phase 2):
+- First build: 3-4 min (vs 7-10 min originally)
+- Rebuilds: 1-2 min (vs 2-4 min currently)
+- Final image: 1.5-2.0 GB
 
-**Priority Rationale**: Security is critical for users indexing untrusted content. File type validation is a quick win (1-2 hours). ClamAV provides comprehensive protection without disrupting workflow.
+**See**: [internal_planning/DOCKER_BUILD_OPTIMIZATION.md](../internal_planning/DOCKER_BUILD_OPTIMIZATION.md)
 
 ---
 
 
 ### Medium Priority
 
-#### 3. Python 3.13 Upgrade
+#### 4. Python 3.13 Upgrade
 
 **Target**: v0.16.0-alpha
 
-**Status**: ✅ Ready to migrate (see `docs/PYTHON_3.13_COMPATIBILITY_AUDIT.md`)
+Migrate to Python 3.13 for free-threading (no GIL) and JIT compilation. Expected 30-100% improvement in concurrent embedding performance. All dependencies are compatible.
 
-**Objective**: Upgrade to Python 3.13 for performance improvements with free-threading and JIT compilation.
-
-**Benefits**:
-- Free-threading (no GIL) - true multi-core parallelism for embedding generation
-- JIT compiler - faster execution for hot code paths
-- 8-12% performance improvement for CPU-intensive operations (standard)
-- 30-100% concurrent embedding improvement (free-threading mode)
-
-**Implementation Plan**:
-1. [x] Audit Python 3.13 compatibility (✅ All deps compatible)
-2. [ ] Update Dockerfile to python:3.13-slim
-3. [ ] Upgrade PyTorch to 2.6.0+ and NumPy to 2.0+
-4. [ ] Run full test suite and benchmarks
-5. [ ] **Re-validate embedding model choices** (free-threading may change CPU/GPU tradeoffs)
-6. [ ] Update documentation and deployment guides
-7. [ ] Optional: Evaluate free-threading mode (python3.13t)
-
-**Model Re-Evaluation**: After Python 3.13 migration, revisit `internal_planning/EMBEDDING_MODEL_ANALYSIS.md` to re-benchmark all models. Free-threading (no GIL) may significantly improve CPU inference performance.
-
-**Priority Rationale**: Python 3.13's free-threading and JIT compiler provide significant performance improvements while maintaining Python's ML ecosystem advantages. All dependencies now support Python 3.13.
+**See**: [docs/PYTHON_3.13_COMPATIBILITY_AUDIT.md](PYTHON_3.13_COMPATIBILITY_AUDIT.md)
 
 ---
 
-#### 4. Post-Migration Dependency Updates
+#### 5. Post-Migration Dependency Updates
 
-**Target**: v0.17.0-alpha (after Python 3.13 migration)
+**Target**: v0.17.0-alpha
 
-**Objective**: After migrating to Python 3.13, audit and update all dependencies to latest stable versions to benefit from new features and performance improvements.
-
-**Rationale**:
-- Dependencies may have Python 3.13-specific optimizations
-- Newer versions may have bug fixes and security patches
-- Check backwards compatibility before updating
-
-**Implementation Plan**:
-1. [ ] Generate dependency update report (pip list --outdated)
-2. [ ] Review changelogs for breaking changes
-3. [ ] Update dependencies one category at a time:
-   - [ ] PyTorch ecosystem (torch, torchvision, sentence-transformers)
-   - [ ] FastAPI ecosystem (fastapi, pydantic, uvicorn)
-   - [ ] Document processing (docling, pypdf, python-docx)
-   - [ ] Code/notebook parsing (astchunk, nbformat, tree-sitter)
-   - [ ] Supporting libs (watchdog, networkx, obsidiantools)
-4. [ ] Run full test suite after each category update
-5. [ ] Benchmark performance impact
-6. [ ] Document version changes and rationale
-
-**Backwards Compatibility**:
-- Test with existing knowledge bases (no reindexing required)
-- Verify API compatibility (no breaking changes for users)
-- Fallback plan if major issues arise
-
-**Priority Rationale**: Keeping dependencies up-to-date improves security, performance, and ensures access to latest features. Python 3.13 migration is prerequisite.
+Audit and update all dependencies after Python 3.13 migration to leverage new optimizations and security patches. Includes PyTorch, FastAPI, docling, and supporting libraries.
 
 ---
 
 ### GPU-Accelerated Features
 
-**Note**: Hardware details and implementation guides are available in `internal_planning/HARDWARE_SETUP_GUIDE.md`
+**Note**: Hardware details in [internal_planning/HARDWARE_SETUP_GUIDE.md](../internal_planning/HARDWARE_SETUP_GUIDE.md)
 
 ---
 
-#### 5. GPU Support Infrastructure
+#### 6. GPU Support Infrastructure
 
 **Target**: v0.13.0-alpha
 
-**Objective**: Add CUDA/ROCm GPU support to enable hardware-accelerated embedding generation, transcription, and model inference.
-
-**Implementation Plan**: See internal planning documentation for detailed hardware requirements and setup instructions.
-
-**Priority Rationale**: Foundation for all GPU-accelerated features below. Enables 10-50x performance improvements.
+CUDA/ROCm GPU support for hardware-accelerated embedding generation and model inference. Enables 10-50x performance improvements for all GPU-accelerated features below.
 
 ---
 
-#### 6. Embedding Model Upgrade & Reranking
+#### 7. Embedding Model Upgrade & Reranking
 
-**Target**: v0.13.0-alpha (requires GPU Support #5)
+**Target**: v0.13.0-alpha (requires GPU)
 
-**Objective**: Upgrade to larger, more accurate embedding models and add cross-encoder reranking for better retrieval quality.
+Upgrade to Qwen3-Embedding-8B (MTEB 70.58) and add BGE-Reranker-v2-m3 cross-encoder for +20-30% retrieval accuracy improvement. Makes re-indexing large knowledge bases practical (hours instead of weeks).
 
-**Current Model**: Snowflake Arctic Embed L (335M params, 1024 dim, MTEB 59.0)
-
-**Proposed Upgrades**:
-- **GPU (12GB+)**: Upgrade to Qwen3-Embedding-8B (MTEB 70.58, #1 multilingual, 16x faster)
-- **Reranking**: Add BGE-Reranker-v2-m3 for +20-30% ranking accuracy (requires GPU)
-
-**Implementation Plan**:
-1. [ ] Implement model auto-selection based on available hardware (GPU/VRAM)
-2. [ ] Add GPU-accelerated embedding generation
-3. [ ] Benchmark Qwen3-8B on GPU vs Arctic Embed L on CPU
-4. [ ] Add cross-encoder reranking for top-K results
-5. [ ] Provide migration/reindexing script for model changes
-6. [ ] Document model comparison and hardware requirements
-
-**Detailed Analysis**: See `internal_planning/EMBEDDING_MODEL_ANALYSIS.md` for comprehensive research on model performance and cost-benefit analysis.
-
-**Priority Rationale**: Re-indexing large knowledge bases on CPU would take weeks. GPU makes this practical (hours instead of weeks). Significant quality improvement (+20-30% ranking accuracy with reranking).
+**See**: [internal_planning/EMBEDDING_MODEL_ANALYSIS.md](../internal_planning/EMBEDDING_MODEL_ANALYSIS.md)
 
 ---
 
-#### 7. Video/Audio Processing Support
+#### 8. Video/Audio Processing Support
 
-**Target**: v0.14.0-alpha (requires GPU Support #5)
+**Target**: v0.14.0-alpha (requires GPU)
 
-**Objective**: Enable indexing and querying of video and audio files (lectures, podcasts, meetings, tutorials) through automatic transcription and temporal chunking.
-
-**Supported Formats**: `.mp4`, `.mp3`, `.wav`, `.m4a`, `.webm`, `.mkv`, `.avi`
-
-**Use Cases**:
-- Podcast search: "Find episodes where they discuss options trading"
-- Lecture notes: "What did the professor say about recursion in week 3?"
-- Meeting search: "When did we discuss the Q4 roadmap?"
-- Tutorial indexing: "How to implement authentication in that Django video?"
-- YouTube backup: Index downloaded educational content locally
-
-**Priority Rationale**: High user demand for podcast/lecture indexing. Complements existing document/code RAG capabilities.
+Automatic transcription and indexing of video/audio files (podcasts, lectures, meetings, tutorials). Search across spoken content with temporal chunking for timestamp-accurate results.
 
 ---
 
-#### 8. Local Vision Models
+#### 9. Local Vision Models
 
-**Target**: v0.15.0-alpha (requires GPU Support #5)
+**Target**: v0.15.0-alpha (requires GPU)
 
-**Objective**: Run vision models locally instead of relying on external APIs (Gemini/OpenAI) for video frame analysis.
-
-**Priority Rationale**: Privacy, cost savings, no rate limits. Lower priority than reranking as external APIs work well for now.
+Run vision models locally for video frame analysis instead of external APIs. Provides privacy, cost savings, and no rate limits.
 
 ---
 
 ### Medium-Low Priority
 
-#### 9. Remote Processing Server Support (Cloud TPU/GPU Workers)
+#### 10. Remote Processing Server Support
 
 **Target**: v0.16.0-alpha
 
-**Objective**: Enable offloading compute-intensive processing to remote cloud workers (GPU/TPU) while keeping local query interface. Pay-per-use for fast indexing without buying hardware.
-
-**Use Cases**:
-- One-time indexing of massive archives (100K+ documents)
-- Podcast/video transcription bursts (rent GPU for 2 hours)
-- Distributed team with shared cloud knowledge base
-- Startup without GPU budget (pay $20/month for occasional indexing)
-
-**Priority Rationale**: Most users should get local GPU first - much simpler. Only valuable for one-time massive indexing, no hardware budget, or distributed teams. Detailed architecture and cost analysis in internal planning docs.
+Offload compute-intensive processing to remote cloud workers (GPU/TPU) for pay-per-use indexing. Useful for one-time massive indexing without buying hardware.
 
 ---
 
-#### 10. Web UI for Knowledge Base Management
+#### 11. Web UI for Knowledge Base Management
 
 **Target**: v0.18.0-alpha or later
 
-**Objective**: Build a web interface for browsing, organizing, and managing the indexed knowledge base with visual library view and operational controls.
-
-**Current Limitation**:
-- All operations done via terminal/CLI (cURL, Python scripts)
-- No visual way to browse indexed documents
-- No organization/tagging system
-- Operational controls require terminal commands
-
-**Features**:
-
-**Library View**:
-- Visual grid/list of all indexed documents
-- Cover images/thumbnails for PDFs, ebooks, documents
-- Document metadata (title, type, size, chunks, indexed date)
-- Sort by: date added, name, type, size, chunks
-- Filter by: file type, tag, date range
-- Search indexed documents by name/path
-
-**Tagging System**:
-- Manual tags for organization (e.g., "finance", "machine-learning", "work", "personal")
-- Tag management UI (create, rename, delete tags)
-- Multi-tag support per document
-- Tag-based filtering and search
-- Color-coded tag badges
-- Optional: Auto-tagging via LLM analysis of content
-
-**File Upload & Import**:
-- Drag-and-drop file upload interface
-- Browse and select multiple files
-- Upload progress indicators (per-file and overall)
-- Automatic indexing after upload
-- Supported formats: PDF, DOCX, EPUB, Markdown, Code, Jupyter, etc.
-- Batch upload (multiple files at once)
-- Upload to specific folders/categories
-- Alternative to manually copying files to knowledge_base directory
-
-**Document Management**:
-- View document details (path, hash, chunks, embeddings)
-- Re-index individual documents
-- Delete documents from index (with option to delete original file)
-- Download original file
-- View chunk breakdown with preview
-- Move/rename documents within KB
-
-**Operational Controls (GUI)**:
-- Dashboard with system stats (indexed docs, total chunks, queue status)
-- Queue management: pause/resume/clear indexing queue
-- View current indexing jobs (file, status, progress)
-- Fast-track files (move to HIGH priority)
-- Orphan detection and repair buttons
-- Real-time indexing progress indicators
-
-**Search Interface**:
-- Full-text RAG search with preview
-- Highlighting of relevant chunks
-- Relevance scores
-- Chunk-level navigation
-- Export search results
-
-**Implementation Plan**:
-1. [ ] Choose web framework (React + FastAPI backend, or Streamlit for simplicity)
-2. [ ] Design library view UI/UX mockups
-3. [ ] Implement document listing API endpoints
-4. [ ] Build file upload system (drag-drop, multipart upload, progress tracking)
-5. [ ] Add cover extraction for PDFs/ebooks (first page thumbnail)
-6. [ ] Build tagging system (DB schema, API, UI)
-7. [ ] Create operational controls dashboard
-8. [ ] Implement search interface with highlighting
-9. [ ] Add real-time updates (WebSocket for queue status)
-10. [ ] Deploy as separate Docker service or integrated
-
-**Technology Options**:
-- **Option A**: Streamlit (fastest, Python-only, good for MVP)
-- **Option B**: React + FastAPI (more polished, better UX)
-- **Option C**: Gradio (ML-focused, simpler than React)
-
-**Priority Rationale**: Improves UX significantly but not critical for core functionality. Terminal/API access works for power users. Good stretch goal after Python 3.13 migration.
+Web interface with visual library view, document thumbnails, tagging system, drag-drop file upload, and GUI operational controls. Improves UX but not critical for core functionality.
 
 ---
 
-#### 11. Multi-Vector Representations
-- Store multiple embeddings per chunk (e.g., question + answer pairs)
-- Improve retrieval diversity
-- Better handling of multi-aspect content
+#### 12. Multi-Vector Representations & Incremental Updates
 
-#### 12. Incremental Updates
-- Delta indexing for modified files
-- Avoid full reprocessing on small changes
-- Track file modification times
+Store multiple embeddings per chunk for better retrieval diversity. Delta indexing for modified files to avoid full reprocessing.
 
 ---
 
-#### 13. Async Database Migration (Performance)
+#### 13. Async Database Migration
 
 **Target**: v0.13.0-alpha or v0.14.0-alpha
 
-**Objective**: Migrate all blocking database calls to async I/O to prevent API endpoint slowness during heavy indexing.
+Migrate blocking database calls to async I/O (using `aiosqlite`) to fix slow API endpoints during indexing. Target <10ms response time for `/health` endpoint even during heavy indexing.
 
-**Current Limitation**:
-- All database queries are synchronous blocking calls
-- API endpoints block while counting documents, fetching stats, querying vectors
-- Noticeable slowness when accessing `/health`, `/documents`, `/query` during indexing
-- User experience: "feels slow when curling to localhost:8000 webhooks"
+**See**: [KNOWN_ISSUES.md #5](KNOWN_ISSUES.md) - API Endpoints Block During Indexing (current problem)
 
-**Blocking Endpoints Identified** (2025-11-22 audit):
-1. **`/health`** - Calls `COUNT(*)` on documents + chunks tables (CRITICAL - health checks should be fast)
-2. **`/documents`** - Queries all documents with JOIN (1,599+ docs = slow)
-3. **`/documents/search`** - Pattern matching across file paths
-4. **`/query`** - Vector similarity search + chunk retrieval (main RAG query)
-5. **`/document/{filename}`** - Document info lookup with LIKE query
+---
 
-**Non-Blocking Endpoints** (already fast):
-- `/queue/jobs` - In-memory queue stats ✅
-- `/indexing/status` - In-memory worker state ✅
-- `/indexing/pause|resume|clear` - Queue operations ✅
+#### 14. Chunking Strategy Evaluation & Improvement
 
-**Implementation Plan**:
-1. [ ] Add `aiosqlite` or `asyncpg` (if migrating to PostgreSQL) dependency
-2. [ ] Create async database connection pool
-3. [ ] Migrate repository classes to async methods:
-   - `DocumentRepository.count()` → `async count()`
-   - `ChunkRepository.count()` → `async count()`
-   - `VectorRepository.search()` → `async search()`
-4. [ ] Add caching layer for `/health` endpoint stats (update every 10s, not every request)
-5. [ ] Update all `async def` endpoints to use `await` for database calls
-6. [ ] Add comprehensive tests for async database operations
-7. [ ] Benchmark before/after response times under load
+**Target**: v0.14.0-alpha or v0.15.0-alpha
 
-**Performance Targets**:
-- `/health`: <10ms response time (currently 50-200ms with 1,599 docs)
-- `/documents`: <100ms for listing (currently 200-500ms)
-- `/query`: <500ms for vector search (currently 1-3s with context switches)
+Systematic evaluation of chunking quality with metrics and content-aware strategies. Philosophy: chunking quality > embedding model quality. Improves retrieval for plain text and specialized content types.
 
-**Alternative Approach** (shorter-term fix):
-- Cache `/health` stats in memory, refresh every 10 seconds via background thread
-- Moves counting off request path, instant health checks
-- Doesn't solve `/documents` and `/query` slowness
-
-**Priority Rationale**: User-facing API should be responsive during indexing. Blocking database calls create poor UX when monitoring progress via webhooks/CLI.
+**See**: [internal_planning/CHUNKING_STRATEGY_EVALUATION.md](../internal_planning/CHUNKING_STRATEGY_EVALUATION.md)
 
 ---
 
 ### Low Priority / Future
 
-#### 14. Advanced Metadata Extraction
+#### 15. Advanced Metadata Extraction
 - Author, publication date, categories
 - Automatic tagging via LLM
 - Relationship mapping between documents
 
-#### 15. Multi-Language Support
+#### 16. Multi-Language Support
 - Non-English document processing
 - Language detection
 - Multilingual embedding models
@@ -414,6 +219,14 @@ CLAMAV_HOST=clamav                 # ClamAV container hostname
 ---
 
 ## Completed Features
+
+### v0.13.0-alpha
+- **Docker Build Optimization**: BuildKit cache mounts reduce rebuild time by 60% (7-10 min → 2-4 min)
+- **Multi-Stage Docker Build**: 40-60% smaller final image (~2.0-2.5 GB vs ~3.5 GB), more secure runtime
+- **Structured Progress Logging**: Real-time progress tracking with timing, rates, and ETA across all pipeline stages
+- **Periodic Heartbeat**: Background updates every 60s for long-running operations
+- **.dockerignore**: Optimized build context by excluding unnecessary files
+- **Bug Fixes**: Fixed extraction method logging, EPUB conversion logging, renamed TextExtractor to ExtractionRouter
 
 ### v0.12.0-alpha
 - **Configurable Knowledge Base Directory**: Environment variable `KNOWLEDGE_BASE_PATH` to customize KB location

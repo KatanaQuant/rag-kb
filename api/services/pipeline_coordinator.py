@@ -18,6 +18,7 @@ from services.pipeline_queues import (
 )
 from services.pipeline_workers import StageWorker, EmbedWorkerPool
 from services.indexing_queue import QueueItem
+from services.progress_logger import ProgressLogger
 from domain_models import DocumentFile
 
 class PipelineCoordinator:
@@ -33,6 +34,7 @@ class PipelineCoordinator:
         self.processor = processor
         self.indexer = indexer
         self.embedding_service = embedding_service
+        self.progress_logger = ProgressLogger()
 
         # Create pipeline queues
         self.queues = PipelineQueues()
@@ -111,17 +113,25 @@ class PipelineCoordinator:
                     print(f"[Skip] {item.path.name} - already indexed")
                     return None
 
-            # File needs chunking
-            print(f"[Chunk] {item.path.name}")
+            # File needs processing - determine stage name based on file type
+            # EPUB files are converted to PDF, not chunked
+            stage = "Convert" if item.path.suffix.lower() == '.epub' else "Chunk"
+
+            self.progress_logger.log_start(stage, item.path.name)
+
+            # Start heartbeat for long-running operations
+            self.progress_logger.start_heartbeat(stage, item.path.name, interval=60)
+
             chunks = self.processor.process_file(doc_file)
 
             if not chunks:
-                print(f"[Chunk] {item.path.name} - no chunks extracted")
+                print(f"[{stage}] {item.path.name} - no chunks extracted")
+                self.progress_logger.log_complete(stage, item.path.name, 0)
                 # Don't mark as processed - file will be retried on next run
                 # This allows automatic pickup when support is added for new file types
                 return None
 
-            print(f"[Chunk] {item.path.name} - {len(chunks)} chunks created")
+            self.progress_logger.log_complete(stage, item.path.name, len(chunks))
 
             return ChunkedDocument(
                 priority=item.priority,
@@ -138,14 +148,16 @@ class PipelineCoordinator:
     def _embed_stage(self, doc: ChunkedDocument) -> Optional[EmbeddedDocument]:
         """Embed chunks"""
         try:
-            print(f"[Embed] {doc.path.name} - embedding {len(doc.chunks)} chunks")
+            self.progress_logger.log_start("Embed", doc.path.name)
 
             # Use the existing embedding service
             embeddings = self.embedding_service.embed_batch(
-                [chunk['content'] for chunk in doc.chunks]
+                texts=[chunk['content'] for chunk in doc.chunks],
+                document_name=doc.path.name,
+                progress_logger=self.progress_logger
             )
 
-            print(f"[Embed] {doc.path.name} - complete")
+            self.progress_logger.log_complete("Embed", doc.path.name, len(doc.chunks))
 
             return EmbeddedDocument(
                 priority=doc.priority,
@@ -162,7 +174,7 @@ class PipelineCoordinator:
     def _store_stage(self, doc: EmbeddedDocument) -> None:
         """Store embedded chunks in database"""
         try:
-            print(f"[Store] {doc.path.name} - storing {len(doc.chunks)} chunks")
+            self.progress_logger.log_start("Store", doc.path.name)
 
             self.embedding_service.store.add_document(
                 file_path=str(doc.path),
@@ -171,7 +183,7 @@ class PipelineCoordinator:
                 embeddings=doc.embeddings
             )
 
-            print(f"[Store] {doc.path.name} - complete")
+            self.progress_logger.log_complete("Store", doc.path.name, len(doc.chunks))
 
         except Exception as e:
             print(f"[Store] Error storing {doc.path}: {e}")

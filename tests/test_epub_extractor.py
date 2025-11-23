@@ -203,6 +203,51 @@ class TestEpubConversionErrors:
                     chromium_calls = [call for call in mock_run.call_args_list if 'chromium' in str(call)]
                     assert len(chromium_calls) > 0
 
+    def test_deeply_nested_error_triggers_fallback(self, tmp_path):
+        """'Too deeply nested' error should trigger HTML fallback conversion"""
+        epub_path = tmp_path / "nested_lists.epub"
+        pdf_path = tmp_path / "nested_lists.pdf"
+
+        self._create_minimal_epub(epub_path)
+
+        with patch('subprocess.run') as mock_run:
+            # First call: Pandoc fails with deeply nested error
+            # Second call: EPUB→HTML succeeds
+            # Third call: HTML→PDF (Chromium) succeeds
+            # Fourth call: Ghostscript font embedding
+            # Fifth call: pdfinfo
+            mock_run.side_effect = [
+                Mock(returncode=1, stdout="", stderr="! LaTeX Error: Too deeply nested.\n\nSee the LaTeX manual"),
+                Mock(returncode=0, stdout="", stderr=""),  # pandoc epub→html
+                Mock(returncode=0, stdout="", stderr=""),  # chromium html→pdf
+                Mock(returncode=0, stdout="", stderr=""),  # ghostscript
+                Mock(returncode=0, stdout="Pages:          50\n", stderr=""),  # pdfinfo
+            ]
+
+            with patch('shutil.move'):
+                # Create a real temporary HTML file
+                temp_html = tmp_path / "temp.html"
+                temp_html.touch()
+
+                with patch('tempfile.NamedTemporaryFile') as mock_temp:
+                    mock_temp.return_value.__enter__.return_value.name = str(temp_html)
+                    mock_temp.return_value.__exit__.return_value = None
+
+                    pdf_path.touch()
+                    # Create temp PDF that ghostscript would create
+                    tmp_pdf = tmp_path / "nested_lists.tmp.pdf"
+                    tmp_pdf.touch()
+
+                    result = EpubExtractor.extract(epub_path)
+
+                    # Should complete via fallback
+                    assert result.method == 'epub_conversion_only'
+                    assert result.page_count == 0  # Empty pages
+
+                    # Verify Chromium was called (HTML→PDF)
+                    chromium_calls = [call for call in mock_run.call_args_list if 'chromium' in str(call)]
+                    assert len(chromium_calls) > 0
+
     def _create_minimal_epub(self, path: Path):
         """Create a minimal valid EPUB file (ZIP with mimetype)"""
         import zipfile

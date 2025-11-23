@@ -9,7 +9,6 @@ import logging
 import sys
 import warnings
 
-from pypdf import PdfReader
 from docx import Document
 import markdown
 import numpy as np
@@ -25,14 +24,13 @@ logging.getLogger('docling').setLevel(logging.CRITICAL)
 logging.getLogger('docling_parse').setLevel(logging.CRITICAL)
 logging.getLogger('docling_core').setLevel(logging.CRITICAL)
 logging.getLogger('pdfium').setLevel(logging.CRITICAL)
-warnings.filterwarnings('ignore', category=UserWarning, module='pypdf')
 
 try:
     from docling.document_converter import DocumentConverter
     DOCLING_AVAILABLE = True
 except ImportError as e:
     DOCLING_AVAILABLE = False
-    print(f"Warning: Docling not available, falling back to pypdf ({e})")
+    print(f"Warning: Docling not available ({e})")
 
 # Try to import chunking separately (may not be available in all versions)
 try:

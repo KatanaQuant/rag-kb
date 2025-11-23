@@ -9,7 +9,6 @@ import logging
 import sys
 import warnings
 
-from pypdf import PdfReader
 from docx import Document
 import markdown
 import numpy as np
@@ -21,7 +20,7 @@ from domain_models import ChunkData, DocumentFile, ExtractionResult
 # Cross-module imports
 from .chunking import TextChunker
 from .progress import ProcessingProgressTracker, ProcessingProgress
-from .extractors import TextExtractor
+from .extractors import ExtractionRouter
 from .helpers import FileHasher
 
 # Suppress verbose Docling/PDF warnings and errors
@@ -31,14 +30,13 @@ logging.getLogger('docling').setLevel(logging.CRITICAL)
 logging.getLogger('docling_parse').setLevel(logging.CRITICAL)
 logging.getLogger('docling_core').setLevel(logging.CRITICAL)
 logging.getLogger('pdfium').setLevel(logging.CRITICAL)
-warnings.filterwarnings('ignore', category=UserWarning, module='pypdf')
 
 try:
     from docling.document_converter import DocumentConverter
     DOCLING_AVAILABLE = True
 except ImportError as e:
     DOCLING_AVAILABLE = False
-    print(f"Warning: Docling not available, falling back to pypdf ({e})")
+    print(f"Warning: Docling not available ({e})")
 
 # Try to import chunking separately (may not be available in all versions)
 try:
@@ -144,7 +142,7 @@ class DocumentProcessor:
 
     def __init__(self, progress_tracker: Optional[ProcessingProgressTracker] = None):
         self.hasher = FileHasher()
-        self.extractor = TextExtractor()
+        self.extractor = ExtractionRouter()
         self.chunker = TextChunker()
         self.enricher = MetadataEnricher(self.hasher)
         self.tracker = progress_tracker

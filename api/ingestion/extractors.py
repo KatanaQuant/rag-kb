@@ -9,7 +9,6 @@ import logging
 import sys
 import warnings
 
-from pypdf import PdfReader
 from docx import Document
 import markdown
 import numpy as np
@@ -32,7 +31,6 @@ logging.getLogger('docling_core').setLevel(logging.CRITICAL)
 logging.getLogger('pdfium').setLevel(logging.CRITICAL)
 # RapidOCR/EasyOCR warnings (like "text detection result is empty") are normal
 # when OCR checks images/pages and finds no text to extract
-warnings.filterwarnings('ignore', category=UserWarning, module='pypdf')
 
 try:
     from docling.document_converter import DocumentConverter
@@ -185,31 +183,6 @@ class DoclingExtractor:
             chunks_list.append((chunk_text, page))
 
         return chunks_list
-
-class PDFExtractor:
-    """Extracts text from PDF files (fallback when Docling fails)"""
-
-    @staticmethod
-    def extract(path: Path) -> ExtractionResult:
-        """Extract text with page numbers"""
-        reader = PdfReader(path)
-        pages = PDFExtractor._extract_pages(reader)
-        return ExtractionResult(pages=pages, method='pypdf')
-
-    @staticmethod
-    def _extract_pages(reader) -> List[Tuple[str, int]]:
-        """Extract all pages"""
-        results = []
-        for num, page in enumerate(reader.pages, 1):
-            PDFExtractor._add_page(results, page, num)
-        return results
-
-    @staticmethod
-    def _add_page(results: List, page, num: int):
-        """Add page if has text"""
-        text = page.extract_text()
-        if text.strip():
-            results.append((text, num))
 
 class DOCXExtractor:
     """Extracts text from DOCX files"""
@@ -391,15 +364,18 @@ class EpubExtractor:
 
     @staticmethod
     def _convert_with_pandoc(epub_path: Path, pdf_path: Path):
-        """Convert EPUB to PDF using Pandoc with fallback for longtable errors
+        """Convert EPUB to PDF using Pandoc with fallback for LaTeX structural errors
 
         Strategy:
         1. Try direct EPUB→PDF with xelatex
-        2. If longtable error occurs, fallback to EPUB→HTML→PDF with wkhtmltopdf
+        2. If LaTeX structural error occurs, fallback to EPUB→HTML→PDF with Chromium
 
-        Known Issue: Pandoc has a bug with nested tables in EPUB files that causes
-        "Forbidden control sequence found while scanning use of \\LT@nofcols" errors.
-        The workaround is to use HTML as an intermediate format with wkhtmltopdf.
+        Known LaTeX Issues Handled by HTML Fallback:
+        - Nested tables (longtable/LT@nofcols errors)
+        - Deeply nested lists (Too deeply nested - exceeds 4-6 level limit)
+        - Other LaTeX formatting constraints
+
+        The workaround uses HTML as an intermediate format with Chromium headless.
         """
         result = EpubExtractor._try_direct_conversion(epub_path, pdf_path)
         if result.returncode == 0:
@@ -429,8 +405,18 @@ class EpubExtractor:
 
     @staticmethod
     def _is_longtable_error(stderr: str) -> bool:
-        """Check if error is known longtable issue"""
-        return 'LT@nofcols' in stderr or 'longtable' in stderr.lower()
+        """Check if error is a known LaTeX structural issue that can be fixed via HTML fallback
+
+        Common LaTeX errors that HTML fallback can handle:
+        - longtable/LT@nofcols: Nested table issues
+        - Too deeply nested: Excessive list nesting (>4-6 levels)
+        """
+        stderr_lower = stderr.lower()
+        return (
+            'LT@nofcols' in stderr or
+            'longtable' in stderr_lower or
+            'too deeply nested' in stderr_lower
+        )
 
     @staticmethod
     def _raise_conversion_error(epub_path: Path, stderr: str):
@@ -446,7 +432,11 @@ class EpubExtractor:
     def _convert_via_html_fallback(epub_path: Path, pdf_path: Path):
         """Fallback: Convert EPUB→HTML→PDF using Chromium headless
 
-        This avoids LaTeX longtable issues by using HTML-based PDF generation.
+        This avoids LaTeX structural issues by using HTML-based PDF generation:
+        - longtable errors (nested tables)
+        - Too deeply nested errors (excessive list nesting)
+        - Other LaTeX formatting limitations
+
         Uses Chromium in headless mode as wkhtmltopdf is unmaintained.
         """
         html_path = EpubExtractor._create_temp_html()
@@ -667,8 +657,8 @@ class CodeExtractor:
 
         return ExtractionResult(pages=pages, method=f'ast_{language}')
 
-class TextExtractor:
-    """Extracts text from various file formats"""
+class ExtractionRouter:
+    """Routes extraction requests to specialized extractors based on file type"""
 
     def __init__(self, config=default_config):
         self.config = config
@@ -680,6 +670,9 @@ class TextExtractor:
 
     def extract(self, file_path: Path) -> ExtractionResult:
         """Extract text based on file extension"""
+        # Reset last_method to prevent stale values from previous extractions
+        self.last_method = None
+
         ext = file_path.suffix.lower()
         self._validate_extension(ext)
 
@@ -726,15 +719,14 @@ class TextExtractor:
 
     def _build_extractors(self) -> Dict:
         """Map extensions to extractors - Docling for docs, AST for code, Jupyter for notebooks, Graph-RAG for Obsidian"""
-        print("Using Docling + HybridChunker for PDF/DOCX/EPUB, AST chunking for code, Jupyter for .ipynb, Graph-RAG for Obsidian vaults")
+        print("Using Docling + HybridChunker for PDF/DOCX/EPUB/Markdown, AST chunking for code, Jupyter for .ipynb, Graph-RAG for Obsidian vaults")
         return {
-            # Documents
+            # Documents (Docling with semantic chunking)
             '.pdf': DoclingExtractor.extract,
             '.docx': DoclingExtractor.extract,
             '.epub': EpubExtractor.extract,
-            '.md': MarkdownExtractor.extract,
-            '.markdown': MarkdownExtractor.extract,
-            '.txt': TextFileExtractor.extract,
+            '.md': DoclingExtractor.extract,
+            '.markdown': DoclingExtractor.extract,
             # Code files (AST-based chunking)
             '.py': CodeExtractor.extract,
             '.java': CodeExtractor.extract,

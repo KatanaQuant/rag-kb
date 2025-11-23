@@ -405,6 +405,400 @@ rm data/*.db-*
 docker-compose up -d
 ```
 
+## Development Without Disrupting Your Running Instance
+
+**Use Case**: You're using RAG-KB across your network (laptop, phone, IDE integrations) but want to test changes, upgrades, or new features without breaking your daily workflow.
+
+This blue-green deployment approach lets you **use and develop simultaneously** - keep your working instance on port 8000 while testing on port 8001.
+
+### When to Use This Workflow
+
+**Perfect for users who**:
+- Use RAG-KB daily across multiple devices
+- Want to contribute features or test upgrades
+- Need to experiment without disrupting their knowledge base
+- Have MCP integrations in VSCode that should stay functional
+- Share RAG-KB access with others on their network
+
+**Common development scenarios**:
+- **Testing upgrades**: Python 3.11 → 3.13, PyTorch updates, dependency migrations
+- **Experimenting with models**: Try different embeddings without reindexing production
+- **Feature development**: Build new features while keeping your workflow intact
+- **Configuration tuning**: Test chunking strategies, performance settings
+- **Contributing back**: Validate changes before submitting PRs
+
+**Why this workflow exists**:
+Traditional development requires stopping your instance. But when RAG-KB is integrated into your daily workflow (MCP in VSCode, API queries from scripts, mobile access), downtime is disruptive. This approach eliminates that friction.
+
+**The trade-off**:
+Run two instances side-by-side (production on 8000, test on 8001) until you're ready to swap. Only ~10-30 seconds of downtime when you decide to promote your test changes to production.
+
+### Strategy: Side-by-Side Testing
+
+Run the new version on port 8001 while production continues serving on port 8000. Test thoroughly, then swap when ready.
+
+### Step 1: Prepare Changes (No Impact on Production)
+
+Make your changes to Dockerfile, docker-compose.yml, code, or configuration files. You can either:
+
+**Option A: Edit files directly and build with a test tag**
+```bash
+# Make your changes to Dockerfile, docker-compose.yml, etc.
+# Build with a test tag to distinguish from production
+docker build -t rag-api:test ./api
+```
+
+**Option B: Create variant files for comparison**
+```bash
+# Keep original files pristine, create test variants
+cp api/Dockerfile api/Dockerfile.test
+cp docker-compose.yml docker-compose.test.yml
+
+# Edit the .test versions
+vim api/Dockerfile.test
+
+# Build from variant
+docker build -t rag-api:test -f api/Dockerfile.test ./api
+```
+
+<details>
+<summary><b>Example: Python 3.13 Version Upgrade</b></summary>
+
+**Changes to api/Dockerfile**:
+```dockerfile
+FROM python:3.13-slim  # Changed from 3.11-slim
+
+# Update all python3.11 references to python3.13
+RUN mkdir -p /usr/local/lib/python3.13/site-packages/deepsearch_glm/resources/models/crf/part-of-speech && \
+    mkdir -p /usr/local/lib/python3.13/site-packages/rapidocr/models
+
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app && \
+    chown -R appuser:appuser /usr/local/lib/python3.13/site-packages/deepsearch_glm && \
+    chown -R appuser:appuser /usr/local/lib/python3.13/site-packages/rapidocr
+```
+
+**Changes to docker-compose.yml**:
+```yaml
+volumes:
+  - ./.cache/rapidocr:/usr/local/lib/python3.13/site-packages/rapidocr/models
+```
+</details>
+
+<details>
+<summary><b>Example: Testing a Different Embedding Model</b></summary>
+
+**No code changes needed**, just environment variable:
+```bash
+# Will set when starting test instance in Step 2
+MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1
+```
+</details>
+
+<details>
+<summary><b>Example: Experimental Feature Branch</b></summary>
+
+```bash
+# Checkout feature branch
+git checkout feature/new-chunking-strategy
+
+# Build test image from feature branch code
+docker build -t rag-api:test ./api
+```
+</details>
+
+### Step 2: Start Test Instance on Port 8001 (Parallel to Production)
+
+**Key principle**: Production stays on port 8000 (accessible across your network), test runs on port 8001.
+
+**Option A: Quick start with docker run**
+```bash
+# Production continues running on port 8000 (unchanged)
+
+# Start test instance on port 8001
+docker run -d \
+  --name rag-api-test \
+  -p 8001:8000 \
+  -v ./knowledge_base:/app/knowledge_base \
+  -v ./data_test:/app/data \
+  -v ./.cache/huggingface:/home/appuser/.cache/huggingface \
+  --env-file .env \
+  rag-api:test
+
+# Monitor logs
+docker logs -f rag-api-test
+```
+
+**Option B: Use docker-compose for easier management**
+
+Create `docker-compose.test.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  rag-api-test:
+    build:
+      context: ./api
+      dockerfile: Dockerfile  # or Dockerfile.test if using variant
+    container_name: rag-api-test
+    ports:
+      - "8001:8000"  # Test on 8001, production stays on 8000
+    volumes:
+      # Share knowledge base (read-only, safe for parallel access)
+      - ./knowledge_base:/app/knowledge_base
+
+      # IMPORTANT: Use separate database to avoid conflicts
+      - ./data_test:/app/data
+
+      # Share model caches (read-only, saves disk space)
+      - ./.cache/deepsearch_glm:/app/.cache/deepsearch_glm
+      - ./.cache/docling:/home/appuser/.cache/docling
+      - ./.cache/huggingface:/home/appuser/.cache/huggingface
+      - ./.cache/easyocr:/home/appuser/.EasyOCR
+      - ./.cache/rapidocr:/usr/local/lib/python3.11/site-packages/rapidocr/models
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Override any env vars for testing here
+      - MODEL_NAME=${TEST_MODEL_NAME:-Snowflake/snowflake-arctic-embed-l-v2.0}
+      - BATCH_SIZE=${BATCH_SIZE:-5}
+      # ... copy other env vars from main docker-compose.yml
+    restart: unless-stopped
+```
+
+```bash
+# Start test instance
+docker-compose -f docker-compose.test.yml up --build -d
+
+# Monitor logs
+docker-compose -f docker-compose.test.yml logs -f
+
+# Quick health check
+curl http://localhost:8001/health
+```
+
+**Network Access Note**:
+- Production on port 8000 stays accessible to all network devices
+- Test on port 8001 is only accessible from the host machine (or configure firewall for wider access if needed)
+- Users/devices continue using production without interruption
+
+### Step 3: Validate Both Instances Running
+
+Verify both instances are healthy and serving independently:
+
+```bash
+# Check production (still running on 8000)
+curl http://localhost:8000/health | jq
+
+# Check test (new instance on 8001)
+curl http://localhost:8001/health | jq
+
+# Compare basic stats
+echo "Production documents:"
+curl http://localhost:8000/documents | jq '.total'
+
+echo "Test documents:"
+curl http://localhost:8001/documents | jq '.total'
+```
+
+**What to verify**:
+- ** Both return HTTP 200
+- ** Both report healthy status
+- ** Document counts match (if using same knowledge_base/)
+- ** Any version/config differences appear as expected
+
+### Step 4: Run Comparison Tests
+
+**Query Accuracy Test** (same results expected):
+
+```bash
+# Query production
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"text": "your test query", "top_k": 5}' > prod_results.json
+
+# Query test
+curl -X POST http://localhost:8001/query \
+  -H "Content-Type: application/json" \
+  -d '{"text": "your test query", "top_k": 5}' > test_results.json
+
+# Compare results
+diff prod_results.json test_results.json
+```
+
+**Performance Benchmark**:
+
+```bash
+# Benchmark production
+time curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"text": "test query", "top_k": 5}'
+
+# Benchmark test
+time curl -X POST http://localhost:8001/query \
+  -H "Content-Type: application/json" \
+  -d '{"text": "test query", "top_k": 5}'
+
+# Monitor resource usage
+docker stats rag-api --no-stream
+docker stats rag-api-test --no-stream
+```
+
+**Unit Tests**:
+
+```bash
+# Run tests in test container
+docker exec rag-api-test python -m pytest tests/ -v
+```
+
+### Step 5: Swap to New Version (Brief Downtime)
+
+Once validated and ready, perform the swap. **Network users will experience ~10-30 seconds of downtime**.
+
+```bash
+# 1. Stop production instance
+docker-compose down
+# WARNING: Network users lose access here
+
+# 2. Apply your tested changes
+# If using variant files:
+cp api/Dockerfile.test api/Dockerfile
+cp docker-compose.test.yml docker-compose.yml
+# Or: Apply changes directly if you edited in place
+
+# 3. Backup current database (safety net)
+cp data/rag.db data/rag.db.backup-$(date +%Y%m%d)
+
+# 4. Optional: Copy test database if you want to preserve test indexing
+# cp data_test/rag.db data/rag.db
+
+# 5. Rebuild and start on port 8000
+docker-compose build --no-cache
+docker-compose up -d
+
+# 6. Verify new production is accessible
+curl http://localhost:8000/health
+# ** Network users can access again
+
+# 7. Monitor for issues
+docker-compose logs -f rag-api
+
+# 8. Cleanup test instance when satisfied
+docker stop rag-api-test && docker rm rag-api-test
+# Or: docker-compose -f docker-compose.test.yml down
+rm -rf data_test  # Remove test database
+```
+
+**Minimizing downtime tips**:
+- Have all files ready before stopping production
+- Use `docker-compose build` beforehand if possible
+- Keep test instance running until production is verified stable
+
+### Step 6: Rollback (If Needed)
+
+If issues arise after the swap:
+
+```bash
+# Stop new version
+docker-compose down
+
+# Revert Dockerfile changes
+git checkout api/Dockerfile docker-compose.yml
+
+# Restore database backup
+mv data/rag.db.backup-YYYYMMDD data/rag.db
+
+# Rebuild with old version
+docker-compose build --no-cache
+docker-compose up -d
+
+# Verify
+curl http://localhost:8000/health
+```
+
+### Database Compatibility Notes
+
+**Safe for Side-by-Side Testing**:
+- ** **Read-only access**: Both instances can read same `knowledge_base/` directory
+- ** **Shared model cache**: Both can share `.cache/huggingface` (read-only)
+- ** **Separate databases**: Use `data/` vs `data_test/` to avoid conflicts
+
+**Not Safe for Simultaneous Writes**:
+- ** **Same database**: SQLite doesn't handle concurrent writes well
+- ** **Same `data/` mount**: Test instance should use separate `data_test/`
+
+**Recommendation**: Test instance should have its own database but can share the knowledge base files (documents are read-only during indexing).
+
+### Pre-Flight Dependency Check (Optional)
+
+Before building Docker images, test dependencies locally:
+
+```bash
+# Install Python 3.13 locally (if available)
+python3.13 -m venv test-venv-313
+source test-venv-313/bin/activate
+
+# Test dependency installation
+pip install -r api/requirements.txt
+
+# Run unit tests
+cd api
+python -m pytest tests/ -v
+
+# Deactivate when done
+deactivate
+```
+
+### Benefits of This Approach
+
+** **Zero disruption during testing** - Production keeps serving network users
+** **A/B comparison** - Direct performance and accuracy comparison
+** **Safe experimentation** - Test without risk to production data
+** **Network accessibility** - Other devices stay connected to port 8000
+** **Confidence before commit** - Thorough validation reduces rollback risk
+** **Minimal downtime** - Only ~10-30 seconds during swap
+
+### Real-World Scenarios
+
+**Scenario 1: Testing Python 3.13 Upgrade**
+- Production: Python 3.11 on port 8000 (laptops, MCP integrations connected)
+- Test: Python 3.13 on port 8001 (validate compatibility, benchmark performance)
+- Swap when satisfied, <30 sec downtime for network users
+
+**Scenario 2: Evaluating Different Embedding Model**
+- Production: Arctic Embed on port 8000 (serving queries normally)
+- Test: Static-retrieval-mrl-en-v1 on port 8001 (test speed vs accuracy tradeoff)
+- Compare query results and resource usage before deciding
+
+**Scenario 3: Feature Branch Development**
+- Production: Stable release on port 8000 (network-wide access)
+- Test: Feature branch on port 8001 (dev testing with production-like data)
+- Validate new chunking strategy, async DB migration, etc.
+
+**Scenario 4: Infrastructure Migration**
+- Production: Current setup on port 8000 (24/7 availability for network)
+- Test: Major dependency update on port 8001 (PyTorch 2.6, FastAPI 0.115)
+- Verify no regressions before committing
+
+### Network Access Considerations
+
+**During Testing Phase** (Step 2-4):
+- **Port 8000** (Production): Accessible to all network devices, unchanged
+- **Port 8001** (Test): Local testing only, or expose to specific devices for validation
+- Users continue accessing RAG-KB via MCP, API calls, web queries
+
+**During Swap** (Step 5):
+- Brief 10-30 second window where port 8000 is unavailable
+- Communicate with network users if timing is critical
+- Consider performing swap during low-usage hours
+
+**After Swap**:
+- Port 8000 serves new version, network access restored
+- Port 8001 can be shut down
+- Test artifacts (data_test/) cleaned up
+
+---
+
 ## Contributing
 
 When contributing:

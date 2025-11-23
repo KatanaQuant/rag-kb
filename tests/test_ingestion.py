@@ -8,11 +8,10 @@ import sqlite3
 
 from ingestion import (
     FileHasher,
-    PDFExtractor,
     DOCXExtractor,
     TextFileExtractor,
     MarkdownExtractor,
-    TextExtractor,
+    ExtractionRouter,
     TextChunker,
     DocumentProcessor,
     DatabaseConnection,
@@ -123,7 +122,7 @@ class TestExtractionResult:
         """Test creating failed extraction result"""
         result = ExtractionResult(
             pages=[],
-            method="pypdf",
+            method="docling",
             success=False,
             error="Failed to extract"
         )
@@ -142,7 +141,7 @@ class TestExtractionResult:
     def test_total_chars_property(self):
         """Test total_chars property"""
         pages = [("12345", 1), ("abc", 2), ("test", 3)]
-        result = ExtractionResult(pages=pages, method="pypdf")
+        result = ExtractionResult(pages=pages, method="docling")
 
         assert result.total_chars == 12  # 5 + 3 + 4
 
@@ -195,12 +194,12 @@ class TestMarkdownExtractor:
         assert result.method == 'docling_markdown'
         assert result.success
 
-class TestTextExtractor:
-    """Tests for TextExtractor"""
+class TestExtractionRouter:
+    """Tests for ExtractionRouter"""
 
     def test_build_extractors(self):
         """Test extractor mapping"""
-        extractor = TextExtractor()
+        extractor = ExtractionRouter()
         assert '.pdf' in extractor.extractors
         assert '.txt' in extractor.extractors
         assert '.md' in extractor.extractors
@@ -208,14 +207,14 @@ class TestTextExtractor:
 
     def test_validate_extension(self):
         """Test extension validation"""
-        extractor = TextExtractor()
+        extractor = ExtractionRouter()
 
         with pytest.raises(ValueError, match="Unsupported"):
             extractor._validate_extension('.xyz')
 
     def test_extract_text_file(self, tmp_path):
         """Test extracting text file"""
-        extractor = TextExtractor()
+        extractor = ExtractionRouter()
         file_path = tmp_path / "test.txt"
         file_path.write_text("test")
 
