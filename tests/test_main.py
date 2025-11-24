@@ -47,15 +47,15 @@ class TestAppState:
 class TestModelLoader:
     """Tests for ModelLoader"""
 
-    @patch('main.SentenceTransformer')
+    @patch('api_services.model_loader.SentenceTransformer')
     def test_load(self, mock_transformer):
-        """Test model loading"""
+        """Test model loading with proper mock"""
         mock_model = Mock()
         mock_transformer.return_value = mock_model
 
-        result = ModelLoader.load("test-model")
+        result = ModelLoader.load("all-MiniLM-L6-v2")
 
-        mock_transformer.assert_called_once_with("test-model")
+        mock_transformer.assert_called_once_with("all-MiniLM-L6-v2")
         assert result == mock_model
 
 

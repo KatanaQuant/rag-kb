@@ -10,6 +10,9 @@ from pathlib import Path
 def test_kb_path_in_environment_config_loader():
     """Test that EnvironmentConfigLoader has _load_path_config method"""
     loader_file = Path(__file__).parent.parent / "api" / "environment_config_loader.py"
+    if not loader_file.exists():
+        # Try without api/ prefix (files are in /app/ in Docker)
+        loader_file = Path(__file__).parent.parent / "environment_config_loader.py"
     content = loader_file.read_text()
 
     # Check that _load_path_config method is defined
@@ -24,6 +27,8 @@ def test_kb_path_in_environment_config_loader():
 def test_kb_path_config_is_used_in_loader():
     """Test that load() method calls _load_path_config"""
     loader_file = Path(__file__).parent.parent / "api" / "environment_config_loader.py"
+    if not loader_file.exists():
+        loader_file = Path(__file__).parent.parent / "environment_config_loader.py"
     content = loader_file.read_text()
 
     # Find the load() method
@@ -40,6 +45,8 @@ def test_kb_path_config_is_used_in_loader():
 def test_get_path_has_tilde_expansion():
     """Test that _get_path implementation includes tilde expansion"""
     loader_file = Path(__file__).parent.parent / "api" / "environment_config_loader.py"
+    if not loader_file.exists():
+        loader_file = Path(__file__).parent.parent / "environment_config_loader.py"
     content = loader_file.read_text()
 
     # Check for expanduser() call
@@ -50,6 +57,8 @@ def test_get_path_has_tilde_expansion():
 def test_get_path_has_absolute_conversion():
     """Test that _get_path implementation converts to absolute paths"""
     loader_file = Path(__file__).parent.parent / "api" / "environment_config_loader.py"
+    if not loader_file.exists():
+        loader_file = Path(__file__).parent.parent / "environment_config_loader.py"
     content = loader_file.read_text()
 
     # Check for resolve() or is_absolute() check
@@ -60,6 +69,8 @@ def test_get_path_has_absolute_conversion():
 def test_get_path_returns_path_object():
     """Test that _get_path returns Path object"""
     loader_file = Path(__file__).parent.parent / "api" / "environment_config_loader.py"
+    if not loader_file.exists():
+        loader_file = Path(__file__).parent.parent / "environment_config_loader.py"
     content = loader_file.read_text()
 
     # Check function signature

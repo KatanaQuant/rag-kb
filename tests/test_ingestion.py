@@ -201,9 +201,9 @@ class TestExtractionRouter:
         """Test extractor mapping"""
         extractor = ExtractionRouter()
         assert '.pdf' in extractor.extractors
-        assert '.txt' in extractor.extractors
         assert '.md' in extractor.extractors
         assert '.docx' in extractor.extractors
+        assert '.py' in extractor.extractors  # Code files
 
     def test_validate_extension(self):
         """Test extension validation"""
@@ -213,14 +213,14 @@ class TestExtractionRouter:
             extractor._validate_extension('.xyz')
 
     def test_extract_text_file(self, tmp_path):
-        """Test extracting text file"""
+        """Test extracting markdown file"""
         extractor = ExtractionRouter()
-        file_path = tmp_path / "test.txt"
-        file_path.write_text("test")
+        file_path = tmp_path / "test.md"
+        file_path.write_text("# Test\n\nTest content")
 
         result = extractor.extract(file_path)
-        assert result.page_count == 1
-        assert result.method == 'text'
+        assert result.page_count >= 1
+        assert result.method in ['docling_markdown', 'markdown']  # Docling or fallback
 
 
 class TestTextChunker:
@@ -462,10 +462,10 @@ class TestDocumentProcessor:
         assert len(hash_val) == 64
 
     def test_process_text_file(self, tmp_path):
-        """Test processing text file"""
+        """Test processing markdown file"""
         processor = DocumentProcessor()
-        file_path = tmp_path / "test.txt"
-        content = "A" * 2000  # Enough for multiple chunks
+        file_path = tmp_path / "test.md"
+        content = "# Test\n\n" + "A" * 2000  # Enough for multiple chunks
         file_path.write_text(content)
 
         file_hash = FileHasher.hash_file(file_path)

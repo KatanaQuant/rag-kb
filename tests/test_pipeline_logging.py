@@ -101,7 +101,7 @@ class TestPipelineLogging:
         # Verify: Should log [Chunk] with chunk count
         captured = capsys.readouterr()
         assert "[Chunk]" in captured.out
-        assert "2 chunks created" in captured.out
+        assert "2 chunks complete" in captured.out
 
     @patch('services.pipeline_coordinator.DocumentFile')
     def test_forced_file_always_chunks(self, mock_doc_class, mock_services, mock_doc_file, capsys):

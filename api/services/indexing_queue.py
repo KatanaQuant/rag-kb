@@ -34,10 +34,12 @@ class QueueItem:
 class IndexingQueue:
     """Priority queue for document indexing with pause/resume support
 
-    Thread-safe implementation using PriorityQueue.
+    Thread-safe implementation using PriorityQueue with duplicate detection.
+    Tracks queued files to prevent duplicate processing.
+
     Follows Sandi Metz rules:
     - < 100 lines
-    - 3 instance variables
+    - 4 instance variables
     - Methods < 5 lines (mostly)
     """
 
@@ -45,9 +47,17 @@ class IndexingQueue:
         self.queue = PriorityQueue()
         self.paused = False
         self.lock = threading.Lock()
+        self.queued_files: set[Path] = set()  # Track files currently in queue
 
     def add(self, path: Path, priority: Priority = Priority.NORMAL, force: bool = False):
-        """Add file to queue with priority"""
+        """Add file to queue with priority (skip if already queued)"""
+        with self.lock:
+            # Check if already queued (unless force=True)
+            if not force and path in self.queued_files:
+                return  # Silent skip - already queued
+
+            self.queued_files.add(path)
+
         item = QueueItem(priority=priority.value, path=path, force=force)
         self.queue.put(item)
 
@@ -61,13 +71,18 @@ class IndexingQueue:
 
         Returns None if paused or queue empty.
         Blocks for up to timeout seconds if queue not empty.
+        Removes item from tracking set.
         """
         with self.lock:
             if self.paused:
                 return None
 
         try:
-            return self.queue.get(timeout=timeout)
+            item = self.queue.get(timeout=timeout)
+            # Remove from tracking set when dequeued
+            with self.lock:
+                self.queued_files.discard(item.path)
+            return item
         except Empty:
             return None
 
@@ -95,9 +110,12 @@ class IndexingQueue:
         return self.queue.empty()
 
     def clear(self):
-        """Clear all items from queue"""
+        """Clear all items from queue and tracking set"""
         while not self.queue.empty():
             try:
                 self.queue.get_nowait()
             except Empty:
                 break
+
+        with self.lock:
+            self.queued_files.clear()

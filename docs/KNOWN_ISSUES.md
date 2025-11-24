@@ -352,6 +352,133 @@ The VectorStore and VectorRepository implementations use auto-commit for operati
 
 ---
 
+## 7. ~~File Watcher Re-queues Files Already in Processing Pipeline~~ **FIXED in v0.13.1-alpha**
+
+**Issue:** The file watcher could detect a file as "changed" and re-queue it even while it was currently being processed in the chunking or embedding pipeline, causing unnecessary duplicate processing.
+
+**Example from Logs:**
+```
+[Embed] Trades, Quotes & Prices - Jean-Philippe Bouchaud.pdf | 96/631 (15%) | ...
+Queueing 1 changed file(s) for processing
+  Queued: Trades, Quotes & Prices - Jean-Philippe Bouchaud.pdf
+[Embed] Trades, Quotes & Prices - Jean-Philippe Bouchaud.pdf | 101/631 (16%) | ...
+```
+
+The file was queued again while it was at 15% of embedding, resulting in it being processed twice unnecessarily.
+
+**Root Cause:**
+
+The file watcher ([watcher.py:85-108](../api/watcher.py#L85-L108)) detects file system modification events (`on_modified`) but didn't check if the file was already in the processing pipeline before queuing:
+
+1. File is being read during embedding (or any file access during processing)
+2. OS updates the file's access timestamp or generates a modification event
+3. Watchdog triggers `on_modified` event
+4. File watcher queues the file again via `IndexingCoordinator._queue_files()` ([watcher.py:144-159](../api/watcher.py#L144-L159))
+5. IndexingQueue had **no duplicate detection**
+6. File gets added to queue again, even though it's actively being processed
+
+**Fix Applied (v0.13.1-alpha):**
+
+Implemented **Layer 2: Indexing Queue Duplicate Detection** from the solution proposals below.
+
+The IndexingQueue now tracks queued files in a set ([services/indexing_queue.py:50](../api/services/indexing_queue.py#L50)):
+- Files are added to `queued_files` set when queued
+- Duplicate add attempts are silently skipped (unless `force=True`)
+- Files are removed from tracking set when dequeued
+- Clear operation resets tracking set
+
+This prevents:
+- EPUB files from being re-queued after conversion moves them to `original/`
+- Files being re-queued during active processing
+- Duplicate queue entries from rapid file system events
+
+**Test Coverage:**
+- [tests/test_indexing_queue.py:169-215](../tests/test_indexing_queue.py#L169-L215) - Duplicate detection tests
+
+**Ideal Solution:**
+
+Add pipeline-aware duplicate detection at multiple layers:
+
+**Layer 1: File Watcher** (prevention)
+```python
+class IndexingCoordinator:
+    def __init__(self, queue, collector, batch_size, pipeline_monitor):
+        self.pipeline_monitor = pipeline_monitor  # NEW: Check what's processing
+
+    def _queue_files(self, files: Set[Path]):
+        for file_path in files_list:
+            # NEW: Skip if already in pipeline
+            if self.pipeline_monitor.is_processing(file_path):
+                print(f"  ⊘ Skipped {file_path.name}: already in pipeline")
+                continue
+
+            self.queue.add(file_path, priority=Priority.NORMAL)
+```
+
+**Layer 2: Indexing Queue** (duplicate detection)
+```python
+class IndexingQueue:
+    def __init__(self):
+        self.queue = PriorityQueue()
+        self.queued_files: Set[Path] = set()  # NEW: Track queued files
+
+    def add(self, path: Path, priority: Priority = Priority.NORMAL):
+        # NEW: Check if already queued
+        if path in self.queued_files:
+            return  # Silent skip - already queued
+
+        self.queued_files.add(path)
+        item = QueueItem(priority=priority.value, path=path)
+        self.queue.put(item)
+
+    def get(self, timeout: float = 1.0) -> Optional[QueueItem]:
+        item = self.queue.get(timeout=timeout)
+        self.queued_files.discard(item.path)  # NEW: Remove from tracking
+        return item
+```
+
+**Layer 3: Pipeline Coordinator** (final check)
+Already has this via resumable processing - checks if file hash changed before reprocessing.
+
+**Alternative Solution (Quick Fix):**
+
+Ignore modification events for recently processed files:
+```python
+class FileChangeCollector:
+    def __init__(self):
+        self.changed_files: Set[Path] = set()
+        self.recently_processed: Dict[Path, float] = {}  # path -> timestamp
+        self.cooldown_seconds = 300  # 5 minutes
+
+    def add(self, file_path: Path):
+        # Skip if processed within cooldown period
+        last_processed = self.recently_processed.get(file_path, 0)
+        if time.time() - last_processed < self.cooldown_seconds:
+            return  # Skip - too soon
+
+        with self.lock:
+            self.changed_files.add(file_path)
+```
+
+**Previous Workaround (before fix):**
+
+The resumable processing system ([ingestion/processing.py](../api/ingestion/processing.py)) provided partial protection:
+- Files with matching hash were skipped during chunking
+- No chunks added = no embedding performed
+- But the file still went through the queue unnecessarily
+
+So the impact was **mostly wasted queue time** rather than actual duplicate processing.
+
+**Status:** ✅ **FIXED in v0.13.1-alpha** - IndexingQueue now has duplicate detection
+
+**Related:**
+- [watcher.py:85-108](../api/watcher.py#L85-L108) - File event handlers
+- [watcher.py:144-159](../api/watcher.py#L144-L159) - Queue coordination
+- [services/indexing_queue.py:52-62](../api/services/indexing_queue.py#L52-L62) - Queue add logic with duplicate detection
+- [ingestion/processing.py](../api/ingestion/processing.py) - Resumable processing (additional safety layer)
+
+---
+
 ## Contributing
 
 Found a new issue? Please document it here with:

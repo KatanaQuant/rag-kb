@@ -4,7 +4,7 @@ from typing import List, Dict, Tuple, Optional
 import hashlib
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import sys
 import warnings
@@ -89,7 +89,7 @@ class ProcessingProgressTracker:
 
     def _create_progress(self, file_path: str, file_hash: str) -> ProcessingProgress:
         """Create new progress record"""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         self.conn.execute("""
             INSERT INTO processing_progress
             (file_path, file_hash, started_at, last_updated)
@@ -100,7 +100,7 @@ class ProcessingProgressTracker:
 
     def update_progress(self, file_path: str, chunks_processed: int, last_chunk_end: int):
         """Update progress after batch"""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         self.conn.execute("""
             UPDATE processing_progress
             SET chunks_processed = ?, last_chunk_end = ?, last_updated = ?
@@ -110,7 +110,7 @@ class ProcessingProgressTracker:
 
     def mark_completed(self, file_path: str):
         """Mark as completed"""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         self.conn.execute("""
             UPDATE processing_progress
             SET status = 'completed', completed_at = ?, last_updated = ?
@@ -120,7 +120,7 @@ class ProcessingProgressTracker:
 
     def mark_failed(self, file_path: str, error_message: str):
         """Mark as failed"""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         self.conn.execute("""
             UPDATE processing_progress
             SET status = 'failed', error_message = ?, last_updated = ?

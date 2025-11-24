@@ -188,6 +188,153 @@ async def repair_orphans():
             detail=f"Failed to repair orphans: {str(e)}"
         )
 
+@app.get("/database/check-duplicates")
+async def check_database_duplicates():
+    """Check for duplicate chunks in the database
+
+    Returns statistics about duplicate chunks within documents and across documents.
+    Within-document duplicates are usually problematic and should be cleaned up.
+    Cross-document duplicates may be intentional (shared content).
+    """
+    try:
+        conn = state.core.vector_store.conn
+        cursor = conn.cursor()
+
+        # Get total stats
+        cursor.execute("SELECT COUNT(*) FROM chunks")
+        total_chunks = cursor.fetchone()[0]
+
+        cursor.execute("SELECT COUNT(*) FROM documents")
+        total_docs = cursor.fetchone()[0]
+
+        # Check for duplicate chunks within same document
+        cursor.execute("""
+            SELECT document_id, content, COUNT(*) as cnt
+            FROM chunks
+            GROUP BY document_id, content
+            HAVING cnt > 1
+        """)
+        doc_duplicates = cursor.fetchall()
+
+        # Check for duplicate content across documents (limited to top 10)
+        cursor.execute("""
+            SELECT content, COUNT(*) as cnt, COUNT(DISTINCT document_id) as doc_count
+            FROM chunks
+            GROUP BY content
+            HAVING doc_count > 1
+            ORDER BY cnt DESC
+            LIMIT 10
+        """)
+        cross_doc_duplicates = cursor.fetchall()
+
+        # Calculate total duplicate chunks
+        duplicate_chunks_count = sum(cnt - 1 for _, _, cnt in doc_duplicates)
+
+        return {
+            "status": "success",
+            "total_documents": total_docs,
+            "total_chunks": total_chunks,
+            "within_document_duplicates": {
+                "count": len(doc_duplicates),
+                "total_duplicate_chunks": duplicate_chunks_count,
+                "impact": "These are usually problematic and should be cleaned"
+            },
+            "cross_document_duplicates": {
+                "count": len(cross_doc_duplicates),
+                "top_10": [
+                    {
+                        "content_preview": content[:100],
+                        "occurrences": cnt,
+                        "documents": doc_count
+                    }
+                    for content, cnt, doc_count in cross_doc_duplicates
+                ],
+                "impact": "May be intentional (shared content like headers, footers)"
+            },
+            "recommendation": "Run /database/cleanup-duplicates to remove within-document duplicates" if duplicate_chunks_count > 0 else "Database is clean"
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to check duplicates: {str(e)}"
+        )
+
+@app.post("/database/cleanup-duplicates")
+async def cleanup_database_duplicates():
+    """Clean up duplicate chunks within documents
+
+    Removes duplicate chunks that appear multiple times within the same document.
+    Keeps the first occurrence and deletes the rest.
+    Cross-document duplicates are NOT removed (may be intentional).
+
+    Returns the number of duplicate chunks removed.
+    """
+    try:
+        conn = state.core.vector_store.conn
+        cursor = conn.cursor()
+
+        # Find duplicate chunks within same document
+        cursor.execute("""
+            SELECT document_id, content, MIN(id) as keep_id, COUNT(*) as cnt
+            FROM chunks
+            GROUP BY document_id, content
+            HAVING cnt > 1
+        """)
+        doc_duplicates = cursor.fetchall()
+
+        if not doc_duplicates:
+            return {
+                "status": "success",
+                "duplicates_found": 0,
+                "chunks_deleted": 0,
+                "message": "No duplicate chunks found within documents"
+            }
+
+        deleted_count = 0
+
+        for doc_id, content, keep_id, count in doc_duplicates:
+            # Delete all chunks with same document_id + content EXCEPT the one with keep_id
+            cursor.execute("""
+                DELETE FROM chunks
+                WHERE document_id = ? AND content = ? AND id != ?
+            """, (doc_id, content, keep_id))
+
+            deleted = count - 1
+            deleted_count += deleted
+
+        # Clean up orphaned vector and FTS entries
+        cursor.execute("""
+            DELETE FROM vec_chunks
+            WHERE chunk_id NOT IN (SELECT id FROM chunks)
+        """)
+
+        cursor.execute("""
+            DELETE FROM fts_chunks
+            WHERE chunk_id NOT IN (SELECT id FROM chunks)
+        """)
+
+        conn.commit()
+
+        # Get updated stats
+        cursor.execute("SELECT COUNT(*) FROM chunks")
+        final_chunks = cursor.fetchone()[0]
+
+        return {
+            "status": "success",
+            "duplicates_found": len(doc_duplicates),
+            "chunks_deleted": deleted_count,
+            "final_chunk_count": final_chunks,
+            "message": f"Successfully removed {deleted_count} duplicate chunks from {len(doc_duplicates)} documents"
+        }
+
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to cleanup duplicates: {str(e)}"
+        )
+
 @app.get("/document/{filename}", response_model=DocumentInfoResponse)
 async def get_document_info(filename: str):
     """Get document information including extraction method"""

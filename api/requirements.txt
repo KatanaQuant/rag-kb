@@ -3,9 +3,10 @@ uvicorn[standard]>=0.27.0
 pydantic>=2.7.0
 
 # CPU-only PyTorch (avoid 700MB+ CUDA downloads)
+# Note: Python 3.13 requires torch 2.6.0+ and torchvision 0.21.0+
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.5.1+cpu
-torchvision==0.20.1+cpu
+torch>=2.5.1
+torchvision>=0.21.0
 
 # Sentence transformers (will use CPU torch above)
 sentence-transformers>=3.0.0

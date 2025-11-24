@@ -8,12 +8,15 @@
 
 Built with FastAPI, sqlite-vec, and sentence-transformers.
 
-**Current Version**: v0.13.0-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
+**Current Version**: v0.14.0-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
 
 ---
 
 ## Features
 
+- **Python 3.13**: Modern Python for 5-10% better performance and improved debugging (v0.14.0+)
+- **Database Maintenance**: Duplicate detection and cleanup webhooks for database health (v0.14.0+)
+- **Queue Duplicate Detection**: Prevents redundant file processing with smart tracking (v0.14.0+)
 - **Structured Progress Logging**: Real-time progress tracking with timing, rates, and ETA across all pipeline stages (v0.13.0+)
 - **Periodic Heartbeat**: Background updates every 60s for long-running operations (v0.13.0+)
 - **Configurable Storage**: Choose your knowledge base location via KNOWLEDGE_BASE_PATH (v0.12.0+)
@@ -99,7 +102,7 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 # 1. Clone and setup
 git clone https://github.com/KatanaQuant/rag-kb.git
 cd rag-kb
-git checkout v0.13.0-alpha
+git checkout v0.14.0-alpha
 
 # 2. Add your documents
 mkdir -p knowledge_base/{books,notes,docs}
@@ -186,7 +189,7 @@ docker-compose down
 git fetch --tags
 
 # 4. Checkout the desired version
-git checkout v0.13.0-alpha
+git checkout v0.14.0-alpha
 
 # 5. Rebuild Docker image (required for dependency/system updates)
 docker-compose build --no-cache
@@ -231,7 +234,7 @@ git checkout $(git describe --tags --abbrev=0)
 
 **Specific Version**:
 ```bash
-git checkout v0.13.0-alpha
+git checkout v0.14.0-alpha
 ```
 
 **Development Branch** (not recommended for production):
@@ -327,7 +330,9 @@ curl http://localhost:8000/documents
 - `POST /indexing/priority/{path}` - Fast-track file
 - `GET /indexing/status` - Check progress
 
-**Maintenance**:
+**Maintenance** (v0.14.0+):
+- `POST /maintenance/check-duplicates` - Detect duplicate chunks
+- `POST /maintenance/cleanup-duplicates` - Remove duplicates
 - `POST /repair-orphans` - Repair orphaned files
 - `DELETE /document/{path}` - Remove document
 - `POST /index` - Force reindex

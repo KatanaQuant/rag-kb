@@ -214,9 +214,10 @@ class TestDocumentProcessor:
 
     @pytest.fixture
     def temp_file(self):
-        """Create temporary text file"""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
-            f.write("Test content for processing\n" * 100)
+        """Create temporary markdown file"""
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+            f.write("# Test Document\n\n")
+            f.write("Test content for processing\n\n" * 100)
             temp_path = Path(f.name)
 
         yield temp_path

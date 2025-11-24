@@ -165,3 +165,51 @@ class TestIndexingQueue:
         assert item is None
         assert elapsed >= 0.1
         assert elapsed < 0.3  # Should not wait much longer
+
+    def test_duplicate_detection(self):
+        """Adding same file twice only queues it once"""
+        queue = IndexingQueue()
+        path = Path("test.pdf")
+
+        queue.add(path)
+        queue.add(path)  # Duplicate - should be skipped
+
+        assert queue.size() == 1
+        item = queue.get()
+        assert item.path == path
+        assert queue.is_empty()
+
+    def test_duplicate_detection_with_force(self):
+        """Force flag bypasses duplicate detection"""
+        queue = IndexingQueue()
+        path = Path("test.pdf")
+
+        queue.add(path)
+        queue.add(path, force=True)  # Force - should be added
+
+        assert queue.size() == 2
+
+    def test_duplicate_tracking_after_get(self):
+        """File can be re-queued after being dequeued"""
+        queue = IndexingQueue()
+        path = Path("test.pdf")
+
+        queue.add(path)
+        item = queue.get()
+        assert item.path == path
+
+        # Should be able to add again after processing
+        queue.add(path)
+        assert queue.size() == 1
+
+    def test_clear_resets_duplicate_tracking(self):
+        """clear() resets duplicate tracking"""
+        queue = IndexingQueue()
+        path = Path("test.pdf")
+
+        queue.add(path)
+        queue.clear()
+
+        # Should be able to add again after clear
+        queue.add(path)
+        assert queue.size() == 1

@@ -224,7 +224,13 @@ class DocumentProcessor:
 
     def _handle_file_not_found(self, doc_file: DocumentFile) -> List[Dict]:
         """Handle file not found during processing"""
-        print(f"Skipping (file moved): {doc_file.name}")
+        import traceback
+        print(f"\nFile not found during processing: {doc_file.name}")
+        print(f"Path: {doc_file.path}")
+        print(f"File exists check: {doc_file.path.exists()}")
+        print("Stack trace:")
+        traceback.print_exc()
+        print(f"Skipping (file moved/deleted): {doc_file.name}\n")
         return []
 
     def _handle_processing_error(self, doc_file: DocumentFile, error: Exception) -> List[Dict]:

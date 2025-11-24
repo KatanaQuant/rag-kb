@@ -3,7 +3,7 @@
 # ============================================================================
 # Stage 1: Builder - Install and compile Python packages
 # ============================================================================
-FROM python:3.11-slim AS builder
+FROM python:3.13-slim AS builder
 
 WORKDIR /build
 
@@ -31,7 +31,7 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # ============================================================================
 # Stage 2: Runtime - Minimal runtime environment
 # ============================================================================
-FROM python:3.11-slim AS runtime
+FROM python:3.13-slim AS runtime
 
 WORKDIR /app
 
@@ -67,8 +67,8 @@ COPY . .
 RUN mkdir -p /app/data /app/.cache/deepsearch_glm
 
 # Create model directories and make them writable (in venv)
-RUN mkdir -p /opt/venv/lib/python3.11/site-packages/deepsearch_glm/resources/models/crf/part-of-speech && \
-    mkdir -p /opt/venv/lib/python3.11/site-packages/rapidocr/models
+RUN mkdir -p /opt/venv/lib/python3.13/site-packages/deepsearch_glm/resources/models/crf/part-of-speech && \
+    mkdir -p /opt/venv/lib/python3.13/site-packages/rapidocr/models
 
 # Run as non-root user for security
 RUN useradd -m -u 1000 appuser && \
