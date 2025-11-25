@@ -68,3 +68,5 @@ core.*
 
 # E2E testing
 e2e-test-files/
+e2e-test.sh
+*.log

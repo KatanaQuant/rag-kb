@@ -61,10 +61,10 @@ class IndexingQueue:
         item = QueueItem(priority=priority.value, path=path, force=force)
         self.queue.put(item)
 
-    def add_many(self, paths: List[Path], priority: Priority = Priority.NORMAL):
+    def add_many(self, paths: List[Path], priority: Priority = Priority.NORMAL, force: bool = False):
         """Add multiple files to queue"""
         for path in paths:
-            self.add(path, priority)
+            self.add(path, priority, force=force)
 
     def get(self, timeout: float = 1.0) -> Optional[QueueItem]:
         """Get next item from queue (respects pause state)

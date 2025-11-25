@@ -122,7 +122,7 @@ class PipelineCoordinator:
             # Start heartbeat for long-running operations
             self.progress_logger.start_heartbeat(stage, item.path.name, interval=60)
 
-            chunks = self.processor.process_file(doc_file)
+            chunks = self.processor.process_file(doc_file, force=item.force)
 
             if not chunks:
                 print(f"[{stage}] {item.path.name} - no chunks extracted")

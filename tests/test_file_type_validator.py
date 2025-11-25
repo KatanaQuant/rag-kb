@@ -6,11 +6,8 @@ Tests use TDD approach - written before implementation.
 import pytest
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from ingestion.file_type_validator import (
-    FileTypeValidator,
-    ValidationResult,
-    ValidationAction
-)
+from ingestion.file_type_validator import FileTypeValidator
+from ingestion.validation_result import ValidationResult, ValidationAction
 
 
 class TestFileTypeValidator:

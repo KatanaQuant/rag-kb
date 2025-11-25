@@ -27,10 +27,11 @@ This document outlines planned features and improvements for the RAG Knowledge B
     - [11. Web UI for Knowledge Base Management](#11-web-ui-for-knowledge-base-management)
     - [12. Multi-Vector Representations & Incremental Updates](#12-multi-vector-representations--incremental-updates)
     - [13. Async Database Migration](#13-async-database-migration)
-    - [14. Chunking Strategy Evaluation & Improvement](#14-chunking-strategy-evaluation--improvement)
+    - [14. Startup Logging Verbosity Reduction](#14-startup-logging-verbosity-reduction)
+    - [15. Chunking Strategy Evaluation & Improvement](#15-chunking-strategy-evaluation--improvement)
   - [Low Priority / Future](#low-priority--future)
-    - [15. Advanced Metadata Extraction](#15-advanced-metadata-extraction)
-    - [16. Multi-Language Support](#16-multi-language-support)
+    - [16. Advanced Metadata Extraction](#16-advanced-metadata-extraction)
+    - [17. Multi-Language Support](#17-multi-language-support)
 - [Completed Features](#completed-features)
   - [v0.14.0-alpha](#v0140-alpha)
   - [v0.13.0-alpha](#v0130-alpha)
@@ -48,9 +49,9 @@ This document outlines planned features and improvements for the RAG Knowledge B
 
 ---
 
-## Current Version: v0.14.0-alpha
+## Current Version: v0.15.0-alpha
 
-**Status**: Production-ready with Python 3.13 upgrade, database maintenance tools, and improved reliability
+**Status**: Production-ready with Sandi Metz POODR refactoring, improved code maintainability, and 87% reduction in main.py complexity
 
 ---
 
@@ -61,10 +62,10 @@ RAG-KB is approximately **70-80% ready** for a stable v1.0.0 release. The core s
 ### Roadmap Overview
 
 ```
-v0.14.0-alpha (CURRENT)
-    └─ Python 3.13 upgrade, database maintenance, queue duplicate detection
+v0.15.0-alpha (CURRENT)
+    └─ Sandi Metz POODR refactoring, route extraction, code quality improvements
 
-v0.15.0-alpha (Next - 4-8 weeks)
+v0.16.0-alpha (Next - 4-8 weeks)
     └─ Fix API blocking during indexing (async database migration)
 
 v0.16.0-beta (Feature Freeze - 6-10 weeks)
@@ -260,11 +261,34 @@ Migrate blocking database calls to async I/O (using `aiosqlite`) to fix slow API
 
 ---
 
-#### 14. Chunking Strategy Evaluation & Improvement
+#### 14. Startup Logging Verbosity Reduction
 
-**Target**: v0.15.0-alpha or v0.16.0-alpha
+**Target**: v0.16.0-alpha
+
+Reduce log verbosity during startup. Currently each "Skip: already indexed" file gets its own log line, creating excessive noise during startup scan.
+
+**Improvement**:
+- Clump skip messages together instead of individual lines
+- Show periodic summary every few seconds: "Scanned 500 files, 480 skipped (already indexed), 20 pending..."
+- Full verbose logging available via debug flag for troubleshooting
+- Individual skip lines only in DEBUG mode
+
+**User Impact**: Cleaner logs during normal operation, faster visual feedback on startup progress
+
+---
+
+#### 15. Chunking Strategy Evaluation & Improvement
+
+**Target**: v0.16.0-alpha or v0.17.0-alpha
 
 Systematic evaluation of chunking quality with metrics and content-aware strategies. Philosophy: chunking quality > embedding model quality. Improves retrieval for plain text and specialized content types.
+
+**Research Topics**:
+- **Embedding-Based Semantic Segmentation**: Instead of fixed-size chunks, compute embeddings for consecutive text segments and measure cosine similarity between adjacent chunks. Start new chunk boundaries when similarity drops below threshold, indicating semantic topic shift. This approach creates variable-size chunks that align with natural topic boundaries.
+  - **Benefits**: More coherent chunks, better retrieval accuracy, natural boundary detection
+  - **Considerations**: Requires embedding computation during chunking (slower), needs GPU for acceptable performance
+  - **Optimal timing**: After GPU support infrastructure (Roadmap #6) is implemented
+  - **User suggestion**: "Split docs into chunks, compute embeddings for each chunk, measure similarity between consecutive chunks. If 2 adjacent units are semantically unrelated, start a new chunk" (using cosine distance)
 
 **See**: [internal_planning/CHUNKING_STRATEGY_EVALUATION.md](../internal_planning/CHUNKING_STRATEGY_EVALUATION.md)
 
@@ -272,12 +296,12 @@ Systematic evaluation of chunking quality with metrics and content-aware strateg
 
 ### Low Priority / Future
 
-#### 15. Advanced Metadata Extraction
+#### 16. Advanced Metadata Extraction
 - Author, publication date, categories
 - Automatic tagging via LLM
 - Relationship mapping between documents
 
-#### 16. Multi-Language Support
+#### 17. Multi-Language Support
 - Non-English document processing
 - Language detection
 - Multilingual embedding models
@@ -285,6 +309,16 @@ Systematic evaluation of chunking quality with metrics and content-aware strateg
 ---
 
 ## Completed Features
+
+### v0.15.0-alpha
+- **Sandi Metz POODR Refactoring**: Applied Practical Object-Oriented Design principles throughout codebase
+- **Route Extraction**: Split main.py (684 → 89 LOC, 87% reduction) into 6 focused route modules
+- **Law of Demeter Compliance**: Added 9 delegation methods to AppState to eliminate train wreck chains
+- **Strategy Pattern**: Reduced FileTypeValidator complexity from CC:12 (critical) to CC:5 (acceptable)
+- **Extractor Modularization**: Split 747-line extractors.py into 9 focused modules following Single Responsibility Principle
+- **Code Quality**: Achieved 100% A-grade code complexity across all refactored modules (MI: 84-100)
+- **Test Coverage**: Added 37 new tests for refactored components, all passing
+- **Maintainability**: Improved code organization for easier navigation, testing, and modification
 
 ### v0.14.0-alpha
 - **Python 3.13 Upgrade**: Migrated from Python 3.11 to Python 3.13 (5-10% performance improvement)

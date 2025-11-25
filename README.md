@@ -8,7 +8,7 @@
 
 Built with FastAPI, sqlite-vec, and sentence-transformers.
 
-**Current Version**: v0.14.0-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
+**Current Version**: v0.15.0-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
 
 ---
 

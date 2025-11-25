@@ -12,7 +12,6 @@ from ingestion import (
     TextFileExtractor,
     MarkdownExtractor,
     ExtractionRouter,
-    TextChunker,
     DocumentProcessor,
     DatabaseConnection,
     SchemaManager,
@@ -223,160 +222,6 @@ class TestExtractionRouter:
         assert result.method in ['docling_markdown', 'markdown']  # Docling or fallback
 
 
-class TestTextChunker:
-    """Tests for TextChunker"""
-
-    def test_chunk_small_text(self):
-        """Test chunking small text"""
-        config = ChunkConfig(size=100, overlap=20, min_size=10)
-        chunker = TextChunker(config)
-
-        text = "A" * 50  # Small text
-        chunks = chunker.chunk(text)
-
-        assert len(chunks) == 1
-        assert chunks[0].content == text
-
-    def test_chunk_large_text(self):
-        """Test chunking large text"""
-        config = ChunkConfig(size=100, overlap=20, min_size=10, semantic=False)
-        chunker = TextChunker(config)
-
-        text = "A" * 250  # Large text
-        chunks = chunker.chunk(text)
-
-        assert len(chunks) > 1
-
-    def test_chunk_with_overlap(self):
-        """Test overlap works correctly"""
-        config = ChunkConfig(size=100, overlap=20, min_size=10, semantic=False)
-        chunker = TextChunker(config)
-
-        text = "A" * 200
-        chunks = chunker.chunk(text)
-
-        # Should have overlap
-        assert len(chunks) >= 2
-
-    def test_min_size_filter(self):
-        """Test minimum size filtering"""
-        config = ChunkConfig(size=100, overlap=0, min_size=50)
-        chunker = TextChunker(config)
-
-        text = "A" * 30  # Below min size
-        chunks = chunker.chunk(text)
-
-        assert len(chunks) == 0
-
-    def test_page_metadata(self):
-        """Test page metadata is preserved"""
-        chunker = TextChunker()
-        text = "A" * 100
-        chunks = chunker.chunk(text, page=5)
-
-        assert all(c.page == 5 for c in chunks)
-
-
-class TestSemanticChunkingStrategy:
-    """Tests for SemanticChunkingStrategy"""
-
-    def test_chunk_on_paragraphs(self):
-        """Test semantic chunking splits on paragraphs"""
-        from ingestion import SemanticChunkingStrategy
-
-        config = ChunkConfig(size=100, overlap=0, min_size=10)
-        strategy = SemanticChunkingStrategy(config)
-
-        text = "First paragraph.\n\nSecond paragraph.\n\nThird paragraph."
-        chunks = strategy.chunk(text, page=1)
-
-        assert len(chunks) >= 1
-        assert all(isinstance(c, ChunkData) for c in chunks)
-        assert all(c.page == 1 for c in chunks)
-
-    def test_respects_max_size(self):
-        """Test semantic chunking respects max size"""
-        from ingestion import SemanticChunkingStrategy
-
-        config = ChunkConfig(size=50, overlap=0, min_size=10)
-        strategy = SemanticChunkingStrategy(config)
-
-        # Two large paragraphs that exceed size
-        text = "A" * 60 + "\n\n" + "B" * 60
-        chunks = strategy.chunk(text, page=1)
-
-        # Should create separate chunks
-        assert len(chunks) >= 2
-
-    def test_filters_by_min_size(self):
-        """Test semantic chunking filters by min size"""
-        from ingestion import SemanticChunkingStrategy
-
-        config = ChunkConfig(size=100, overlap=0, min_size=50)
-        strategy = SemanticChunkingStrategy(config)
-
-        text = "Small.\n\nTiny."
-        chunks = strategy.chunk(text, page=1)
-
-        # All chunks should meet min_size or be filtered
-        assert all(len(c.content) >= 50 for c in chunks)
-
-
-class TestFixedChunkingStrategy:
-    """Tests for FixedChunkingStrategy"""
-
-    def test_fixed_size_chunks(self):
-        """Test fixed-size chunking"""
-        from ingestion import FixedChunkingStrategy
-
-        config = ChunkConfig(size=100, overlap=0, min_size=10)
-        strategy = FixedChunkingStrategy(config)
-
-        text = "A" * 250
-        chunks = strategy.chunk(text, page=1)
-
-        assert len(chunks) > 1
-        # Most chunks should be ~100 chars (except last)
-        assert all(len(c.content) <= 100 for c in chunks)
-
-    def test_chunk_overlap(self):
-        """Test chunking with overlap"""
-        from ingestion import FixedChunkingStrategy
-
-        config = ChunkConfig(size=100, overlap=20, min_size=10)
-        strategy = FixedChunkingStrategy(config)
-
-        text = "A" * 200
-        chunks = strategy.chunk(text, page=1)
-
-        # Should have overlap between chunks
-        assert len(chunks) >= 2
-
-    def test_preserves_page_metadata(self):
-        """Test page metadata is preserved"""
-        from ingestion import FixedChunkingStrategy
-
-        config = ChunkConfig(size=100, overlap=0, min_size=10)
-        strategy = FixedChunkingStrategy(config)
-
-        text = "A" * 250
-        chunks = strategy.chunk(text, page=5)
-
-        assert all(c.page == 5 for c in chunks)
-
-    def test_min_size_filter(self):
-        """Test minimum size filtering"""
-        from ingestion import FixedChunkingStrategy
-
-        config = ChunkConfig(size=100, overlap=0, min_size=50)
-        strategy = FixedChunkingStrategy(config)
-
-        text = "A" * 30  # Below min size
-        chunks = strategy.chunk(text, page=1)
-
-        assert len(chunks) == 0
-
-
 class TestMetadataEnricher:
     """Tests for MetadataEnricher"""
 
@@ -449,8 +294,8 @@ class TestDocumentProcessor:
         """Test supported extensions"""
         processor = DocumentProcessor()
         assert '.pdf' in processor.SUPPORTED_EXTENSIONS
-        assert '.txt' in processor.SUPPORTED_EXTENSIONS
         assert '.md' in processor.SUPPORTED_EXTENSIONS
+        assert '.py' in processor.SUPPORTED_EXTENSIONS  # Code files supported
 
     def test_get_file_hash(self, tmp_path):
         """Test file hash retrieval"""

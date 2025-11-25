@@ -11,12 +11,9 @@ import shutil
 from ingestion import (
     ProcessingProgressTracker,
     ProcessingProgress,
-    ChunkedTextProcessor,
     DocumentProcessor,
-    TextChunker,
     FileHasher
 )
-from config import ChunkConfig
 from domain_models import DocumentFile
 
 
@@ -55,13 +52,6 @@ def temp_db():
 def tracker(temp_db):
     """Create progress tracker"""
     return ProcessingProgressTracker(temp_db)
-
-
-@pytest.fixture
-def chunker():
-    """Create text chunker"""
-    config = ChunkConfig(size=100, overlap=20, min_size=10, semantic=False)
-    return TextChunker(config)
 
 
 class TestProcessingProgressTracker:
@@ -156,59 +146,6 @@ class TestProcessingProgressTracker:
         assert progress is None
 
 
-class TestChunkedTextProcessor:
-    """Test chunk-based text processing"""
-
-    def test_process_new_text(self, tracker, chunker):
-        """Test processing text from scratch"""
-        processor = ChunkedTextProcessor(chunker, tracker, batch_size=5)
-
-        text = "a" * 1000  # 1000 chars
-        chunks = processor.process_text("/test/file.txt", text, "hash123", page_num=1)
-
-        assert len(chunks) > 0
-        progress = tracker.get_progress("/test/file.txt")
-        assert progress.status == "completed"
-        assert progress.chunks_processed == len(chunks)
-
-    def test_resume_from_checkpoint(self, tracker, chunker):
-        """Test resuming from saved checkpoint"""
-        processor = ChunkedTextProcessor(chunker, tracker, batch_size=5)
-
-        # Simulate partial processing
-        tracker.start_processing("/test/file.txt", "hash123")
-        tracker.update_progress("/test/file.txt", 5, 400)
-
-        # Resume processing
-        full_text = "a" * 1000
-        chunks = processor.process_text("/test/file.txt", full_text, "hash123", page_num=1)
-
-        # Should only process remaining text
-        assert len(chunks) < len(chunker.chunk(full_text, 1))
-
-    def test_batch_commits(self, tracker, chunker):
-        """Test progress updated after each batch"""
-        processor = ChunkedTextProcessor(chunker, tracker, batch_size=3)
-
-        text = "a" * 500
-        processor.process_text("/test/file.txt", text, "hash123", page_num=1)
-
-        progress = tracker.get_progress("/test/file.txt")
-        # Should have multiple updates (batch commits)
-        assert progress.chunks_processed > 0
-        assert progress.status == "completed"
-
-    def test_empty_text(self, tracker, chunker):
-        """Test processing empty text"""
-        processor = ChunkedTextProcessor(chunker, tracker, batch_size=5)
-
-        chunks = processor.process_text("/test/file.txt", "", "hash123", page_num=1)
-
-        assert len(chunks) == 0
-        progress = tracker.get_progress("/test/file.txt")
-        assert progress.status == "completed"
-
-
 class TestDocumentProcessor:
     """Test end-to-end document processing"""
 
@@ -296,29 +233,3 @@ class TestDocumentProcessor:
 
         progress = tracker.get_progress(str(temp_file))
         assert progress.status == "completed"
-
-
-class TestIntegration:
-    """Integration tests"""
-
-    def test_full_workflow(self, tracker, chunker):
-        """Test complete workflow from start to finish"""
-        processor = ChunkedTextProcessor(chunker, tracker, batch_size=5)
-
-        # Start processing
-        text = "Test content " * 200
-        chunks = processor.process_text("/test/doc.pdf", text, "hash_v1", page_num=1)
-
-        # Verify completion
-        progress = tracker.get_progress("/test/doc.pdf")
-        assert progress.status == "completed"
-        assert len(chunks) > 0
-
-        # Should skip on second run
-        chunks2 = processor.process_text("/test/doc.pdf", text, "hash_v1", page_num=1)
-        assert len(chunks2) == len(chunks)  # Returns same chunks
-
-        # Should restart with new hash
-        new_text = text + " additional content " * 100  # Add significant content
-        chunks3 = processor.process_text("/test/doc.pdf", new_text, "hash_v2", page_num=1)
-        assert len(chunks3) > len(chunks)  # More chunks
