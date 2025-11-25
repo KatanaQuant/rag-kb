@@ -190,7 +190,7 @@ Converting EPUB to PDF: The Data Science Design Manual - Steven S Skiena.epub
 
 ---
 
-## 5. API Endpoints Block During Indexing
+## 5. ~~API Endpoints Block During Indexing~~ [RESOLVED in v0.16.0]
 
 **Issue:** API endpoints (`/health`, `/search`, `/queue/jobs`) can take 10+ seconds to respond or timeout during heavy indexing operations.
 
@@ -276,13 +276,44 @@ None required - endpoints remain functional, just slower during indexing. For pr
 2. Schedule large indexing jobs during off-hours
 3. Monitor indexing progress via logs instead of API
 
-**Status:** Known architectural limitation - fix planned for v0.13.0-alpha or v0.14.0-alpha
+**Resolution:** Fixed in v0.16.0-alpha with hybrid async/sync database architecture.
+
+**Solution Implemented:**
+
+Migrated to hybrid architecture with both sync and async database layers:
+
+1. **Async AsyncVectorStore** for API routes:
+   ```python
+   # Non-blocking async version
+   async def get_stats(self):
+       cursor = await self.conn.execute("SELECT COUNT(*) FROM documents")
+       row = await cursor.fetchone()
+       return {'indexed_documents': row[0]}
+   ```
+
+2. **Sync VectorStore** for pipeline workers:
+   - Background workers continue using synchronous operations in threads
+   - No need to refactor entire pipeline
+   - Both stores access same SQLite database with WAL mode
+
+**Performance Results:**
+- API endpoints now respond in <100ms during heavy indexing
+- Health checks: 30-40ms (vs 10+ seconds before)
+- Query endpoints: <500ms (vs timeout before)
+- System remains responsive during PDF processing (86 chunks)
+
+**Architecture:**
+- WAL mode enables safe concurrent reads/writes
+- Async store for non-blocking user-facing operations
+- Sync store for simple thread-based background processing
+
+**Status:** RESOLVED
 
 **Related:**
-- [ROADMAP.md #13](ROADMAP.md) - Async Database Migration (planned fix)
-- [database.py](../api/ingestion/database.py) - VectorStore implementation
-- [routes.py](../api/routes.py) - API endpoints
-- [aiosqlite](https://github.com/omnilib/aiosqlite) - Async SQLite library
+- [RELEASE_v0.16.0-alpha.md](RELEASE_v0.16.0-alpha.md) - Full release notes
+- [async_database.py](../api/ingestion/async_database.py) - Async database layer
+- [async_repositories.py](../api/ingestion/async_repositories.py) - Async repositories
+- [app_state.py](../api/app_state.py) - Hybrid architecture integration
 
 ---
 

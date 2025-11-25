@@ -38,15 +38,15 @@ from routes.queue import router as queue_router
 async def lifespan(app: FastAPI):
     """Application lifespan"""
     manager = StartupManager(state)
-    manager.initialize()
+    await manager.initialize()  # Now async
     yield
-    _cleanup()
+    await _cleanup()  # Make cleanup async too
 
-def _cleanup():
+async def _cleanup():
     """Cleanup resources using Law of Demeter compliant delegation"""
     state.stop_watcher()
     state.stop_indexing()
-    state.close_all_resources()
+    await state.close_all_resources()  # Now async for AsyncVectorStore
 
 app = FastAPI(
     title="RAG Knowledge Base API",

@@ -10,8 +10,8 @@ class QueryExecutor:
         self.store = vector_store
         self.cache = cache
 
-    def execute(self, request: QueryRequest) -> QueryResponse:
-        """Execute search query"""
+    async def execute(self, request: QueryRequest) -> QueryResponse:
+        """Execute search query (async for non-blocking database access)"""
         self._validate(request.text)
 
         if self.cache:
@@ -20,7 +20,7 @@ class QueryExecutor:
                 return self._format(cached, request.text)
 
         embedding = self._gen_embedding(request.text)
-        results = self._search(embedding, request)
+        results = await self._search(embedding, request)  # Now async!
 
         if self.cache:
             self.cache.put(request.text, request.top_k, request.threshold, results)
@@ -37,9 +37,9 @@ class QueryExecutor:
         """Generate query embedding"""
         return self.model.encode(text, show_progress_bar=False)
 
-    def _search(self, embedding, request):
-        """Search vector store"""
-        return self.store.search(
+    async def _search(self, embedding, request):
+        """Search vector store (async for non-blocking database access)"""
+        return await self.store.search(
             query_embedding=embedding.tolist(),
             top_k=request.top_k,
             threshold=request.threshold,
