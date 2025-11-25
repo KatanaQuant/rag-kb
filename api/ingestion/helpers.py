@@ -76,31 +76,40 @@ class GhostscriptHelper:
         Process PDF with Ghostscript to embed fonts and fix structure.
         Returns True if successful, False otherwise.
         """
-        import subprocess
-
         temp_pdf = pdf_path.with_suffix('.gs_tmp.pdf')
 
         try:
-            result = subprocess.run([
-                'gs', '-dNOPAUSE', '-dBATCH', '-sDEVICE=pdfwrite',
-                '-dEmbedAllFonts=true', '-dSubsetFonts=true',
-                '-dCompressFonts=true', '-dPDFSETTINGS=/prepress',
-                f'-sOutputFile={temp_pdf}', str(pdf_path)
-            ], capture_output=True, text=True, timeout=300)
-
-            if result.returncode == 0 and temp_pdf.exists():
-                # Replace original with fixed version
-                temp_pdf.replace(pdf_path)
-                return True
-            else:
-                # Clean up temp file if it exists
-                if temp_pdf.exists():
-                    temp_pdf.unlink()
-                return False
-
+            result = GhostscriptHelper._run_ghostscript(pdf_path, temp_pdf)
+            return GhostscriptHelper._handle_result(result, temp_pdf, pdf_path)
         except Exception:
-            # Clean up temp file if it exists
-            if temp_pdf.exists():
-                temp_pdf.unlink()
+            GhostscriptHelper._cleanup_temp_file(temp_pdf)
             return False
+
+    @staticmethod
+    def _run_ghostscript(pdf_path: Path, temp_pdf: Path):
+        """Run Ghostscript to process PDF"""
+        import subprocess
+
+        return subprocess.run([
+            'gs', '-dNOPAUSE', '-dBATCH', '-sDEVICE=pdfwrite',
+            '-dEmbedAllFonts=true', '-dSubsetFonts=true',
+            '-dCompressFonts=true', '-dPDFSETTINGS=/prepress',
+            f'-sOutputFile={temp_pdf}', str(pdf_path)
+        ], capture_output=True, text=True, timeout=300)
+
+    @staticmethod
+    def _handle_result(result, temp_pdf: Path, pdf_path: Path) -> bool:
+        """Handle Ghostscript execution result"""
+        if result.returncode == 0 and temp_pdf.exists():
+            temp_pdf.replace(pdf_path)
+            return True
+        else:
+            GhostscriptHelper._cleanup_temp_file(temp_pdf)
+            return False
+
+    @staticmethod
+    def _cleanup_temp_file(temp_pdf: Path):
+        """Clean up temporary PDF file if it exists"""
+        if temp_pdf.exists():
+            temp_pdf.unlink()
 

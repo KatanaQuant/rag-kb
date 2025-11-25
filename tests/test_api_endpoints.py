@@ -51,7 +51,7 @@ class TestIndexEndpoint:
         state.indexing.queue.add_many = Mock()
 
         # Mock FileWalker to avoid actual file scanning
-        with patch('main.FileWalker') as mock_walker_class:
+        with patch('routes.indexing.FileWalker') as mock_walker_class:
             mock_walker = Mock()
             mock_walker.walk.return_value = []
             mock_walker_class.return_value = mock_walker
@@ -73,7 +73,7 @@ class TestIndexEndpoint:
         state.indexing.queue = Mock()
         state.indexing.queue.add_many = Mock()
 
-        with patch('main.FileWalker') as mock_walker_class:
+        with patch('routes.indexing.FileWalker') as mock_walker_class:
             mock_walker = Mock()
             mock_walker.walk.return_value = []
             mock_walker_class.return_value = mock_walker
@@ -103,7 +103,7 @@ class TestIndexEndpoint:
         state.indexing.queue = Mock()
         state.indexing.queue.add_many = Mock()
 
-        with patch('main.FileWalker') as mock_walker_class:
+        with patch('routes.indexing.FileWalker') as mock_walker_class:
             mock_walker = Mock()
             mock_walker.walk.return_value = []
             mock_walker_class.return_value = mock_walker
@@ -288,7 +288,7 @@ class TestRepairOrphansEndpoint:
         state.core.vector_store = Mock()
         state.indexing.queue = Mock()
 
-        with patch('main.OrphanDetector', return_value=mock_detector):
+        with patch('routes.database.OrphanDetector', return_value=mock_detector):
             response = client.post("/repair-orphans")
 
         assert response.status_code == 200
@@ -308,7 +308,7 @@ class TestRepairOrphansEndpoint:
         state.core.progress_tracker = Mock()
         state.core.vector_store = Mock()
 
-        with patch('main.OrphanDetector', return_value=mock_detector):
+        with patch('routes.database.OrphanDetector', return_value=mock_detector):
             response = client.post("/repair-orphans")
 
         assert response.status_code == 200
@@ -335,13 +335,17 @@ class TestDocumentInfoEndpoint:
     def test_get_document_info_success(self, client):
         """Get document info should return metadata"""
         from main import state
+        from unittest.mock import AsyncMock
 
-        state.core.vector_store = Mock()
-        state.core.vector_store.get_document_info.return_value = {
-            'file_path': '/test/document.pdf',
-            'extraction_method': 'docling_pdf',
-            'indexed_at': '2025-11-21 08:00:00'
-        }
+        async def mock_get_info(filename):
+            return {
+                'file_path': '/test/document.pdf',
+                'extraction_method': 'docling_pdf',
+                'indexed_at': '2025-11-21 08:00:00'
+            }
+
+        state.core.async_vector_store = Mock()
+        state.core.async_vector_store.get_document_info = AsyncMock(side_effect=mock_get_info)
 
         response = client.get("/document/document.pdf")
 
@@ -354,9 +358,13 @@ class TestDocumentInfoEndpoint:
     def test_get_document_info_not_found(self, client):
         """Get document info should return 404 for missing document"""
         from main import state
+        from unittest.mock import AsyncMock
 
-        state.core.vector_store = Mock()
-        state.core.vector_store.get_document_info.return_value = None
+        async def mock_get_info(filename):
+            return None
+
+        state.core.async_vector_store = Mock()
+        state.core.async_vector_store.get_document_info = AsyncMock(side_effect=mock_get_info)
 
         response = client.get("/document/nonexistent.pdf")
 
@@ -370,16 +378,19 @@ class TestListDocumentsEndpoint:
     def test_list_documents_success(self, client):
         """List documents should return all indexed documents"""
         from main import state
+        from unittest.mock import AsyncMock
 
-        # Mock cursor results
-        mock_cursor = [
-            ('/test/doc1.pdf', '2025-11-21 08:00:00', 10),
-            ('/test/doc2.md', '2025-11-21 08:30:00', 5),
-            ('/test/doc3.epub', '2025-11-21 09:00:00', 20)
-        ]
+        # Create async generator for cursor
+        async def mock_cursor():
+            for row in [
+                ('/test/doc1.pdf', '2025-11-21 08:00:00', 10),
+                ('/test/doc2.md', '2025-11-21 08:30:00', 5),
+                ('/test/doc3.epub', '2025-11-21 09:00:00', 20)
+            ]:
+                yield row
 
-        state.core.vector_store = Mock()
-        state.core.vector_store.query_documents_with_chunks.return_value = mock_cursor
+        state.core.async_vector_store = Mock()
+        state.core.async_vector_store.query_documents_with_chunks = AsyncMock(return_value=mock_cursor())
 
         response = client.get("/documents")
 
@@ -392,6 +403,14 @@ class TestListDocumentsEndpoint:
     def test_list_documents_empty_database(self, client):
         """List documents should handle empty database"""
         from main import state
+        from unittest.mock import AsyncMock
+
+        async def mock_cursor():
+            return
+            yield  # Make it a generator
+
+        state.core.async_vector_store = Mock()
+        state.core.async_vector_store.query_documents_with_chunks = AsyncMock(return_value=mock_cursor())
 
         state.core.vector_store = Mock()
         state.core.vector_store.query_documents_with_chunks.return_value = []
@@ -407,51 +426,67 @@ class TestListDocumentsEndpoint:
 class TestDeleteDocumentEndpoint:
     """Test DELETE /document/{path} endpoint"""
 
-    @pytest.mark.skip(reason="Mock object causes FastAPI JSON encoder recursion - requires integration test approach")
     def test_delete_document_success(self, client):
         """Delete document should remove document and chunks"""
         from main import state
-        from unittest.mock import Mock
+        from unittest.mock import AsyncMock
 
-        # Use simple Mock to avoid circular references
-        mock_store = Mock()
-        mock_store.delete_document.return_value = {
-            'found': True,
-            'document_id': 42,
-            'chunks_deleted': 15,
-            'document_deleted': True
-        }
-        state.core.vector_store = mock_store
+        # Use AsyncMock for async endpoint
+        async def mock_delete(file_path):
+            return {
+                'found': True,
+                'document_id': 42,
+                'chunks_deleted': 15,
+                'document_deleted': True
+            }
 
-        # Note: DELETE requests need proper routing
-        # This test assumes the endpoint exists
-        # Adjust path based on actual implementation
+        state.core.async_vector_store = Mock()
+        state.core.async_vector_store.delete_document = AsyncMock(side_effect=mock_delete)
+        state.core.progress_tracker = Mock()
+        state.core.progress_tracker.delete_document = Mock()
+
         response = client.delete("/document/test.pdf")
 
-        # If endpoint exists
-        if response.status_code != 404:
-            assert response.status_code == 200
-            data = response.json()
-            assert data['found'] is True
-            assert data['chunks_deleted'] == 15
+        assert response.status_code == 200
+        data = response.json()
+        assert data['status'] == 'success'
+        assert data['file_path'] == 'test.pdf'
+        assert data['found'] is True
+        assert data['chunks_deleted'] == 15
+        assert data['document_deleted'] is True
+
+        # Verify async method was called
+        state.core.async_vector_store.delete_document.assert_called_once_with('test.pdf')
+        state.core.progress_tracker.delete_document.assert_called_once_with('test.pdf')
 
     def test_delete_nonexistent_document(self, client):
         """Delete should handle non-existent documents"""
         from main import state
+        from unittest.mock import AsyncMock
 
-        state.core.vector_store = Mock()
-        state.core.vector_store.delete_document.return_value = {
-            'found': False,
-            'chunks_deleted': 0,
-            'document_deleted': False
-        }
+        async def mock_delete(file_path):
+            return {
+                'found': False,
+                'chunks_deleted': 0,
+                'document_deleted': False
+            }
+
+        state.core.async_vector_store = Mock()
+        state.core.async_vector_store.delete_document = AsyncMock(side_effect=mock_delete)
+        state.core.progress_tracker = Mock()
 
         response = client.delete("/document/nonexistent.pdf")
 
-        # If endpoint exists
-        if response.status_code != 404:
-            data = response.json()
-            assert data['found'] is False
+        assert response.status_code == 200
+        data = response.json()
+        assert data['status'] == 'success'
+        assert data['file_path'] == 'nonexistent.pdf'
+        assert data['found'] is False
+        assert data['chunks_deleted'] == 0
+        assert data['document_deleted'] is False
+
+        # Verify async method was called
+        state.core.async_vector_store.delete_document.assert_called_once_with('nonexistent.pdf')
 
 
 class TestIndexingStatusEndpoint:

@@ -27,14 +27,32 @@ class KernelLanguageDetector:
         """
         kernel_lower = kernel_name.lower()
 
-        if 'python' in kernel_lower:
+        if KernelLanguageDetector._is_python(kernel_lower):
             return 'python'
-        elif kernel_lower in ('ir', 'r'):  # IR is the R kernel
+        if KernelLanguageDetector._is_r(kernel_lower):
             return 'r'
-        elif 'julia' in kernel_lower:
+        if KernelLanguageDetector._is_julia(kernel_lower):
             return 'julia'
-        elif 'javascript' in kernel_lower or 'node' in kernel_lower:
+        if KernelLanguageDetector._is_javascript(kernel_lower):
             return 'javascript'
-        else:
-            # Unknown kernel, default to python
-            return 'python'
+        return 'python'  # Default for unknown kernels
+
+    @staticmethod
+    def _is_python(kernel_lower: str) -> bool:
+        """Check if kernel is Python"""
+        return 'python' in kernel_lower
+
+    @staticmethod
+    def _is_r(kernel_lower: str) -> bool:
+        """Check if kernel is R"""
+        return kernel_lower in ('ir', 'r')
+
+    @staticmethod
+    def _is_julia(kernel_lower: str) -> bool:
+        """Check if kernel is Julia"""
+        return 'julia' in kernel_lower
+
+    @staticmethod
+    def _is_javascript(kernel_lower: str) -> bool:
+        """Check if kernel is JavaScript"""
+        return 'javascript' in kernel_lower or 'node' in kernel_lower

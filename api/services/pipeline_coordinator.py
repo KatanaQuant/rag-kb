@@ -104,46 +104,59 @@ class PipelineCoordinator:
     def _chunk_stage(self, item: QueueItem) -> Optional[ChunkedDocument]:
         """Process file: extract text and chunk it"""
         try:
-            # Extract and chunk in one stage
             doc_file = DocumentFile.from_path(item.path)
 
-            # Check if already indexed (unless force=True)
-            if not item.force:
-                if self.embedding_service.store.is_document_indexed(str(item.path), doc_file.hash):
-                    print(f"[Skip] {item.path.name} - already indexed")
-                    return None
+            if self._should_skip_indexed_file(item, doc_file):
+                return None
 
-            # File needs processing - determine stage name based on file type
-            # EPUB files are converted to PDF, not chunked
-            stage = "Convert" if item.path.suffix.lower() == '.epub' else "Chunk"
-
-            self.progress_logger.log_start(stage, item.path.name)
-
-            # Start heartbeat for long-running operations
-            self.progress_logger.start_heartbeat(stage, item.path.name, interval=60)
+            stage = self._get_stage_name(item.path)
+            self._log_processing_start(stage, item.path.name)
 
             chunks = self.processor.process_file(doc_file, force=item.force)
 
             if not chunks:
-                print(f"[{stage}] {item.path.name} - no chunks extracted")
-                self.progress_logger.log_complete(stage, item.path.name, 0)
-                # Don't mark as processed - file will be retried on next run
-                # This allows automatic pickup when support is added for new file types
-                return None
+                return self._handle_no_chunks(stage, item.path.name)
 
             self.progress_logger.log_complete(stage, item.path.name, len(chunks))
-
-            return ChunkedDocument(
-                priority=item.priority,
-                path=item.path,
-                chunks=chunks,
-                hash_val=doc_file.hash,
-                force=item.force
-            )
+            return self._create_chunked_document(item, doc_file, chunks)
 
         except Exception as e:
             print(f"[Chunk] Error processing {item.path}: {e}")
             return None
+
+    def _should_skip_indexed_file(self, item: QueueItem, doc_file) -> bool:
+        """Check if file should be skipped (already indexed)"""
+        if item.force:
+            return False
+        if self.embedding_service.store.is_document_indexed(str(item.path), doc_file.hash):
+            print(f"[Skip] {item.path.name} - already indexed")
+            return True
+        return False
+
+    def _get_stage_name(self, path) -> str:
+        """Determine stage name based on file type"""
+        return "Convert" if path.suffix.lower() == '.epub' else "Chunk"
+
+    def _log_processing_start(self, stage: str, filename: str):
+        """Log processing start with heartbeat"""
+        self.progress_logger.log_start(stage, filename)
+        self.progress_logger.start_heartbeat(stage, filename, interval=60)
+
+    def _handle_no_chunks(self, stage: str, filename: str) -> None:
+        """Handle case when no chunks were extracted"""
+        print(f"[{stage}] {filename} - no chunks extracted")
+        self.progress_logger.log_complete(stage, filename, 0)
+        return None
+
+    def _create_chunked_document(self, item: QueueItem, doc_file, chunks) -> ChunkedDocument:
+        """Create ChunkedDocument from processing results"""
+        return ChunkedDocument(
+            priority=item.priority,
+            path=item.path,
+            chunks=chunks,
+            hash_val=doc_file.hash,
+            force=item.force
+        )
 
     def _embed_stage(self, doc: ChunkedDocument) -> Optional[EmbeddedDocument]:
         """Embed chunks"""

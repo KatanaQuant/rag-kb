@@ -75,31 +75,50 @@ class ConfigValidator:
         """Validate data directory for database"""
         data_dir = self.config.paths.data_dir
 
-        # Check if parent exists
+        if not self._check_parent_exists(data_dir):
+            return
+        self._ensure_directory_exists(data_dir)
+        self._check_directory_writable(data_dir)
+
+    def _check_parent_exists(self, data_dir) -> bool:
+        """Check if parent directory exists"""
         if not data_dir.parent.exists():
             self.errors.append(
                 f"Data directory parent does not exist: {data_dir.parent}\n"
                 f"    Create it with: mkdir -p {data_dir.parent}"
             )
+            return False
+        return True
+
+    def _ensure_directory_exists(self, data_dir):
+        """Create data directory if it doesn't exist"""
+        if data_dir.exists():
             return
 
-        # If data_dir doesn't exist, try to create it
-        if not data_dir.exists():
-            try:
-                data_dir.mkdir(parents=True, exist_ok=True)
-                print(f"Created data directory: {data_dir}")
-            except PermissionError:
-                self.errors.append(
-                    f"Cannot create data directory (permission denied): {data_dir}\n"
-                    f"    Fix with: sudo mkdir -p {data_dir} && sudo chown $USER {data_dir}"
-                )
-            except Exception as e:
-                self.errors.append(
-                    f"Cannot create data directory: {data_dir}\n"
-                    f"    Error: {e}"
-                )
+        try:
+            data_dir.mkdir(parents=True, exist_ok=True)
+            print(f"Created data directory: {data_dir}")
+        except PermissionError:
+            self._add_permission_error(data_dir)
+        except Exception as e:
+            self._add_creation_error(data_dir, e)
 
-        # Check if writable (needed for database)
+    def _add_permission_error(self, data_dir):
+        """Add permission error to errors list"""
+        self.errors.append(
+            f"Cannot create data directory (permission denied): {data_dir}\n"
+            f"    Fix with: sudo mkdir -p {data_dir} && sudo chown $USER {data_dir}"
+        )
+
+    def _add_creation_error(self, data_dir, exception):
+        """Add general creation error to errors list"""
+        self.errors.append(
+            f"Cannot create data directory: {data_dir}\n"
+            f"    Error: {exception}"
+        )
+
+    def _check_directory_writable(self, data_dir):
+        """Check if directory is writable"""
         if data_dir.exists() and not os.access(data_dir, os.W_OK):
             self.errors.append(
                 f"Data directory is not writable: {data_dir}\n"

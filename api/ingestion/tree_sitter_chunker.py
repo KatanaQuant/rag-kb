@@ -124,35 +124,43 @@ class TreeSitterChunker:
         Returns:
             List of code chunks
         """
-        chunks = []
         chunkable_types = self.CHUNKABLE_NODES.get(self.language, set())
 
-        # Check if this node is a chunkable boundary
         if node.type in chunkable_types:
-            chunk_content = code_bytes[node.start_byte:node.end_byte].decode('utf8')
-            chunk_size = len(chunk_content)
-
-            # If node fits in one chunk, take it
-            if chunk_size <= self.max_chunk_size:
-                chunk = CodeChunk(
-                    content=chunk_content,
-                    start_byte=node.start_byte,
-                    end_byte=node.end_byte,
-                    start_line=node.start_point[0] + 1,  # 0-indexed to 1-indexed
-                    end_line=node.end_point[0] + 1,
-                    node_type=node.type,
-                    metadata=self._build_metadata(node, chunk_content)
-                )
-                chunks.append(chunk)
-            else:
-                # Node too large, recurse into children
-                for child in node.children:
-                    chunks.extend(self._walk_tree(child, code_bytes))
+            return self._process_chunkable_node(node, code_bytes)
         else:
-            # Not a chunkable node, recurse into children
-            for child in node.children:
-                chunks.extend(self._walk_tree(child, code_bytes))
+            return self._process_non_chunkable_node(node, code_bytes)
 
+    def _process_chunkable_node(self, node, code_bytes: bytes) -> List[CodeChunk]:
+        """Process a node that represents a chunkable boundary"""
+        chunk_content = code_bytes[node.start_byte:node.end_byte].decode('utf8')
+
+        if len(chunk_content) <= self.max_chunk_size:
+            return [self._create_chunk(node, chunk_content)]
+        else:
+            return self._recurse_into_children(node, code_bytes)
+
+    def _process_non_chunkable_node(self, node, code_bytes: bytes) -> List[CodeChunk]:
+        """Process a node that is not a chunkable boundary"""
+        return self._recurse_into_children(node, code_bytes)
+
+    def _create_chunk(self, node, content: str) -> CodeChunk:
+        """Create a code chunk from a node"""
+        return CodeChunk(
+            content=content,
+            start_byte=node.start_byte,
+            end_byte=node.end_byte,
+            start_line=node.start_point[0] + 1,  # 0-indexed to 1-indexed
+            end_line=node.end_point[0] + 1,
+            node_type=node.type,
+            metadata=self._build_metadata(node, content)
+        )
+
+    def _recurse_into_children(self, node, code_bytes: bytes) -> List[CodeChunk]:
+        """Recursively process all children of a node"""
+        chunks = []
+        for child in node.children:
+            chunks.extend(self._walk_tree(child, code_bytes))
         return chunks
 
     def _merge_small_chunks(self, chunks: List[CodeChunk], code: str) -> List[CodeChunk]:
@@ -175,34 +183,37 @@ class TreeSitterChunker:
         current_size = len(chunks[0].content)
 
         for chunk in chunks[1:]:
-            chunk_size = len(chunk.content)
-
-            # Check if we can merge this chunk
-            # Use start/end bytes to get exact content between chunks
-            if current_chunks:
-                gap_start = current_chunks[-1].end_byte
-                gap_end = chunk.start_byte
-                gap_content = code[gap_start:gap_end] if gap_end > gap_start else ""
-                combined_size = current_size + len(gap_content) + chunk_size
-            else:
-                combined_size = chunk_size
-                gap_content = ""
+            combined_size = self._calculate_combined_size(current_chunks, chunk, code, current_size)
 
             if combined_size <= self.max_chunk_size:
-                # Merge: add chunk to current group
                 current_chunks.append(chunk)
                 current_size = combined_size
             else:
-                # Can't merge: finalize current group and start new
-                if current_chunks:
-                    merged.append(self._combine_chunks(current_chunks, code))
+                merged = self._finalize_current_group(merged, current_chunks, code)
                 current_chunks = [chunk]
-                current_size = chunk_size
+                current_size = len(chunk.content)
 
-        # Add last group
+        merged = self._finalize_current_group(merged, current_chunks, code)
+        return merged
+
+    def _calculate_combined_size(self, current_chunks: List[CodeChunk], next_chunk: CodeChunk, code: str, current_size: int) -> int:
+        """Calculate size if we merge next_chunk with current group"""
+        if not current_chunks:
+            return len(next_chunk.content)
+
+        gap_content = self._get_gap_content(current_chunks[-1], next_chunk, code)
+        return current_size + len(gap_content) + len(next_chunk.content)
+
+    def _get_gap_content(self, last_chunk: CodeChunk, next_chunk: CodeChunk, code: str) -> str:
+        """Get content between two chunks (whitespace, comments, etc.)"""
+        gap_start = last_chunk.end_byte
+        gap_end = next_chunk.start_byte
+        return code[gap_start:gap_end] if gap_end > gap_start else ""
+
+    def _finalize_current_group(self, merged: List[CodeChunk], current_chunks: List[CodeChunk], code: str) -> List[CodeChunk]:
+        """Add current chunk group to merged list"""
         if current_chunks:
             merged.append(self._combine_chunks(current_chunks, code))
-
         return merged
 
     def _combine_chunks(self, chunks: List[CodeChunk], code: str) -> CodeChunk:

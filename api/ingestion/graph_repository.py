@@ -228,26 +228,45 @@ class GraphRepository:
         if not graph_export:
             return
 
-        # Persist nodes
-        for node_data in graph_export.get('nodes', []):
-            node_id = node_data.get('id')
-            node_type = node_data.get('node_type', 'unknown')
-            title = node_data.get('title', '')
-            content = node_data.get('content')
-            metadata = {k: v for k, v in node_data.items()
-                       if k not in ['id', 'node_type', 'title', 'content']}
+        self._persist_nodes(graph_export.get('nodes', []))
+        self._persist_edges(graph_export.get('edges', []))
 
-            self.nodes.save(node_id, node_type, title, content, metadata)
+    def _persist_nodes(self, nodes: list):
+        """Persist all nodes from graph export"""
+        for node_data in nodes:
+            self._persist_single_node(node_data)
 
-        # Persist edges
-        for edge_data in graph_export.get('edges', []):
-            source = edge_data.get('source')
-            target = edge_data.get('target')
-            edge_type = edge_data.get('type', 'unknown')
-            metadata = {k: v for k, v in edge_data.items()
-                       if k not in ['source', 'target', 'type']}
+    def _persist_single_node(self, node_data: dict):
+        """Persist a single node with its metadata"""
+        node_id = node_data.get('id')
+        node_type = node_data.get('node_type', 'unknown')
+        title = node_data.get('title', '')
+        content = node_data.get('content')
+        metadata = self._extract_node_metadata(node_data)
+        self.nodes.save(node_id, node_type, title, content, metadata)
 
-            self.edges.save(source, target, edge_type, metadata)
+    def _extract_node_metadata(self, node_data: dict) -> dict:
+        """Extract metadata by excluding core node fields"""
+        excluded_fields = {'id', 'node_type', 'title', 'content'}
+        return {k: v for k, v in node_data.items() if k not in excluded_fields}
+
+    def _persist_edges(self, edges: list):
+        """Persist all edges from graph export"""
+        for edge_data in edges:
+            self._persist_single_edge(edge_data)
+
+    def _persist_single_edge(self, edge_data: dict):
+        """Persist a single edge with its metadata"""
+        source = edge_data.get('source')
+        target = edge_data.get('target')
+        edge_type = edge_data.get('type', 'unknown')
+        metadata = self._extract_edge_metadata(edge_data)
+        self.edges.save(source, target, edge_type, metadata)
+
+    def _extract_edge_metadata(self, edge_data: dict) -> dict:
+        """Extract metadata by excluding core edge fields"""
+        excluded_fields = {'source', 'target', 'type'}
+        return {k: v for k, v in edge_data.items() if k not in excluded_fields}
 
     def commit(self):
         """Commit transaction"""

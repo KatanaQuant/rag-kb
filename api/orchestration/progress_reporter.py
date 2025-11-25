@@ -32,9 +32,13 @@ class ProgressReporter:
 
     def _crossed_quarter(self, curr: float, prev: float) -> bool:
         """Check if crossed 25%, 50%, or 75%"""
-        return (curr >= 25 and prev < 25 or
-                curr >= 50 and prev < 50 or
-                curr >= 75 and prev < 75)
+        return (self._crossed_threshold(curr, prev, 25) or
+                self._crossed_threshold(curr, prev, 50) or
+                self._crossed_threshold(curr, prev, 75))
+
+    def _crossed_threshold(self, curr: float, prev: float, threshold: float) -> bool:
+        """Check if crossed specific percentage threshold"""
+        return curr >= threshold and prev < threshold
 
     def _print_progress(self, idx: int, total: int, stats: dict):
         """Print progress message"""

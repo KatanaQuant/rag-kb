@@ -28,6 +28,10 @@ def mock_state():
 
     state.runtime = Mock()
     state.runtime.indexing_in_progress = False
+
+    # Mock new delegation methods
+    state.is_indexing_in_progress = Mock(return_value=False)
+
     return state
 
 
@@ -35,7 +39,7 @@ def mock_state():
 def client(mock_state):
     """Create test client with mocked dependencies"""
     from fastapi import FastAPI
-    from api.routes.health import router
+    from routes.health import router
 
     app = FastAPI()
     app.include_router(router)
@@ -96,6 +100,7 @@ class TestHealthEndpoint:
     def test_health_shows_indexing_status(self, client, mock_state):
         """Health should show if indexing is in progress"""
         mock_state.runtime.indexing_in_progress = True
+        mock_state.is_indexing_in_progress = Mock(return_value=True)
 
         response = client.get("/health")
 

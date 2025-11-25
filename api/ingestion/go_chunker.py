@@ -88,37 +88,57 @@ class GoChunker:
         node_text = self._extract_node_text(node, source_bytes)
         node_size = self._count_non_whitespace(node_text)
 
-        # If node is chunkable and fits, create chunk
-        if self._is_chunkable_node(node) and node_size <= self.max_chunk_size:
-            chunk = {
-                'content': node_text,
-                'metadata': {
-                    'node_type': node.type,
-                    'start_line': node.start_point[0] + 1,
-                    'end_line': node.end_point[0] + 1,
-                    'size': node_size,
-                } if self.metadata_template == 'default' else {}
-            }
-            chunks.append(chunk)
+        if self._should_create_chunk(node, node_size):
+            chunks.append(self._create_node_chunk(node, node_text, node_size))
             return
 
-        # If node has children, recursively process them
+        self._process_node_children(node, source_bytes, chunks, node_text, node_size)
+
+    def _should_create_chunk(self, node, node_size: int) -> bool:
+        """Check if node should be chunked as-is"""
+        return self._is_chunkable_node(node) and node_size <= self.max_chunk_size
+
+    def _create_node_chunk(self, node, node_text: str, node_size: int) -> Dict:
+        """Create chunk from node"""
+        return {
+            'content': node_text,
+            'metadata': self._build_node_metadata(node, node_size, False)
+        }
+
+    def _build_node_metadata(self, node, size: int, truncated: bool) -> Dict:
+        """Build metadata for node chunk"""
+        if self.metadata_template != 'default':
+            return {}
+
+        metadata = {
+            'node_type': node.type,
+            'start_line': node.start_point[0] + 1,
+            'end_line': node.end_point[0] + 1,
+            'size': size,
+        }
+        if truncated:
+            metadata['truncated'] = True
+        return metadata
+
+    def _process_node_children(self, node, source_bytes: bytes, chunks: List[Dict],
+                               node_text: str, node_size: int):
+        """Process node children or create leaf chunk"""
         if node.child_count > 0:
             for child in node.children:
                 self._chunk_node(child, source_bytes, chunks)
         elif node_size > 0:
-            # Leaf node - create chunk even if large (will be truncated)
-            chunk = {
-                'content': node_text[:self.max_chunk_size * 4],  # Approx truncation
-                'metadata': {
-                    'node_type': node.type,
-                    'start_line': node.start_point[0] + 1,
-                    'end_line': node.end_point[0] + 1,
-                    'size': min(node_size, self.max_chunk_size),
-                    'truncated': node_size > self.max_chunk_size
-                } if self.metadata_template == 'default' else {}
-            }
-            chunks.append(chunk)
+            chunks.append(self._create_truncated_leaf_chunk(node, node_text, node_size))
+
+    def _create_truncated_leaf_chunk(self, node, node_text: str, node_size: int) -> Dict:
+        """Create chunk for large leaf node (with truncation)"""
+        truncated_content = node_text[:self.max_chunk_size * 4]
+        truncated_size = min(node_size, self.max_chunk_size)
+        is_truncated = node_size > self.max_chunk_size
+
+        return {
+            'content': truncated_content,
+            'metadata': self._build_node_metadata(node, truncated_size, is_truncated)
+        }
 
     def chunkify(self, source_code: str) -> List[Dict]:
         """Chunk Go source code using AST

@@ -43,15 +43,17 @@ class TestAppStateDelegation:
         state.indexing.worker = None
         state.stop_indexing()  # Should not raise
 
-    def test_close_vector_store_delegates(self, state):
-        """AppState.close_vector_store() should delegate to core.vector_store.close()"""
-        state.close_vector_store()
+    @pytest.mark.asyncio
+    async def test_close_vector_store_delegates(self, state):
+        """AppState.close_vector_store() should delegate to async close methods"""
+        await state.close_vector_store()
         state.core.vector_store.close.assert_called_once()
 
-    def test_close_vector_store_handles_none(self, state):
+    @pytest.mark.asyncio
+    async def test_close_vector_store_handles_none(self, state):
         """close_vector_store() should handle None gracefully"""
         state.core.vector_store = None
-        state.close_vector_store()  # Should not raise
+        await state.close_vector_store()  # Should not raise
 
     def test_close_progress_tracker_delegates(self, state):
         """AppState.close_progress_tracker() should delegate"""
@@ -63,21 +65,30 @@ class TestAppStateDelegation:
         state.core.progress_tracker = None
         state.close_progress_tracker()  # Should not raise
 
-    def test_close_all_resources(self, state):
+    @pytest.mark.asyncio
+    async def test_close_all_resources(self, state):
         """AppState.close_all_resources() should close all resources"""
-        state.close_all_resources()
+        await state.close_all_resources()
 
         state.core.vector_store.close.assert_called_once()
         state.core.progress_tracker.close.assert_called_once()
 
-    def test_get_vector_store_stats_delegates(self, state):
-        """AppState.get_vector_store_stats() should delegate and return stats"""
-        state.core.vector_store.get_stats.return_value = {'docs': 42, 'chunks': 1337}
+    @pytest.mark.asyncio
+    async def test_get_vector_store_stats_delegates(self, state):
+        """AppState.get_vector_store_stats() should delegate and return stats (async)"""
+        from unittest.mock import AsyncMock
 
-        stats = state.get_vector_store_stats()
+        # Mock async get_stats method
+        async def mock_get_stats():
+            return {'docs': 42, 'chunks': 1337}
+
+        state.core.async_vector_store = Mock()
+        state.core.async_vector_store.get_stats = AsyncMock(side_effect=mock_get_stats)
+
+        stats = await state.get_vector_store_stats()
 
         assert stats == {'docs': 42, 'chunks': 1337}
-        state.core.vector_store.get_stats.assert_called_once()
+        state.core.async_vector_store.get_stats.assert_called_once()
 
     def test_queue_size_delegates(self, state):
         """AppState.queue_size() should delegate to indexing.queue.size()"""

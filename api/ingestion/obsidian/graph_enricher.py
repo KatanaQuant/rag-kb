@@ -38,37 +38,57 @@ class GraphEnricher:
         Returns:
             List of enriched (chunk_text, page_number) tuples
         """
-        enriched = []
+        context_footer = GraphEnricher._build_context_footer(graph_meta, title)
+        return [(f"{chunk_text}\n{context_footer}", page) for chunk_text, page in chunks]
 
-        for i, (chunk_text, page) in enumerate(chunks):
-            # Build context footer
-            context_lines = [
-                f"\n---",
-                f"Note: {title}",
-            ]
+    @staticmethod
+    def _build_context_footer(graph_meta: Dict, title: str) -> str:
+        """Build context footer with graph metadata"""
+        context_lines = ["\n---", f"Note: {title}"]
+        GraphEnricher._add_tags_line(graph_meta, context_lines)
+        GraphEnricher._add_wikilinks_line(graph_meta, context_lines)
+        GraphEnricher._add_backlinks_line(graph_meta, context_lines)
+        GraphEnricher._add_connected_notes_line(graph_meta, context_lines)
+        return '\n'.join(context_lines)
 
-            if graph_meta['tags']:
-                context_lines.append(f"Tags: {', '.join(graph_meta['tags'])}")
+    @staticmethod
+    def _add_tags_line(graph_meta: Dict, context_lines: List[str]):
+        """Add tags line if tags exist"""
+        if graph_meta['tags']:
+            context_lines.append(f"Tags: {', '.join(graph_meta['tags'])}")
 
-            if graph_meta['wikilinks_out']:
-                links_preview = ', '.join(graph_meta['wikilinks_out'][:5])
-                if len(graph_meta['wikilinks_out']) > 5:
-                    links_preview += f" (+{len(graph_meta['wikilinks_out']) - 5} more)"
-                context_lines.append(f"Links to: {links_preview}")
+    @staticmethod
+    def _add_wikilinks_line(graph_meta: Dict, context_lines: List[str]):
+        """Add wikilinks line if links exist"""
+        if graph_meta['wikilinks_out']:
+            links_preview = GraphEnricher._format_wikilinks(graph_meta['wikilinks_out'])
+            context_lines.append(f"Links to: {links_preview}")
 
-            if graph_meta['backlinks_count'] > 0:
-                context_lines.append(f"Linked from: {graph_meta['backlinks_count']} notes")
+    @staticmethod
+    def _format_wikilinks(wikilinks: List[str]) -> str:
+        """Format wikilinks with preview limit"""
+        links_preview = ', '.join(wikilinks[:5])
+        if len(wikilinks) > 5:
+            links_preview += f" (+{len(wikilinks) - 5} more)"
+        return links_preview
 
-            if graph_meta['connected_notes']:
-                connected_preview = ', '.join(graph_meta['connected_notes'][:3])
-                if len(graph_meta['connected_notes']) > 3:
-                    connected_preview += "..."
-                context_lines.append(f"Related notes: {connected_preview}")
+    @staticmethod
+    def _add_backlinks_line(graph_meta: Dict, context_lines: List[str]):
+        """Add backlinks count if any exist"""
+        if graph_meta['backlinks_count'] > 0:
+            context_lines.append(f"Linked from: {graph_meta['backlinks_count']} notes")
 
-            # Add context to chunk
-            context_footer = '\n'.join(context_lines)
-            enriched_text = f"{chunk_text}\n{context_footer}"
+    @staticmethod
+    def _add_connected_notes_line(graph_meta: Dict, context_lines: List[str]):
+        """Add connected notes if any exist"""
+        if graph_meta['connected_notes']:
+            connected_preview = GraphEnricher._format_connected_notes(graph_meta['connected_notes'])
+            context_lines.append(f"Related notes: {connected_preview}")
 
-            enriched.append((enriched_text, page))
-
-        return enriched
+    @staticmethod
+    def _format_connected_notes(connected_notes: List[str]) -> str:
+        """Format connected notes with preview limit"""
+        connected_preview = ', '.join(connected_notes[:3])
+        if len(connected_notes) > 3:
+            connected_preview += "..."
+        return connected_preview

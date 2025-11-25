@@ -75,6 +75,56 @@ class AppState:
     # Instead of: state.runtime.watcher.stop()
     # Use: state.stop_watcher()
 
+    # === Service Access Delegation (for route handlers) ===
+
+    def get_model(self):
+        """Get ML model for embeddings"""
+        return self.core.model
+
+    def get_async_vector_store(self):
+        """Get async vector store for non-blocking API operations"""
+        return self.core.async_vector_store
+
+    def get_vector_store(self):
+        """Get sync vector store for pipeline workers"""
+        return self.core.vector_store
+
+    def get_query_cache(self):
+        """Get query cache"""
+        return self.query.cache
+
+    def get_processor(self):
+        """Get document processor"""
+        return self.core.processor
+
+    def get_progress_tracker(self):
+        """Get processing progress tracker"""
+        return self.core.progress_tracker
+
+    def get_indexing_queue(self):
+        """Get indexing queue"""
+        return self.indexing.queue
+
+    def get_pipeline_coordinator(self):
+        """Get pipeline coordinator"""
+        return self.indexing.pipeline_coordinator
+
+    # === State Access Delegation ===
+
+    def is_indexing_in_progress(self):
+        """Check if indexing is currently in progress"""
+        return self.runtime.indexing_in_progress
+
+    def set_indexing_in_progress(self, value: bool):
+        """Set indexing in progress flag"""
+        self.runtime.indexing_in_progress = value
+
+    def get_indexing_stats(self):
+        """Get current indexing statistics"""
+        return self.runtime.stats
+
+    # === Lifecycle Management Delegation ===
+
     def stop_watcher(self):
         """Stop file watcher service"""
         if self.runtime.watcher:

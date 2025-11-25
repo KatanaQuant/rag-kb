@@ -161,29 +161,44 @@ class DocumentProcessor:
         if not doc_file.exists():
             return False
 
-        # Validate file type for security
-        if self.validation_enabled:
-            validation_result = self.validator.validate(doc_file.path)
-            if not validation_result.is_valid:
-                if self.validation_action == 'reject':
-                    print(f"REJECTED (security): {doc_file.name} - {validation_result.reason}")
-                    return False
-                elif self.validation_action == 'warn':
-                    print(f"WARNING (security): {doc_file.name} - {validation_result.reason}")
-                elif self.validation_action == 'skip':
-                    return False
+        if not self._passes_security_validation(doc_file):
+            return False
 
-        # Skip progress check if force=True (reindexing requested)
         if force:
             return True
 
-        # Check progress tracker
-        if self.tracker:
-            progress = self.tracker.get_progress(str(doc_file.path))
-            if self._is_completed(progress, doc_file.hash):
-                return False
+        return not self._is_already_completed(doc_file)
 
+    def _passes_security_validation(self, doc_file: DocumentFile) -> bool:
+        """Check if file passes security validation"""
+        if not self.validation_enabled:
+            return True
+
+        validation_result = self.validator.validate(doc_file.path)
+        if validation_result.is_valid:
+            return True
+
+        return self._handle_validation_failure(doc_file, validation_result)
+
+    def _handle_validation_failure(self, doc_file: DocumentFile, validation_result) -> bool:
+        """Handle validation failure based on configured action"""
+        if self.validation_action == 'reject':
+            print(f"REJECTED (security): {doc_file.name} - {validation_result.reason}")
+            return False
+        elif self.validation_action == 'warn':
+            print(f"WARNING (security): {doc_file.name} - {validation_result.reason}")
+            return True
+        elif self.validation_action == 'skip':
+            return False
         return True
+
+    def _is_already_completed(self, doc_file: DocumentFile) -> bool:
+        """Check if file has already been processed"""
+        if not self.tracker:
+            return False
+
+        progress = self.tracker.get_progress(str(doc_file.path))
+        return self._is_completed(progress, doc_file.hash)
 
     def _is_completed(self, progress, file_hash: str) -> bool:
         """Check if file already completed"""
