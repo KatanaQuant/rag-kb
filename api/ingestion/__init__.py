@@ -36,12 +36,20 @@ from .progress import (
     ProcessingProgressTracker
 )
 
-# Database
+# Database (synchronous)
 from .database import (
     DatabaseConnection,
     SchemaManager,
     VectorRepository,
     VectorStore
+)
+
+# Database (asynchronous)
+from .async_database import (
+    AsyncDatabaseConnection,
+    AsyncSchemaManager,
+    AsyncVectorRepository,
+    AsyncVectorStore
 )
 
 __all__ = [
@@ -61,9 +69,14 @@ __all__ = [
     # Progress
     'ProcessingProgress',
     'ProcessingProgressTracker',
-    # Database
+    # Database (synchronous)
     'DatabaseConnection',
     'SchemaManager',
     'VectorRepository',
     'VectorStore',
+    # Database (asynchronous)
+    'AsyncDatabaseConnection',
+    'AsyncSchemaManager',
+    'AsyncVectorRepository',
+    'AsyncVectorStore',
 ]

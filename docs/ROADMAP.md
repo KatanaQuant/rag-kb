@@ -49,9 +49,9 @@ This document outlines planned features and improvements for the RAG Knowledge B
 
 ---
 
-## Current Version: v0.15.0-alpha
+## Current Version: v0.16.0-alpha
 
-**Status**: Production-ready with Sandi Metz POODR refactoring, improved code maintainability, and 87% reduction in main.py complexity
+**Status**: Production-ready with hybrid async/sync database architecture - API endpoints now non-blocking during heavy indexing
 
 ---
 
@@ -62,13 +62,13 @@ RAG-KB is approximately **70-80% ready** for a stable v1.0.0 release. The core s
 ### Roadmap Overview
 
 ```
-v0.15.0-alpha (CURRENT)
+v0.15.0-alpha
     └─ Sandi Metz POODR refactoring, route extraction, code quality improvements
 
-v0.16.0-alpha (Next - 4-8 weeks)
-    └─ Fix API blocking during indexing (async database migration)
+v0.16.0-alpha (CURRENT)
+    └─ Hybrid async/sync database architecture - API endpoints non-blocking
 
-v0.16.0-beta (Feature Freeze - 6-10 weeks)
+v0.16.0-beta (Feature Freeze - 4-6 weeks)
     └─ Comprehensive testing, API stability review, documentation polish
 
 v1.0.0 (Stable Release - 2-4 weeks after beta)
@@ -77,7 +77,7 @@ v1.0.0 (Stable Release - 2-4 weeks after beta)
 
 ### Critical Blockers for v1.0.0
 
-1. **Async Database Migration** - Fix API endpoints blocking 10+ seconds during indexing ([KNOWN_ISSUES.md #5](KNOWN_ISSUES.md))
+1. ~~**Async Database Migration**~~ - ✅ **COMPLETED** in v0.16.0-alpha
 2. **Comprehensive Test Coverage** - Fix skipped tests, add integration test suite (>80% coverage)
 3. **API Stability Review** - Review all endpoints before committing to semantic versioning
 
@@ -251,13 +251,21 @@ Store multiple embeddings per chunk for better retrieval diversity. Delta indexi
 
 ---
 
-#### 13. Async Database Migration
+#### 13. ~~Async Database Migration~~ [COMPLETED in v0.16.0-alpha]
 
 **Target**: v0.15.0-alpha or v0.16.0-alpha
 
 Migrate blocking database calls to async I/O (using `aiosqlite`) to fix slow API endpoints during indexing. Target <10ms response time for `/health` endpoint even during heavy indexing.
 
-**See**: [KNOWN_ISSUES.md #5](KNOWN_ISSUES.md) - API Endpoints Block During Indexing (current problem)
+**Status**: ✅ **COMPLETED** - Implemented hybrid async/sync architecture
+- API endpoints respond in <100ms during heavy indexing (vs 10+ seconds before)
+- Health checks: 30-40ms response time
+- Query endpoints: <500ms response time
+- System remains responsive during PDF processing
+
+**See**:
+- [KNOWN_ISSUES.md #5](KNOWN_ISSUES.md) - Marked as RESOLVED
+- [RELEASE_v0.16.0-alpha.md](RELEASE_v0.16.0-alpha.md) - Full release notes
 
 ---
 

@@ -7,11 +7,17 @@ class CoreServices:
 
     Holds fundamental services needed throughout the application.
     Focused on storage, processing, and ML models.
+
+    Hybrid Architecture:
+    - vector_store: Sync VectorStore for pipeline workers (background writes)
+    - async_vector_store: Async AsyncVectorStore for API routes (non-blocking reads)
+    Both use same SQLite database with WAL mode for concurrency.
     """
 
     def __init__(self):
         self.model = None
-        self.vector_store = None
+        self.vector_store = None  # Sync store for pipeline workers
+        self.async_vector_store = None  # Async store for API routes
         self.processor = None
         self.progress_tracker = None
 
@@ -79,25 +85,27 @@ class AppState:
         if self.indexing.worker:
             self.indexing.worker.stop()
 
-    def close_vector_store(self):
-        """Close vector store connection"""
+    async def close_vector_store(self):
+        """Close both sync and async vector store connections"""
         if self.core.vector_store:
-            self.core.vector_store.close()
+            self.core.vector_store.close()  # Sync close
+        if self.core.async_vector_store:
+            await self.core.async_vector_store.close()  # Async close
 
     def close_progress_tracker(self):
         """Close progress tracker connection"""
         if self.core.progress_tracker:
             self.core.progress_tracker.close()
 
-    def close_all_resources(self):
-        """Close all resource connections"""
-        self.close_vector_store()
+    async def close_all_resources(self):
+        """Close all resource connections (async for AsyncVectorStore)"""
+        await self.close_vector_store()
         self.close_progress_tracker()
 
-    def get_vector_store_stats(self):
-        """Get vector store statistics"""
-        if self.core.vector_store:
-            return self.core.vector_store.get_stats()
+    async def get_vector_store_stats(self):
+        """Get vector store statistics (async, non-blocking for API routes)"""
+        if self.core.async_vector_store:
+            return await self.core.async_vector_store.get_stats()
         return {'indexed_documents': 0, 'total_chunks': 0}
 
     def queue_size(self):

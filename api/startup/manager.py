@@ -8,7 +8,7 @@ import threading
 
 from sentence_transformers import SentenceTransformer
 from config import default_config
-from ingestion import DocumentProcessor, VectorStore, ProcessingProgressTracker
+from ingestion import DocumentProcessor, VectorStore, AsyncVectorStore, ProcessingProgressTracker
 from watcher import FileWatcherService
 from query_cache import QueryCache
 from value_objects import IndexingStats
@@ -27,12 +27,12 @@ class StartupManager:
     def __init__(self, app_state: AppState):
         self.state = app_state
 
-    def initialize(self):
-        """Initialize all components"""
+    async def initialize(self):
+        """Initialize all components (async for AsyncVectorStore)"""
         print("Initializing RAG system...")
         self._validate_config()
         self._load_model()
-        self._init_store()
+        await self._init_store()  # Now async
         self._init_progress_tracker()
         self._init_processor()
         self._init_cache()
@@ -52,10 +52,25 @@ class StartupManager:
         model_name = default_config.model.name
         self.state.core.model = loader.load(model_name)
 
-    def _init_store(self):
-        """Initialize vector store"""
-        print("Initializing vector store...")
+    async def _init_store(self):
+        """Initialize both sync and async vector stores
+
+        Hybrid Architecture:
+        - Sync VectorStore: Used by pipeline workers for background writes
+        - Async AsyncVectorStore: Used by API routes for non-blocking reads
+
+        Both stores use the same SQLite database with WAL mode for safe concurrent access.
+        """
+        print("Initializing vector stores...")
+
+        # Initialize sync store for pipeline workers
         self.state.core.vector_store = VectorStore()
+        print("Sync vector store initialized (for pipeline workers)")
+
+        # Initialize async store for API routes
+        self.state.core.async_vector_store = AsyncVectorStore()
+        await self.state.core.async_vector_store.initialize()
+        print("Async vector store initialized (for API routes)")
 
     def _init_progress_tracker(self):
         """Initialize progress tracker"""

@@ -11,14 +11,21 @@ from unittest.mock import Mock, MagicMock
 
 @pytest.fixture
 def mock_state():
-    """Create mocked app state"""
+    """Create mocked app state with async support"""
+    from unittest.mock import AsyncMock
+
     state = Mock()
     state.core = Mock()
     state.core.vector_store = Mock()
-    state.core.vector_store.get_stats.return_value = {
-        'indexed_documents': 42,
-        'total_chunks': 1337
-    }
+
+    # Make get_vector_store_stats async (new delegation method)
+    async def mock_get_stats():
+        return {
+            'indexed_documents': 42,
+            'total_chunks': 1337
+        }
+    state.get_vector_store_stats = AsyncMock(side_effect=mock_get_stats)
+
     state.runtime = Mock()
     state.runtime.indexing_in_progress = False
     return state
@@ -72,7 +79,8 @@ class TestHealthEndpoint:
         assert "model" in data
         assert data["indexing_in_progress"] == False
 
-        mock_state.core.vector_store.get_stats.assert_called_once()
+        # Verify async method was called
+        mock_state.get_vector_store_stats.assert_called_once()
 
     def test_health_includes_model_name(self, client):
         """Health should include embedding model name"""

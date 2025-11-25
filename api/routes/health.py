@@ -30,7 +30,7 @@ async def health(request: Request):
     Returns system statistics and operational status
     """
     app_state = request.app.state.app_state
-    stats = app_state.core.vector_store.get_stats()
+    stats = await app_state.get_vector_store_stats()  # Now async, non-blocking!
 
     return HealthResponse(
         status="healthy",

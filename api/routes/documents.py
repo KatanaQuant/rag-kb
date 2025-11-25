@@ -21,21 +21,21 @@ class DocumentLister:
     def __init__(self, vector_store):
         self.store = vector_store
 
-    def list_all(self) -> dict:
-        """List all documents"""
-        cursor = self._query()
-        documents = self._format(cursor)
+    async def list_all(self) -> dict:
+        """List all documents (async for non-blocking database)"""
+        cursor = await self._query()
+        documents = await self._format(cursor)
         return self._build_response(documents)
 
-    def _query(self):
-        """Query documents"""
-        return self.store.query_documents_with_chunks()
+    async def _query(self):
+        """Query documents (async)"""
+        return await self.store.query_documents_with_chunks()
 
     @staticmethod
-    def _format(cursor) -> List[dict]:
-        """Format results"""
+    async def _format(cursor) -> List[dict]:
+        """Format results (async to iterate cursor)"""
         documents = []
-        for row in cursor:
+        async for row in cursor:
             DocumentLister._add_doc(documents, row)
         return documents
 
@@ -130,7 +130,7 @@ async def get_document_info(filename: str, request: Request):
     """Get document information including extraction method"""
     try:
         app_state = request.app.state.app_state
-        info = app_state.core.vector_store.get_document_info(filename)
+        info = await app_state.core.async_vector_store.get_document_info(filename)  # Use async store
         if not info:
             raise HTTPException(status_code=404, detail=f"Document not found: {filename}")
         return DocumentInfoResponse(**info)
@@ -145,8 +145,8 @@ async def list_documents(request: Request):
     """List all documents"""
     try:
         app_state = request.app.state.app_state
-        lister = DocumentLister(app_state.core.vector_store)
-        return lister.list_all()
+        lister = DocumentLister(app_state.core.async_vector_store)  # Use async store
+        return await lister.list_all()  # Now async!
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -193,7 +193,7 @@ async def delete_document(file_path: str, request: Request):
     try:
         app_state = request.app.state.app_state
         # Delete from vector store (documents + chunks)
-        result = app_state.core.vector_store.delete_document(file_path)
+        result = await app_state.core.async_vector_store.delete_document(file_path)  # Use async store
 
         # Delete from processing progress
         if app_state.core.progress_tracker:
