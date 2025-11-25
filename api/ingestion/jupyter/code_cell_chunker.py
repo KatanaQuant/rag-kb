@@ -30,31 +30,21 @@ class CodeCellChunker:
         if not cell.source or not cell.source.strip():
             return []
 
-        # Detect language from cell metadata or path
         language = self._detect_language(cell, path)
+        code_chunks = self._create_code_chunks(cell, language, path)
+        return self._enrich_chunks_with_metadata(code_chunks, cell, language, path)
 
-        # Delegate to chunker factory for actual chunking
+    def _create_code_chunks(self, cell, language: str, path: str) -> List[Dict]:
+        """Create code chunks using chunker factory"""
         cell_size = len(cell.source)
         chunker = self.chunker_factory.create_chunker(language, cell_size)
-        code_chunks = chunker.chunkify(cell.source, filepath=path)
+        return chunker.chunkify(cell.source, filepath=path)
 
-        # Enrich chunks with cell metadata
-        enriched_chunks = []
-        for chunk in code_chunks:
-            enriched_chunks.append({
-                'content': chunk['content'],
-                'type': 'code',
-                'language': language,
-                'cell_number': getattr(cell, 'cell_number', 0),
-                'cell_type': 'code',
-                'execution_count': getattr(cell, 'execution_count', None),
-                'has_output': len(getattr(cell, 'outputs', [])) > 0,
-                'outputs': getattr(cell, 'outputs', []),
-                'metadata': chunk.get('metadata', {}),
-                'filepath': path,
-            })
-
-        return enriched_chunks
+    def _enrich_chunks_with_metadata(self, code_chunks: List[Dict], cell,
+                                     language: str, path: str) -> List[Dict]:
+        """Enrich chunks with cell metadata"""
+        enricher = ChunkEnricher(cell, language, path)
+        return [enricher.build_enriched_chunk(chunk) for chunk in code_chunks]
 
     def _detect_language(self, cell, path: str) -> str:
         """Detect programming language for cell
@@ -76,3 +66,45 @@ class CodeCellChunker:
 
         # Fallback to Python for Jupyter notebooks
         return 'python'
+
+
+class ChunkEnricher:
+    """Enriches code chunks with cell metadata
+
+    Encapsulates cell context (cell, language, path) to reduce parameter count.
+    Follows "Introduce Parameter Object" refactoring pattern (Fowler).
+    """
+
+    def __init__(self, cell, language: str, path: str):
+        """Initialize with cell context
+
+        Args:
+            cell: Notebook cell object
+            language: Programming language
+            path: File path for metadata
+        """
+        self.cell = cell
+        self.language = language
+        self.path = path
+
+    def build_enriched_chunk(self, chunk: Dict) -> Dict:
+        """Build a single enriched chunk with cell metadata
+
+        Args:
+            chunk: Base chunk from chunker
+
+        Returns:
+            Enriched chunk dictionary
+        """
+        return {
+            'content': chunk['content'],
+            'type': 'code',
+            'language': self.language,
+            'cell_number': getattr(self.cell, 'cell_number', 0),
+            'cell_type': 'code',
+            'execution_count': getattr(self.cell, 'execution_count', None),
+            'has_output': len(getattr(self.cell, 'outputs', [])) > 0,
+            'outputs': getattr(self.cell, 'outputs', []),
+            'metadata': chunk.get('metadata', {}),
+            'filepath': self.path,
+        }

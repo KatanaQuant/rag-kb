@@ -55,28 +55,47 @@ class StageWorker:
         while self.running:
             try:
                 item = self.input_queue.get(timeout=1.0)
-                with self._lock:
-                    self._current_item = str(item.path.name) if hasattr(item, 'path') else str(item)
-                    self._processing = True
-
-                result = self.process_fn(item)
-
-                if result and self.output_queue:
-                    self.output_queue.put(result)
-
-                with self._lock:
-                    self._processing = False
-                    # Keep _current_item set so it's visible for monitoring
+                self._process_item(item)
             except Empty:
-                with self._lock:
-                    if not self._processing:
-                        self._current_item = None
-                continue
+                self._handle_empty_queue()
             except Exception as e:
-                print(f"{self.name} error: {e}")
-                with self._lock:
-                    self._current_item = None
-                    self._processing = False
+                self._handle_processing_error(e)
+
+    def _process_item(self, item):
+        """Process a single work item"""
+        self._set_processing_state(item, True)
+        result = self.process_fn(item)
+        self._send_result_if_exists(result)
+        self._set_processing_complete()
+
+    def _set_processing_state(self, item, processing: bool):
+        """Update processing state with lock"""
+        with self._lock:
+            self._current_item = str(item.path.name) if hasattr(item, 'path') else str(item)
+            self._processing = processing
+
+    def _send_result_if_exists(self, result):
+        """Send result to output queue if result exists and queue is available"""
+        if result and self.output_queue:
+            self.output_queue.put(result)
+
+    def _set_processing_complete(self):
+        """Mark processing as complete (keep current_item for monitoring)"""
+        with self._lock:
+            self._processing = False
+
+    def _handle_empty_queue(self):
+        """Handle empty queue timeout"""
+        with self._lock:
+            if not self._processing:
+                self._current_item = None
+
+    def _handle_processing_error(self, exception):
+        """Handle processing error"""
+        print(f"{self.name} error: {exception}")
+        with self._lock:
+            self._current_item = None
+            self._processing = False
 
     def get_current_item(self) -> Optional[str]:
         """Get currently processing item (for monitoring)"""

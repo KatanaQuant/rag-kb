@@ -584,7 +584,6 @@ class TestVectorStore:
         store.close()
 
 
-@pytest.mark.skip(reason="Transaction tests require manual transaction control which conflicts with auto-commit behavior")
 @requires_vec0
 class TestDatabaseTransactions:
     """Test database transaction handling"""
@@ -600,8 +599,8 @@ class TestDatabaseTransactions:
         file_hash = "abc123"
         chunks = [{"content": "Test", "chunk_index": 0, "page": 1}]
         embeddings = [np.random.rand(1024).tolist()]
+        # add_document() auto-commits, so no need to call conn.commit()
         store1.add_document(file_path, file_hash, chunks, embeddings)
-        store1.conn.commit()
         store1.close()
 
         # Verify in new connection
@@ -611,18 +610,21 @@ class TestDatabaseTransactions:
         store2.close()
 
     def test_rollback_reverts_changes(self, tmp_path):
-        """Rolled back changes should not persist"""
+        """Rolled back changes should not persist if rolled back before add_document commit"""
         db_path = tmp_path / "test.db"
         config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
 
         store = VectorStore(config)
 
-        # Add document but rollback
+        # Manually insert without using add_document to test rollback behavior
         file_path = "/test/document.pdf"
         file_hash = "abc123"
-        chunks = [{"content": "Test", "chunk_index": 0, "page": 1}]
-        embeddings = [np.random.rand(1024).tolist()]
-        store.add_document(file_path, file_hash, chunks, embeddings)
+        # Insert directly into database without commit
+        store.conn.execute(
+            "INSERT INTO documents (file_path, file_hash) VALUES (?, ?)",
+            (file_path, file_hash)
+        )
+        # Rollback before commit
         store.conn.rollback()
 
         # Document should not be indexed
@@ -636,7 +638,7 @@ class TestDatabaseTransactions:
         db_path = tmp_path / "test.db"
         config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
 
-        # Add documents
+        # Add documents (add_document auto-commits each one)
         store1 = VectorStore(config)
         for i in range(10):
             file_path = f"/test/doc{i}.pdf"
@@ -644,7 +646,6 @@ class TestDatabaseTransactions:
             chunks = [{"content": "Test", "chunk_index": 0, "page": 1}]
             embeddings = [np.random.rand(1024).tolist()]
             store1.add_document(file_path, file_hash, chunks, embeddings)
-        store1.conn.commit()
 
         # Open second connection for concurrent read
         store2 = VectorStore(config)
@@ -653,8 +654,8 @@ class TestDatabaseTransactions:
         stats1 = store1.get_stats()
         stats2 = store2.get_stats()
 
-        assert stats1['documents'] == 10
-        assert stats2['documents'] == 10
+        assert stats1['indexed_documents'] == 10
+        assert stats2['indexed_documents'] == 10
 
         store1.close()
         store2.close()

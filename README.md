@@ -8,7 +8,7 @@
 
 Built with FastAPI, sqlite-vec, and sentence-transformers.
 
-**Current Version**: v0.15.0-alpha (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
+**Current Version**: v1.0.0 - Production Ready (see [Releases](https://github.com/KatanaQuant/rag-kb/releases) for changelog)
 
 ---
 
@@ -102,7 +102,7 @@ Built with FastAPI, sqlite-vec, and sentence-transformers.
 # 1. Clone and setup
 git clone https://github.com/KatanaQuant/rag-kb.git
 cd rag-kb
-git checkout v0.14.0-alpha
+git checkout v1.0.0
 
 # 2. Add your documents
 mkdir -p knowledge_base/{books,notes,docs}
@@ -189,7 +189,7 @@ docker-compose down
 git fetch --tags
 
 # 4. Checkout the desired version
-git checkout v0.14.0-alpha
+git checkout v1.0.0
 
 # 5. Rebuild Docker image (required for dependency/system updates)
 docker-compose build --no-cache
@@ -234,7 +234,7 @@ git checkout $(git describe --tags --abbrev=0)
 
 **Specific Version**:
 ```bash
-git checkout v0.14.0-alpha
+git checkout v1.0.0
 ```
 
 **Development Branch** (not recommended for production):

@@ -278,10 +278,25 @@ class MagicSignatureStrategy:
         Returns:
             ValidationResult with is_valid=True if signature matches
         """
-        # Read first 512 bytes for magic byte check
+        header = self._read_file_header(file_path)
+        if isinstance(header, ValidationResult):
+            return header
+
+        signatures = self.MAGIC_SIGNATURES.get(expected_type, [])
+
+        if self._is_text_based(signatures):
+            return self._validation_success(expected_type)
+
+        if self._has_matching_signature(header, signatures):
+            return self._validation_success(expected_type)
+
+        return self._validation_failure(expected_type)
+
+    def _read_file_header(self, file_path: Path):
+        """Read file header for magic byte check"""
         try:
             with open(file_path, 'rb') as f:
-                header = f.read(512)
+                return f.read(512)
         except Exception as e:
             return ValidationResult(
                 is_valid=False,
@@ -289,27 +304,27 @@ class MagicSignatureStrategy:
                 reason=f'Cannot read file: {e}'
             )
 
-        # Get signatures for expected type
-        signatures = self.MAGIC_SIGNATURES.get(expected_type, [])
+    def _is_text_based(self, signatures: List) -> bool:
+        """Check if file type has no signatures (text-based)"""
+        return not signatures
 
-        # If no signatures defined (text-based files), pass validation
-        if not signatures:
-            return ValidationResult(
-                is_valid=True,
-                file_type=expected_type,
-                reason=''
-            )
-
-        # Check for matching signature
+    def _has_matching_signature(self, header: bytes, signatures: List[Tuple[bytes, int, str]]) -> bool:
+        """Check if header matches any signature"""
         for magic_bytes, offset, description in signatures:
             if self._matches_signature(header, magic_bytes, offset):
-                return ValidationResult(
-                    is_valid=True,
-                    file_type=expected_type,
-                    reason=''
-                )
+                return True
+        return False
 
-        # No matching signature found
+    def _validation_success(self, expected_type: str) -> ValidationResult:
+        """Return success validation result"""
+        return ValidationResult(
+            is_valid=True,
+            file_type=expected_type,
+            reason=''
+        )
+
+    def _validation_failure(self, expected_type: str) -> ValidationResult:
+        """Return failure validation result"""
         return ValidationResult(
             is_valid=False,
             file_type='unknown',

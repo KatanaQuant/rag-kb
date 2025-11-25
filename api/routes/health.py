@@ -30,12 +30,12 @@ async def health(request: Request):
     Returns system statistics and operational status
     """
     app_state = request.app.state.app_state
-    stats = await app_state.get_vector_store_stats()  # Now async, non-blocking!
+    stats = await app_state.get_vector_store_stats()
 
     return HealthResponse(
         status="healthy",
         indexed_documents=stats['indexed_documents'],
         total_chunks=stats['total_chunks'],
         model=default_config.model.name,
-        indexing_in_progress=app_state.runtime.indexing_in_progress
+        indexing_in_progress=app_state.is_indexing_in_progress()
     )

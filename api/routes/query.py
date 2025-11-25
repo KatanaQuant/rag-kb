@@ -27,10 +27,10 @@ async def query(request_data: QueryRequest, request: Request):
     try:
         app_state = request.app.state.app_state
         executor = QueryExecutor(
-            app_state.core.model,
-            app_state.core.async_vector_store,  # Use async store for non-blocking queries
-            app_state.query.cache
+            app_state.get_model(),
+            app_state.get_async_vector_store(),
+            app_state.get_query_cache()
         )
-        return await executor.execute(request_data)  # Now async, non-blocking!
+        return await executor.execute(request_data)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
