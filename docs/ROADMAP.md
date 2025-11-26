@@ -19,14 +19,14 @@ This document outlines the journey from v1.x to v2.0.0 and beyond.
 
 ## Current State
 
-**Latest Release**: v1.6.0 (Security REST API)
+**Latest Release**: v1.6.2 (N+1 Query Fix)
 
 **What's Working**:
 - Production-ready document indexing (PDF, EPUB, Markdown, Code)
 - Concurrent 3-stage pipeline (Chunk → Embed → Store)
 - Async API (responsive during heavy indexing)
 - Comprehensive security scanning (ClamAV, YARA, hash blacklist)
-- 445+ tests passing
+- 627 tests passing
 
 ---
 
@@ -34,6 +34,8 @@ This document outlines the journey from v1.x to v2.0.0 and beyond.
 
 | Version | Highlights |
 |---------|-----------|
+| **v1.6.2** | Fix N+1 query in completeness API (1300x faster) |
+| **v1.6.1** | Fix YARA is_valid logic bug |
 | **v1.6.0** | Security REST API, non-blocking scan jobs, parallel scanning |
 | **v1.5.0** | Advanced malware detection (ClamAV, YARA, hash blacklist) |
 | **v1.4.0** | Quarantine system for dangerous files |
@@ -53,10 +55,10 @@ This document outlines the journey from v1.x to v2.0.0 and beyond.
 ## Journey to v2.0.0
 
 ```
-v1.6.0 (CURRENT)
+v1.6.2 (CURRENT)
     │
     ├── v1.7.x - Performance & Polish
-    │   └── Startup log reduction, N+1 query fixes, chunking improvements
+    │   └── Chunking strategy improvements
     │
     ├── v1.8.x - Content Expansion
     │   └── Notion export, additional file formats
@@ -73,16 +75,6 @@ v1.6.0 (CURRENT)
 ### v1.7.x - Performance & Polish
 
 **Focus**: Performance optimizations and developer experience
-
-#### Startup Logging Verbosity Reduction
-- Clump "skip: already indexed" messages
-- Periodic summary: "Scanned 500 files, 480 skipped, 20 pending..."
-- Verbose mode via debug flag only
-
-#### N+1 Query Fix (Completeness API)
-- Current: ~3 min for 1300 docs (N+1 pattern)
-- Target: <1 sec with batch query
-- See [KNOWN_ISSUES.md #3](KNOWN_ISSUES.md)
 
 #### Chunking Strategy Evaluation
 - Semantic boundary detection via embedding similarity

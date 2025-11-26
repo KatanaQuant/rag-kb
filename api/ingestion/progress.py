@@ -64,6 +64,7 @@ class ProcessingProgressTracker:
     def __init__(self, db_path: str):
         self.db_path = db_path
         self.conn = None
+        self._progress_cache: dict = None
         self._connect()
 
     def _connect(self):
@@ -198,7 +199,10 @@ class ProcessingProgressTracker:
         return [self._row_to_progress(row) for row in cursor.fetchall()]
 
     def get_progress(self, file_path: str) -> Optional[ProcessingProgress]:
-        """Get progress for file"""
+        """Get progress for file (uses cache if available)"""
+        if self._progress_cache is not None:
+            return self._progress_cache.get(file_path)
+
         cursor = self.conn.execute("""
             SELECT file_path, file_hash, total_chunks, chunks_processed,
                    status, last_chunk_end, error_message, started_at,
@@ -208,6 +212,23 @@ class ProcessingProgressTracker:
         """, (file_path,))
         row = cursor.fetchone()
         return self._row_to_progress(row) if row else None
+
+    def preload_all_progress(self) -> None:
+        """Preload all progress records in single query (fixes N+1)"""
+        cursor = self.conn.execute("""
+            SELECT file_path, file_hash, total_chunks, chunks_processed,
+                   status, last_chunk_end, error_message, started_at,
+                   last_updated, completed_at
+            FROM processing_progress
+        """)
+        self._progress_cache = {}
+        for row in cursor.fetchall():
+            progress = self._row_to_progress(row)
+            self._progress_cache[progress.file_path] = progress
+
+    def clear_cache(self) -> None:
+        """Clear the progress cache"""
+        self._progress_cache = None
 
     @staticmethod
     def _row_to_progress(row) -> ProcessingProgress:

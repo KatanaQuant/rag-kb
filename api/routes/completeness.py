@@ -66,9 +66,13 @@ class ChunkRepository:
 
     def __init__(self, db_path: str):
         self.db_path = db_path
+        self._chunk_counts_cache: dict = None
 
     def count_by_document(self, document_id: int) -> int:
-        """Count chunks for document"""
+        """Count chunks for document (uses cache if available)"""
+        if self._chunk_counts_cache is not None:
+            return self._chunk_counts_cache.get(document_id, 0)
+
         conn = sqlite3.connect(self.db_path)
         cursor = conn.execute(
             "SELECT COUNT(*) FROM chunks WHERE document_id = ?",
@@ -77,6 +81,21 @@ class ChunkRepository:
         count = cursor.fetchone()[0]
         conn.close()
         return count
+
+    def preload_all_counts(self) -> None:
+        """Preload all chunk counts in single query (fixes N+1)"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.execute("""
+            SELECT document_id, COUNT(*) as chunk_count
+            FROM chunks
+            GROUP BY document_id
+        """)
+        self._chunk_counts_cache = {row[0]: row[1] for row in cursor.fetchall()}
+        conn.close()
+
+    def clear_cache(self) -> None:
+        """Clear the chunk counts cache"""
+        self._chunk_counts_cache = None
 
 
 class CompletenessReporter:
@@ -106,6 +125,10 @@ class CompletenessReporter:
 
     def generate_report(self) -> Dict:
         """Generate completeness report"""
+        # Preload all data in batch queries (fixes N+1)
+        self.chunk_repo.preload_all_counts()
+        if self.tracker:
+            self.tracker.preload_all_progress()
         analyzer = self._create_analyzer()
         return analyzer.analyze_all()
 

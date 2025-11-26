@@ -34,19 +34,7 @@ Test `test_delete_document_success` is skipped - FastAPI's JSON encoder hits rec
 
 ---
 
-### 3. Performance: Completeness API N+1 Query
-
-**Severity**: MEDIUM
-
-`/documents/completeness` takes ~3 min for 1300 documents due to N+1 query pattern.
-
-**Fix Planned**: Batch query in v1.7.x (see [ROADMAP.md](ROADMAP.md))
-
-**Workaround**: Run completeness checks during off-peak hours.
-
----
-
-### 4. ClamAV Socket Contention
+### 3. ClamAV Socket Contention
 
 **Severity**: LOW (cosmetic)
 
@@ -80,6 +68,10 @@ IndexingQueue now has duplicate detection - prevents re-queuing files already in
 
 ### PDF Integrity Validation [RESOLVED v1.1.0]
 PDF integrity validation detects empty files, missing headers, truncation, corrupt xref tables.
+
+### Completeness API N+1 Query [RESOLVED v1.6.2]
+`/documents/completeness` was slow (~3 min for 1300 docs) due to N+1 query pattern.
+Fixed with batch preloading - now completes in <1 sec.
 
 </details>
 
