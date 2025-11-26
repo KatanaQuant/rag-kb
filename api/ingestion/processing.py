@@ -116,6 +116,10 @@ class DocumentProcessor:
         self.validation_enabled = default_config.file_validation.enabled
         self.validation_action = default_config.file_validation.action
 
+        # Quarantine manager for dangerous files
+        from services.quarantine_manager import QuarantineManager
+        self.quarantine = QuarantineManager(default_config.paths.knowledge_base)
+
     def get_file_hash(self, path: Path) -> str:
         """Get file hash"""
         return self.hasher.hash_file(path)
@@ -184,6 +188,16 @@ class DocumentProcessor:
         """Handle validation failure based on configured action"""
         if self.validation_action == 'reject':
             print(f"REJECTED (security): {doc_file.name} - {validation_result.reason}")
+
+            # Quarantine dangerous files (executables, zip bombs, scripts)
+            if validation_result.validation_check:
+                self.quarantine.quarantine_file(
+                    doc_file.path,
+                    validation_result.reason,
+                    validation_result.validation_check,
+                    doc_file.hash
+                )
+
             # Track rejected file in database
             if self.tracker:
                 self.tracker.mark_rejected(
@@ -196,6 +210,15 @@ class DocumentProcessor:
             print(f"WARNING (security): {doc_file.name} - {validation_result.reason}")
             return True
         elif self.validation_action == 'skip':
+            # Quarantine dangerous files even when skipping
+            if validation_result.validation_check:
+                self.quarantine.quarantine_file(
+                    doc_file.path,
+                    validation_result.reason,
+                    validation_result.validation_check,
+                    doc_file.hash
+                )
+
             # Track skipped files too
             if self.tracker:
                 self.tracker.mark_rejected(

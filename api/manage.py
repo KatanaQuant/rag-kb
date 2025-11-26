@@ -3,12 +3,15 @@
 RAG Knowledge Base Maintenance CLI
 
 Usage:
-    python manage.py health              # Check completeness health
-    python manage.py fix-tracking        # Backfill chunk counts
-    python manage.py delete-orphans      # Delete orphan document records
-    python manage.py list-rejected       # List rejected files
-    python manage.py list-incomplete     # List incomplete documents
-    python manage.py reindex-incomplete  # Re-index all incomplete documents
+    python manage.py health                 # Check completeness health
+    python manage.py fix-tracking           # Backfill chunk counts
+    python manage.py delete-orphans         # Delete orphan document records
+    python manage.py list-rejected          # List rejected files
+    python manage.py quarantine-list        # List quarantined files
+    python manage.py quarantine-restore     # Restore file from quarantine
+    python manage.py quarantine-purge       # Purge old quarantined files
+    python manage.py list-incomplete        # List incomplete documents
+    python manage.py reindex-incomplete     # Re-index all incomplete documents
 
 Via docker:
     docker-compose exec rag-api python manage.py health
@@ -163,6 +166,70 @@ def cmd_list_rejected(args):
     return 0
 
 
+def cmd_quarantine_list(args):
+    """List quarantined files"""
+    from services.quarantine_manager import QuarantineManager
+    from config import default_config
+
+    manager = QuarantineManager(default_config.paths.knowledge_base)
+    quarantined = manager.list_quarantined()
+
+    if not quarantined:
+        print("No files in quarantine.")
+        return 0
+
+    print(f"Quarantined files ({len(quarantined)} total):\n")
+
+    for q in quarantined:
+        filename = Path(q.original_path).name
+        print(f"  {filename}.REJECTED")
+        print(f"    Original: {q.original_path}")
+        print(f"    Reason: {q.reason}")
+        print(f"    Check: {q.validation_check}")
+        print(f"    Quarantined: {q.quarantined_at}")
+        print()
+
+    return 0
+
+
+def cmd_quarantine_restore(args):
+    """Restore file from quarantine"""
+    from services.quarantine_manager import QuarantineManager
+    from config import default_config
+
+    manager = QuarantineManager(default_config.paths.knowledge_base)
+
+    if not args.filename:
+        print("Error: --filename required")
+        return 1
+
+    success = manager.restore_file(args.filename, force=args.force)
+    return 0 if success else 1
+
+
+def cmd_quarantine_purge(args):
+    """Purge old quarantined files"""
+    from services.quarantine_manager import QuarantineManager
+    from config import default_config
+
+    manager = QuarantineManager(default_config.paths.knowledge_base)
+
+    if args.dry_run:
+        print(f"DRY RUN - Would purge files older than {args.days} days:\n")
+
+    purged = manager.purge_old_files(args.days, dry_run=args.dry_run)
+
+    if purged == 0:
+        print(f"No files older than {args.days} days found.")
+    else:
+        if args.dry_run:
+            print(f"\nRun without --dry-run to purge {purged} files")
+        else:
+            print(f"\nPurged {purged} files")
+
+    return 0
+
+
 def cmd_list_incomplete(args):
     """List incomplete documents"""
     import requests
@@ -291,6 +358,22 @@ def main():
     # list-rejected
     p = subparsers.add_parser('list-rejected', help='List rejected files')
     p.set_defaults(func=cmd_list_rejected)
+
+    # quarantine list
+    p = subparsers.add_parser('quarantine-list', help='List quarantined files')
+    p.set_defaults(func=cmd_quarantine_list)
+
+    # quarantine restore
+    p = subparsers.add_parser('quarantine-restore', help='Restore file from quarantine')
+    p.add_argument('--filename', required=True, help='Quarantined filename (e.g., file.pdf.REJECTED)')
+    p.add_argument('--force', action='store_true', help='Overwrite if original path exists')
+    p.set_defaults(func=cmd_quarantine_restore)
+
+    # quarantine purge
+    p = subparsers.add_parser('quarantine-purge', help='Purge old quarantined files')
+    p.add_argument('--days', type=int, default=30, help='Delete files older than N days (default: 30)')
+    p.add_argument('--dry-run', action='store_true', help='Show what would be deleted')
+    p.set_defaults(func=cmd_quarantine_purge)
 
     # list-incomplete
     p = subparsers.add_parser('list-incomplete', help='List incomplete documents')
