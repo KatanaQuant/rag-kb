@@ -85,6 +85,79 @@ class TestSkipBatcher:
         assert captured.out == ""
 
 
+class TestSkipBatcherDefaults:
+    """Test SkipBatcher default configuration"""
+
+    def test_default_interval_is_10_seconds(self):
+        """SkipBatcher default interval should be 10 seconds"""
+        from services.skip_batcher import SkipBatcher
+
+        batcher = SkipBatcher()
+        assert batcher.interval == 10.0
+
+    def test_custom_interval_overrides_default(self):
+        """SkipBatcher should accept custom interval"""
+        from services.skip_batcher import SkipBatcher
+
+        batcher = SkipBatcher(interval=30.0)
+        assert batcher.interval == 30.0
+
+
+class TestSkipBatcherOnlyPrintNew:
+    """Test SkipBatcher only prints when NEW skips occur"""
+
+    def test_tracks_last_printed_count(self):
+        """SkipBatcher should track last printed count"""
+        from services.skip_batcher import SkipBatcher
+
+        batcher = SkipBatcher(interval=100)  # Long interval to prevent auto-print
+        assert batcher._last_printed_count == 0
+
+    def test_reset_clears_last_printed_count(self):
+        """SkipBatcher.reset should clear last printed count"""
+        from services.skip_batcher import SkipBatcher
+
+        batcher = SkipBatcher(interval=100)
+        batcher._last_printed_count = 10
+        batcher.reset()
+
+        assert batcher._last_printed_count == 0
+
+    def test_only_prints_when_new_skips(self, capsys):
+        """SkipBatcher should only print when there are new skips"""
+        from services.skip_batcher import SkipBatcher
+
+        batcher = SkipBatcher(interval=100)
+        batcher.record_skip("file1.pdf", "already indexed")
+        batcher.record_skip("file2.pdf", "already indexed")
+
+        # First print should output
+        batcher._print_summary_if_needed()
+        captured1 = capsys.readouterr()
+        assert "2 files skipped" in captured1.out
+
+        # Second print without new skips should NOT output
+        batcher._print_summary_if_needed()
+        captured2 = capsys.readouterr()
+        assert captured2.out == ""
+
+        # Third print with new skip SHOULD output
+        batcher.record_skip("file3.pdf", "already indexed")
+        batcher._print_summary_if_needed()
+        captured3 = capsys.readouterr()
+        assert "3 files skipped" in captured3.out
+
+    def test_no_print_when_zero_skips(self, capsys):
+        """SkipBatcher should not print when no skips recorded"""
+        from services.skip_batcher import SkipBatcher
+
+        batcher = SkipBatcher(interval=100)
+        batcher._print_summary_if_needed()
+
+        captured = capsys.readouterr()
+        assert captured.out == ""
+
+
 class TestSkipBatcherIntegration:
     """Integration tests for SkipBatcher with PipelineCoordinator"""
 
@@ -100,3 +173,16 @@ class TestSkipBatcherIntegration:
         )
 
         assert hasattr(coordinator, 'skip_batcher')
+
+    def test_pipeline_coordinator_uses_10s_interval(self):
+        """PipelineCoordinator should use 10s interval for skip batcher"""
+        from services.pipeline_coordinator import PipelineCoordinator
+        from unittest.mock import Mock
+
+        coordinator = PipelineCoordinator(
+            processor=Mock(),
+            indexer=Mock(),
+            embedding_service=Mock()
+        )
+
+        assert coordinator.skip_batcher.interval == 10.0

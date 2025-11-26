@@ -55,7 +55,7 @@ See [CONFIGURATION.md](CONFIGURATION.md#auto-sync-configuration) for auto-sync s
 
 Ask Claude questions naturally in VSCode. Claude automatically decides when to query your knowledge base.
 
-See [CLAUDE_CODE_INTEGRATION.md](CLAUDE_CODE_INTEGRATION.md) for setup instructions.
+See [MCP_INTEGRATION.md](MCP_INTEGRATION.md) for setup instructions.
 
 ### Via Command Line
 
@@ -174,7 +174,7 @@ curl -X POST http://localhost:8000/index \
   -d '{"force_reindex": true}'
 ```
 
-**For complete API documentation with examples**, see [OPERATIONAL_CONTROLS.md](OPERATIONAL_CONTROLS.md)
+**For complete API documentation with examples**, see [API.md](API.md)
 
 ## Document Management
 
@@ -259,4 +259,4 @@ curl http://localhost:8000/health
 - **Configuration**: See [CONFIGURATION.md](CONFIGURATION.md) for advanced settings
 - **Development**: See [DEVELOPMENT.md](DEVELOPMENT.md) for testing and development
 - **Troubleshooting**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common issues
-- **API Reference**: See [OPERATIONAL_CONTROLS.md](OPERATIONAL_CONTROLS.md) for complete API docs
+- **API Reference**: See [API.md](API.md) for complete API docs

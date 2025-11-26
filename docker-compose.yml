@@ -31,6 +31,7 @@ services:
       - ./.cache/huggingface:/home/appuser/.cache/huggingface  # Hugging Face model cache (Docling models)
       - ./.cache/easyocr:/home/appuser/.EasyOCR  # EasyOCR model cache (detection models)
       - ./.cache/rapidocr:/opt/venv/lib/python3.13/site-packages/rapidocr/models  # RapidOCR model cache (OCR models)
+      - ./.cache/clamav:/var/lib/clamav  # ClamAV virus database cache (persists ~230MB signatures)
     environment:
       - PYTHONUNBUFFERED=1
       - MODEL_NAME=${MODEL_NAME:-Snowflake/snowflake-arctic-embed-l-v2.0}
@@ -56,5 +57,5 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '${MAX_CPUS:-4.0}'
-          memory: ${MAX_MEMORY:-6G}
+          cpus: '${MAX_CPUS:-11.0}'
+          memory: ${MAX_MEMORY:-21G}

@@ -16,7 +16,7 @@ git clone https://github.com/KatanaQuant/rag-kb.git
 cd rag-kb
 
 # Checkout latest stable release
-git checkout v0.13.0-alpha
+git checkout v1.6.0
 
 # Optional: Change port if 8000 is in use
 echo "RAG_PORT=8001" > .env
@@ -178,7 +178,7 @@ docker images | grep rag-api
 
 ## Next Steps
 
-- **MCP Integration**: See [CLAUDE_CODE_INTEGRATION.md](CLAUDE_CODE_INTEGRATION.md) to use with Claude Code in VSCode
+- **MCP Integration**: See [MCP_INTEGRATION.md](MCP_INTEGRATION.md) to use with Claude Code
 - **Usage Patterns**: See [USAGE.md](USAGE.md) for different query methods
 - **Configuration**: See [CONFIGURATION.md](CONFIGURATION.md) for advanced settings
 - **Troubleshooting**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if you encounter issues

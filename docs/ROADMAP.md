@@ -1,398 +1,165 @@
 # RAG-KB Roadmap
 
-This document outlines planned features and improvements for the RAG Knowledge Base system.
+This document outlines the journey from v1.x to v2.0.0 and beyond.
 
 ## Table of Contents
 
-- [Current Version](#current-version-v0130-alpha)
-- [Path to v1.0.0 Stable Release](#path-to-v100-stable-release)
-  - [Roadmap Overview](#roadmap-overview)
-  - [Critical Blockers for v1.0.0](#critical-blockers-for-v100)
-  - [What's NOT Required for v1.0.0](#whats-not-required-for-v100)
-- [Planned Features](#planned-features)
-  - [High Priority (No GPU Required)](#high-priority-no-gpu-required)
-    - [1. Notion Export Support](#1-notion-export-support)
-    - [2. Document Security & Malware Scanning](#2-document-security--malware-scanning)
-    - [3. Advanced Docker Build Optimization (Phase 2)](#3-advanced-docker-build-optimization-phase-2)
-  - [Medium Priority](#medium-priority)
-    - [4. Python 3.13 Upgrade [COMPLETED]](#4-python-313-upgrade-completed-in-v0140-alpha)
-    - [5. Post-Migration Dependency Updates](#5-post-migration-dependency-updates)
-  - [GPU-Accelerated Features](#gpu-accelerated-features)
-    - [6. GPU Support Infrastructure](#6-gpu-support-infrastructure)
-    - [7. Embedding Model Upgrade & Reranking](#7-embedding-model-upgrade--reranking)
-    - [8. Video/Audio Processing Support](#8-videoaudio-processing-support)
-    - [9. Local Vision Models](#9-local-vision-models)
-  - [Medium-Low Priority](#medium-low-priority)
-    - [10. Remote Processing Server Support](#10-remote-processing-server-support)
-    - [11. Web UI for Knowledge Base Management](#11-web-ui-for-knowledge-base-management)
-    - [12. Multi-Vector Representations & Incremental Updates](#12-multi-vector-representations--incremental-updates)
-    - [13. Async Database Migration](#13-async-database-migration)
-    - [14. Startup Logging Verbosity Reduction](#14-startup-logging-verbosity-reduction)
-    - [15. Chunking Strategy Evaluation & Improvement](#15-chunking-strategy-evaluation--improvement)
-  - [Low Priority / Future](#low-priority--future)
-    - [16. Advanced Metadata Extraction](#16-advanced-metadata-extraction)
-    - [17. Multi-Language Support](#17-multi-language-support)
-- [Completed Features](#completed-features)
-  - [v0.14.0-alpha](#v0140-alpha)
-  - [v0.13.0-alpha](#v0130-alpha)
-  - [v0.12.0-alpha](#v0120-alpha)
-  - [v0.11.0-alpha](#v0110-alpha)
-  - [v0.9.1-alpha](#v091-alpha)
-  - [v0.8.0-alpha](#v080-alpha)
-  - [v0.7.0-alpha](#v070-alpha)
-  - [v0.6.0-alpha](#v060-alpha)
-  - [v0.5.0-alpha](#v050-alpha)
+- [Current State](#current-state)
+- [Version History](#version-history)
+- [Journey to v2.0.0](#journey-to-v200)
+  - [v1.7.x - Performance & Polish](#v17x---performance--polish)
+  - [v1.8.x - Content Expansion](#v18x---content-expansion)
+  - [v1.9.x - Pre-v2 Stabilization](#v19x---pre-v2-stabilization)
+  - [v2.0.0 - GPU & Advanced Features](#v200---gpu--advanced-features)
+- [Feature Backlog](#feature-backlog)
 - [Decision Log](#decision-log)
-  - [Why Python 3.13 Standard Build (Not Free-Threading)?](#why-python-313-standard-build-not-free-threading)
-  - [Why Option C (Hybrid Index) for Code RAG?](#why-option-c-hybrid-index-for-code-rag)
 - [Contributing](#contributing)
 
 ---
 
-## Current Version: v1.0.0
+## Current State
 
-**Status**: **Production Ready** - First stable release with comprehensive testing, clean architecture, and async database support
+**Latest Release**: v1.6.0 (Security REST API)
+
+**What's Working**:
+- Production-ready document indexing (PDF, EPUB, Markdown, Code)
+- Concurrent 3-stage pipeline (Chunk → Embed → Store)
+- Async API (responsive during heavy indexing)
+- Comprehensive security scanning (ClamAV, YARA, hash blacklist)
+- 445+ tests passing
 
 ---
 
-## Path to v2.0.0
+## Version History
 
-RAG-KB v1.0.0 provides a solid foundation. Future major releases will focus on advanced features and GPU acceleration.
+| Version | Highlights |
+|---------|-----------|
+| **v1.6.0** | Security REST API, non-blocking scan jobs, parallel scanning |
+| **v1.5.0** | Advanced malware detection (ClamAV, YARA, hash blacklist) |
+| **v1.4.0** | Quarantine system for dangerous files |
+| **v1.3.0** | Rejection tracking, archive bomb detection |
+| **v1.2.0** | File type validation, executable detection |
+| **v1.0.0** | Production release, async database, 445 tests |
+| **v0.16.0** | Async database migration (API <100ms during indexing) |
+| **v0.15.0** | POODR refactoring (main.py 684→89 LOC) |
+| **v0.14.0** | Python 3.13 upgrade |
+| **v0.13.0** | Docker optimization, progress logging |
+| **v0.11.0** | Concurrent pipeline, Go support |
+| **v0.9.1** | Jupyter notebooks, Obsidian Graph-RAG |
+| **v0.8.0** | Code RAG with AST chunking |
 
-### Roadmap Overview
+---
+
+## Journey to v2.0.0
 
 ```
-v1.0.0 (CURRENT - STABLE)
-    └─ Production-ready, comprehensive testing, clean architecture
-
-v1.x.x (Maintenance & Minor Features)
-    └─ Bug fixes, performance improvements, minor features
-
-v2.0.0 (Major Features - Future)
-    └─ GPU support, advanced models, vision capabilities
+v1.6.0 (CURRENT)
+    │
+    ├── v1.7.x - Performance & Polish
+    │   └── Startup log reduction, N+1 query fixes, chunking improvements
+    │
+    ├── v1.8.x - Content Expansion
+    │   └── Notion export, additional file formats
+    │
+    ├── v1.9.x - Pre-v2 Stabilization
+    │   └── Docker Phase 2, API review, final polish
+    │
+    └── v2.0.0 - GPU & Advanced Features
+        └── GPU support, embedding upgrade, video/audio, vision models
 ```
 
-### Completed Critical Requirements for v1.0.0
+---
 
-1. ~~**Async Database Migration**~~ - ✅ **COMPLETED** in v0.16.0-alpha
-2. ~~**Code Quality & Architecture**~~ - ✅ **COMPLETED** in v1.0.0
-3. ~~**Comprehensive Testing**~~ - ✅ **COMPLETED** (445 tests passing)
-2. **Comprehensive Test Coverage** - Fix skipped tests, add integration test suite (>80% coverage)
-3. **API Stability Review** - Review all endpoints before committing to semantic versioning
+### v1.7.x - Performance & Polish
 
-### What's NOT Required for v1.0.0
+**Focus**: Performance optimizations and developer experience
 
-These features will be added in v1.x.x releases after stable launch:
-- GPU support (v1.1.0+)
-- Video/audio transcription (v1.2.0+)
-- Web UI (v1.3.0+)
-- Python 3.13 upgrade (v1.4.0+)
-- Notion export, ClamAV scanning, advanced optimizations
+#### Startup Logging Verbosity Reduction
+- Clump "skip: already indexed" messages
+- Periodic summary: "Scanned 500 files, 480 skipped, 20 pending..."
+- Verbose mode via debug flag only
 
-**Estimated Timeline**: 3-6 months to v1.0.0 stable
+#### N+1 Query Fix (Completeness API)
+- Current: ~3 min for 1300 docs (N+1 pattern)
+- Target: <1 sec with batch query
+- See [KNOWN_ISSUES.md #3](KNOWN_ISSUES.md)
 
-**Details**: See [internal_planning/V1_RELEASE_PLAN.md](../internal_planning/V1_RELEASE_PLAN.md) for comprehensive release plan
+#### Chunking Strategy Evaluation
+- Semantic boundary detection via embedding similarity
+- Variable-size chunks aligned to topic boundaries
+- Requires profiling before GPU features
+- See [internal_planning/CHUNKING_STRATEGY_EVALUATION.md](../internal_planning/CHUNKING_STRATEGY_EVALUATION.md)
 
 ---
 
-## Planned Features
+### v1.8.x - Content Expansion
 
-### High Priority (No GPU Required)
+**Focus**: Additional content sources
 
-#### 1. Notion Export Support
+#### Notion Export Support
+- Notion workspace exports (ZIP with markdown/HTML/CSV)
+- Preserve page links and hierarchy
+- Database property extraction
 
-**Target**: v0.15.0-alpha
-
-Support for Notion workspace exports (ZIP files with markdown, HTML, CSV) to enable indexing of Notion pages, databases, and hierarchies. Preserves page links and metadata.
-
----
-
-#### 2. Document Security & Malware Scanning
-
-**Target**: v0.15.0-alpha
-
-ClamAV integration for scanning documents before indexing. Protects against malware in PDFs, ebooks, and documents from untrusted sources. Phase 1 (file type validation) completed in v0.12.0-alpha.
+#### Additional Format Support
+- Evaluate user-requested formats
+- Audio transcription prep (metadata, no GPU yet)
 
 ---
 
-#### 3. Advanced Docker Build Optimization (Phase 2)
+### v1.9.x - Pre-v2 Stabilization
 
-**Target**: v0.15.0-alpha or v0.16.0-alpha
+**Focus**: Final polish before major version
 
-Further Docker optimizations beyond v0.13.0 improvements:
+#### Docker Build Optimization Phase 2
+- Pre-built base image on ghcr.io (7-10 min → 3-5 min first build)
+- Python wheels for heavy packages
+- See [internal_planning/DOCKER_BUILD_OPTIMIZATION.md](../internal_planning/DOCKER_BUILD_OPTIMIZATION.md)
 
-**Current State (v0.13.0)**:
-- ** BuildKit cache mounts (60% faster rebuilds)
-- ** Multi-stage build (40-60% smaller images)
-- ** .dockerignore optimization
-
-**Future Improvements**:
-- **Pre-built Base Image**: Push `rag-kb-base` image to ghcr.io with system packages pre-installed
-  - First builds: 7-10 min → 3-5 min (80-95% faster)
-  - Users skip apt-get entirely
-  - Requires: GitHub Container Registry, base image maintenance
-
-- **Python Wheels**: Pre-compile heavy packages (torch, sentence-transformers, docling)
-  - Reduces pip install time by 20-30%
-  - Store in GitHub Releases
-
-**Combined Result** (Phase 1 + Phase 2):
-- First build: 3-4 min (vs 7-10 min originally)
-- Rebuilds: 1-2 min (vs 2-4 min currently)
-- Final image: 1.5-2.0 GB
-
-**See**: [internal_planning/DOCKER_BUILD_OPTIMIZATION.md](../internal_planning/DOCKER_BUILD_OPTIMIZATION.md)
+#### API Stability Review
+- Review all endpoints before semantic versioning
+- Document breaking changes for v2.0.0
+- Deprecation warnings for removed features
 
 ---
 
+### v2.0.0 - GPU & Advanced Features
 
-### Medium Priority
+**Focus**: Hardware acceleration and advanced capabilities
 
-#### 4. ~~Python 3.13 Upgrade~~ [COMPLETED in v0.14.0-alpha]
+#### GPU Support Infrastructure
+- CUDA/ROCm support for embedding generation
+- 10-50x performance improvement for model inference
+- See [internal_planning/HARDWARE_SETUP_GUIDE.md](../internal_planning/HARDWARE_SETUP_GUIDE.md)
 
-~~**Target**: v0.16.0-alpha~~
+#### Embedding Model Upgrade
+- Upgrade to Qwen3-Embedding-8B (MTEB 70.58)
+- BGE-Reranker-v2-m3 cross-encoder (+20-30% retrieval accuracy)
+- Practical re-indexing (hours instead of weeks)
+- See [internal_planning/EMBEDDING_MODEL_ANALYSIS.md](../internal_planning/EMBEDDING_MODEL_ANALYSIS.md)
 
-**Status**: ✓ **COMPLETED** - Upgraded to Python 3.13.9 with standard build (no free-threading/JIT)
+#### Video/Audio Processing
+- Automatic transcription (Whisper)
+- Temporal chunking for timestamp-accurate results
+- Podcast, lecture, meeting support
 
-**Completed**: v0.14.0-alpha (2025-01-24)
-
-**What was done:**
-- Upgraded from Python 3.11 → Python 3.13.9
-- PyTorch 2.5.1 → 2.9.1+cpu (stability + memory leak fixes)
-- torchvision 0.20.1 → 0.24.1+cpu
-- All automatic Python 3.13 optimizations enabled (5-10% performance improvement)
-
-**What was NOT enabled (intentional):**
-- ❌ Free-threading (`python3.13t`) - 40% performance penalty in 3.13, wait for 3.14
-- ❌ JIT compiler - Experimental, minimal/negative gains for I/O-bound workloads
-- ✓ Standard build provides best performance for RAG workloads
-
-**Actual Performance Gains:**
-- PyTorch 2.9.1: Memory leak fixes, dynamic shape support, stability improvements
-- Python 3.13: 5-10% general performance from automatic optimizations
-- Worker scaling (4→8): 50% throughput improvement (already configured)
-
-**See Decision**: [Decision Log - Python 3.13 Standard Build](#why-python-313-standard-build-not-free-threading)
+#### Local Vision Models
+- Video frame analysis without external APIs
+- Privacy, cost savings, no rate limits
 
 ---
 
-#### 5. Post-Migration Dependency Updates
-
-**Target**: Ongoing
-
-~~Audit and update all dependencies after Python 3.13 migration to leverage new optimizations and security patches.~~
-
-**Status**: Completed during Python 3.13 upgrade. PyTorch, FastAPI, docling, and supporting libraries are all current.
-
----
-
-### GPU-Accelerated Features
-
-**Note**: Hardware details in [internal_planning/HARDWARE_SETUP_GUIDE.md](../internal_planning/HARDWARE_SETUP_GUIDE.md)
-
----
-
-#### 6. GPU Support Infrastructure
-
-**Target**: v0.13.0-alpha
-
-CUDA/ROCm GPU support for hardware-accelerated embedding generation and model inference. Enables 10-50x performance improvements for all GPU-accelerated features below.
-
----
-
-#### 7. Embedding Model Upgrade & Reranking
-
-**Target**: v0.13.0-alpha (requires GPU)
-
-Upgrade to Qwen3-Embedding-8B (MTEB 70.58) and add BGE-Reranker-v2-m3 cross-encoder for +20-30% retrieval accuracy improvement. Makes re-indexing large knowledge bases practical (hours instead of weeks).
-
-**See**: [internal_planning/EMBEDDING_MODEL_ANALYSIS.md](../internal_planning/EMBEDDING_MODEL_ANALYSIS.md)
-
----
-
-#### 8. Video/Audio Processing Support
-
-**Target**: v0.14.0-alpha (requires GPU)
-
-Automatic transcription and indexing of video/audio files (podcasts, lectures, meetings, tutorials). Search across spoken content with temporal chunking for timestamp-accurate results.
-
----
-
-#### 9. Local Vision Models
-
-**Target**: v0.15.0-alpha (requires GPU)
-
-Run vision models locally for video frame analysis instead of external APIs. Provides privacy, cost savings, and no rate limits.
-
----
-
-### Medium-Low Priority
-
-#### 10. Remote Processing Server Support
-
-**Target**: v0.16.0-alpha
-
-Offload compute-intensive processing to remote cloud workers (GPU/TPU) for pay-per-use indexing. Useful for one-time massive indexing without buying hardware.
-
----
-
-#### 11. Web UI for Knowledge Base Management
-
-**Target**: v0.18.0-alpha or later
-
-Web interface with visual library view, document thumbnails, tagging system, drag-drop file upload, and GUI operational controls. Improves UX but not critical for core functionality.
-
----
-
-#### 12. Multi-Vector Representations & Incremental Updates
-
-Store multiple embeddings per chunk for better retrieval diversity. Delta indexing for modified files to avoid full reprocessing.
-
----
-
-#### 13. ~~Async Database Migration~~ [COMPLETED in v0.16.0-alpha]
-
-**Target**: v0.15.0-alpha or v0.16.0-alpha
-
-Migrate blocking database calls to async I/O (using `aiosqlite`) to fix slow API endpoints during indexing. Target <10ms response time for `/health` endpoint even during heavy indexing.
-
-**Status**: ✅ **COMPLETED** - Implemented hybrid async/sync architecture
-- API endpoints respond in <100ms during heavy indexing (vs 10+ seconds before)
-- Health checks: 30-40ms response time
-- Query endpoints: <500ms response time
-- System remains responsive during PDF processing
-
-**See**:
-- [KNOWN_ISSUES.md #5](KNOWN_ISSUES.md) - Marked as RESOLVED
-- [RELEASE_v0.16.0-alpha.md](RELEASE_v0.16.0-alpha.md) - Full release notes
-
----
-
-#### 14. Startup Logging Verbosity Reduction
-
-**Target**: v0.16.0-alpha
-
-Reduce log verbosity during startup. Currently each "Skip: already indexed" file gets its own log line, creating excessive noise during startup scan.
-
-**Improvement**:
-- Clump skip messages together instead of individual lines
-- Show periodic summary every few seconds: "Scanned 500 files, 480 skipped (already indexed), 20 pending..."
-- Full verbose logging available via debug flag for troubleshooting
-- Individual skip lines only in DEBUG mode
-
-**User Impact**: Cleaner logs during normal operation, faster visual feedback on startup progress
-
----
-
-#### 15. Chunking Strategy Evaluation & Improvement
-
-**Target**: v0.16.0-alpha or v0.17.0-alpha
-
-Systematic evaluation of chunking quality with metrics and content-aware strategies. Philosophy: chunking quality > embedding model quality. Improves retrieval for plain text and specialized content types.
-
-**Research Topics**:
-- **Embedding-Based Semantic Segmentation**: Instead of fixed-size chunks, compute embeddings for consecutive text segments and measure cosine similarity between adjacent chunks. Start new chunk boundaries when similarity drops below threshold, indicating semantic topic shift. This approach creates variable-size chunks that align with natural topic boundaries.
-  - **Benefits**: More coherent chunks, better retrieval accuracy, natural boundary detection
-  - **Considerations**: Requires embedding computation during chunking (slower), needs GPU for acceptable performance
-  - **Optimal timing**: After GPU support infrastructure (Roadmap #6) is implemented
-  - **User suggestion**: "Split docs into chunks, compute embeddings for each chunk, measure similarity between consecutive chunks. If 2 adjacent units are semantically unrelated, start a new chunk" (using cosine distance)
-
-**See**: [internal_planning/CHUNKING_STRATEGY_EVALUATION.md](../internal_planning/CHUNKING_STRATEGY_EVALUATION.md)
-
----
-
-### Low Priority / Future
-
-#### 16. Advanced Metadata Extraction
-- Author, publication date, categories
-- Automatic tagging via LLM
-- Relationship mapping between documents
-
-#### 17. Multi-Language Support
-- Non-English document processing
-- Language detection
-- Multilingual embedding models
-
----
-
-## Completed Features
-
-### v0.15.0-alpha
-- **Sandi Metz POODR Refactoring**: Applied Practical Object-Oriented Design principles throughout codebase
-- **Route Extraction**: Split main.py (684 → 89 LOC, 87% reduction) into 6 focused route modules
-- **Law of Demeter Compliance**: Added 9 delegation methods to AppState to eliminate train wreck chains
-- **Strategy Pattern**: Reduced FileTypeValidator complexity from CC:12 (critical) to CC:5 (acceptable)
-- **Extractor Modularization**: Split 747-line extractors.py into 9 focused modules following Single Responsibility Principle
-- **Code Quality**: Achieved 100% A-grade code complexity across all refactored modules (MI: 84-100)
-- **Test Coverage**: Added 37 new tests for refactored components, all passing
-- **Maintainability**: Improved code organization for easier navigation, testing, and modification
-
-### v0.14.0-alpha
-- **Python 3.13 Upgrade**: Migrated from Python 3.11 to Python 3.13 (5-10% performance improvement)
-- **Database Maintenance Webhooks**: Added `/maintenance/check-duplicates` and `/maintenance/cleanup-duplicates` endpoints
-- **Queue Duplicate Detection**: IndexingQueue now prevents redundant file processing with smart tracking
-- **Improved Error Handling**: Enhanced FileNotFoundError logging with full paths and stack traces
-- **PyTorch Updates**: Updated to PyTorch 2.5.1+ (Python 3.13 compatible)
-- **Bug Fixes**: Fixed RapidOCR cache mount path for Python 3.13, improved E2E test stability
-
-### v0.13.0-alpha
-- **Docker Build Optimization**: BuildKit cache mounts reduce rebuild time by 60% (7-10 min → 2-4 min)
-- **Multi-Stage Docker Build**: 40-60% smaller final image (~2.0-2.5 GB vs ~3.5 GB), more secure runtime
-- **Structured Progress Logging**: Real-time progress tracking with timing, rates, and ETA across all pipeline stages
-- **Periodic Heartbeat**: Background updates every 60s for long-running operations
-- **.dockerignore**: Optimized build context by excluding unnecessary files
-- **Bug Fixes**: Fixed extraction method logging, EPUB conversion logging, renamed TextExtractor to ExtractionRouter
-
-### v0.12.0-alpha
-- **Configurable Knowledge Base Directory**: Environment variable `KNOWLEDGE_BASE_PATH` to customize KB location
-- **Path Expansion**: Automatic ~ expansion to home directory and relative→absolute conversion
-- **Flexible Storage**: Support for external drives, NAS, existing document collections
-- **File Type Validation**: Magic byte verification prevents malicious files (Phase 1 - Security)
-- **Configuration Validation**: Startup validation with clear error messages for misconfigurations
-- **EPUB Conversion Fix**: Added texlive-plain-generic for soul.sty LaTeX package support
-- **Documentation Improvements**: Restructured docs, added troubleshooting guides
-
-### v0.11.0-alpha
-- **Concurrent Processing Pipeline**: 3-stage pipeline (chunk → embed → store) with 4x throughput improvement
-- **Go Language Support**: AST-based chunking for Go code with tree-sitter
-- **Modular Architecture**: Reduced main.py from 1246 to 530 lines, extracted 9 service modules
-- **Priority Queue System**: HIGH/NORMAL priority levels for urgent files
-- **Operational Controls API**: Pause/resume/clear queue, fast-track files, orphan repair
-- **Queue Management**: GET /queue/jobs, POST /indexing/pause, POST /indexing/resume, POST /indexing/clear
-- **Sanitization Stage**: Orphan detection and automatic repair before indexing
-- **Concurrent Workers**: Configurable CHUNK_WORKERS and EMBED_WORKERS
-
-### v0.9.1-alpha
-- Production-ready architecture (POODR refactoring: 4 God Classes → 25+ focused components)
-- Jupyter notebook support (cell-aware chunking with AST parsing for 160+ languages)
-- Obsidian Graph-RAG (NetworkX knowledge graph with wikilinks, tags, backlinks)
-- Document Management API (DELETE /document/{path}, GET /documents/search?pattern=)
-- Clean logging (silent skips, milestone-based progress, 90% noise reduction)
-- EPUB longtable error fallback (automatic HTML-based conversion)
-- File watcher improvements (show file before processing, .ipynb support)
-
-### v0.8.0-alpha
-- Code RAG with AST-based chunking (Python, Java, TypeScript, JavaScript, C#)
-- Hybrid index (unified vector space for code + docs)
-- Smart file filtering (excludes build artifacts, dependencies, secrets)
-- Progress bar for indexing operations
-- Tested with production codebases
-
-### v0.7.0-alpha
-- Sandi Metz refactoring (modular architecture)
-- Docling HybridChunker for all document types
-- EPUB validation and error handling
-- MCP troubleshooting documentation
-
-### v0.6.0-alpha
-- Markdown support with Docling
-- Async embedding pipeline (parallel processing)
-- Hot reload for development
-
-### v0.5.0-alpha
-- EPUB support (Pandoc → PDF → Docling)
-- Resumable processing with progress tracking
-- Automatic Ghostscript PDF repair
+## Feature Backlog
+
+Lower priority items for future releases:
+
+| Feature | Description |
+|---------|-------------|
+| Remote Processing | Offload to cloud GPU/TPU workers |
+| Web UI | Visual library, drag-drop upload, tagging |
+| Multi-Vector | Multiple embeddings per chunk for diversity |
+| Advanced Metadata | Author extraction, LLM tagging, relationship mapping |
+| Multi-Language | Non-English docs, language detection |
 
 ---
 
@@ -401,81 +168,33 @@ Systematic evaluation of chunking quality with metrics and content-aware strateg
 ### Why Python 3.13 Standard Build (Not Free-Threading)?
 
 **Date**: 2025-01-24
-**Context**: Python 3.13 upgrade from 3.11
 
-**Considered Options**:
-- **Option A**: Python 3.13 standard build (chosen)
-- **Option B**: Python 3.13t free-threaded build (GIL disabled)
-- **Option C**: Python 3.13 with JIT compiler enabled
-
-**Decision**: Option A - Python 3.13 Standard Build
+**Decision**: Standard build (no free-threading, no JIT)
 
 **Rationale**:
+- Free-threading has 40% performance penalty in Python 3.13
+- JIT is experimental with minimal gains for I/O-bound workloads
+- Already using `EMBEDDING_WORKERS=8` for parallelism
+- Wait for Python 3.14 (penalty drops to 5-10%)
 
-**Why NOT Free-Threading (3.13t)?**
-1. **40% Performance Penalty**: Free-threading in Python 3.13 has 40% overhead on single-threaded code
-2. **Extension Compatibility**: PyTorch and sentence-transformers may re-enable GIL anyway
-3. **Already Concurrent**: System uses `EMBEDDING_WORKERS=8` for parallelism
-4. **PyTorch GIL Release**: Torch already releases GIL during CPU operations
-5. **Wait for 3.14**: Python 3.14 reduces penalty to 5-10% with specializing interpreter
-
-**Why NOT JIT Compiler?**
-1. **Minimal Gains**: CPython core dev reports JIT is "slower than interpreter to roughly equivalent"
-2. **I/O Bound**: RAG system bottleneck is database/disk, not CPU-bound Python code
-3. **C Extensions**: JIT doesn't help torch, sentence-transformers (our hot path)
-4. **Complexity**: Experimental feature adds build complexity for 0-2% gain
-
-**What We DO Get (Automatic)?**
-1. **PyTorch 2.9.1**: Memory leak fixes, dynamic shape support, stability
-2. **Better Memory Management**: Improved GC and object allocation
-3. **Optimized Error Handling**: Faster exception handling
-4. **Standard Library Improvements**: Faster `os.path`, string ops, asyncio
-5. **Expected Gain**: 5-10% overall performance improvement
-
-**Performance Priorities (Actual Impact)**:
-1. ✅ **Worker Scaling** (4→8): +50% throughput (already done)
-2. ✅ **PyTorch 2.9.1**: Stability and memory improvements
-3. 🔜 **Async DB Migration**: Fix 10s+ API blocking ([KNOWN_ISSUES.md #5](KNOWN_ISSUES.md))
-4. 🔜 **Faster Storage**: NVMe SSD if not already
-5. 🔜 **Model Upgrade**: Better embedding model ([ROADMAP.md #7](ROADMAP.md))
-
-**Trade-offs Accepted**:
-- No free-threading benefits (but they don't apply to our workload)
-- No JIT benefits (but minimal for I/O-bound code)
-- Gained: Stability, compatibility, automatic optimizations
-
-**Future Consideration**:
-- Revisit free-threading in Python 3.14 when penalty drops to 5-10%
-- Evaluate when PyTorch/sentence-transformers explicitly support free-threading
+**Gains**: 5-10% general performance from Python 3.13 optimizations
 
 ---
 
-### Why Option C (Hybrid Index) for Code RAG?
+### Why Hybrid Index for Code RAG?
 
-**Considered Options**:
-- **Option A**: Single multi-modal model for everything
-- **Option B**: Dual models (Qwen3 for code, Arctic for docs) with separate vector stores
-- **Option C**: Hybrid chunking + unified embedding model
-
-**Decision**: Option C - Hybrid Index
+**Decision**: Single model + hybrid chunking (not dual models)
 
 **Rationale**:
-1. **Simplicity**: One model, one vector store, one search interface
-2. **Natural ranking**: No score fusion gymnastics needed
-3. **Modern models are multi-domain**: Qwen3-8B handles code + text well
-4. **Easier maintenance**: Single model to update/optimize
-5. **Fast iteration**: Change chunking without touching embeddings
-6. **Quality where it matters**: Chunking strategy > embedding model choice
-
-**Trade-offs Accepted**:
-- Slight compromise on embedding quality vs dual-model
-- But chunking quality matters more (AST vs basic text splitting)
+- One model, one vector store, one search interface
+- No score fusion complexity
+- Modern models handle code + text well
+- Chunking quality > embedding model choice
 
 ---
 
 ## Contributing
 
-Have ideas for the roadmap? Open an issue or PR with your suggestions!
+Have ideas? Open an issue or PR.
 
 **Contact**: horoshi@katanaquant.com
-

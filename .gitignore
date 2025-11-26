@@ -70,3 +70,4 @@ core.*
 e2e-test-files/
 e2e-test.sh
 *.log
+up-next/

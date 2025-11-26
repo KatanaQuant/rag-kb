@@ -12,9 +12,11 @@ Usage:
     python manage.py quarantine-purge       # Purge old quarantined files
     python manage.py list-incomplete        # List incomplete documents
     python manage.py reindex-incomplete     # Re-index all incomplete documents
+    python manage.py scan-existing          # Scan existing files for security issues
 
 Via docker:
     docker-compose exec rag-api python manage.py health
+    docker-compose exec rag-api python manage.py scan-existing
 """
 import argparse
 import sqlite3
@@ -331,6 +333,203 @@ def cmd_reindex_incomplete(args):
         return 1
 
 
+def cmd_scan_existing(args):
+    """Scan existing files in knowledge base for security issues
+
+    Retroactively validates all files currently in the knowledge base directory.
+    Runs all enabled security checks (ClamAV, YARA, hash blacklist, file type validation).
+
+    Severity levels:
+    - CRITICAL: Confirmed malware (auto-quarantined by default)
+    - WARNING: Suspicious patterns (logged, user decides)
+
+    CRITICAL detections (ClamAV virus, hash blacklist) are auto-quarantined.
+    Use --no-quarantine to disable auto-quarantine for CRITICAL.
+    Use --force-quarantine to also quarantine WARNING level matches.
+    """
+    from config import default_config
+    from ingestion.file_type_validator import FileTypeValidator
+    from ingestion.validation_result import SecuritySeverity
+    from services.quarantine_manager import QuarantineManager, QUARANTINE_CHECKS
+    from ingestion.helpers import FileHasher
+
+    kb_path = Path(default_config.paths.knowledge_base)
+    validator = FileTypeValidator()
+    quarantine = QuarantineManager(kb_path)
+    hasher = FileHasher()
+    db_path = get_db_path()
+
+    # Find all files in knowledge base
+    all_files = []
+    for ext in ['.pdf', '.md', '.markdown', '.docx', '.epub', '.py', '.java',
+                '.ts', '.tsx', '.js', '.jsx', '.cs', '.go', '.ipynb', '.txt']:
+        all_files.extend(kb_path.rglob(f'*{ext}'))
+
+    # Exclude quarantine directory and problematic directory
+    all_files = [f for f in all_files
+                 if '.quarantine' not in f.parts and 'problematic' not in f.parts]
+
+    if not all_files:
+        print("No files found in knowledge base.")
+        return 0
+
+    print(f"Scanning {len(all_files)} files in knowledge base...\n")
+
+    # Categorize by severity
+    clean_files = []
+    critical_files = []  # CRITICAL: auto-quarantine (ClamAV, hash blacklist)
+    warning_files = []   # WARNING: log only (YARA, non-dangerous validation failures)
+
+    for file_path in all_files:
+        # Run validation
+        result = validator.validate(file_path)
+
+        # Determine if this is truly CRITICAL (quarantinable)
+        is_critical = (
+            result.severity == SecuritySeverity.CRITICAL or
+            (not result.is_valid and result.validation_check in QUARANTINE_CHECKS)
+        )
+
+        if result.is_valid and not result.matches:
+            clean_files.append(file_path)
+            if args.verbose:
+                print(f"  ✓ {file_path.name}")
+
+        elif is_critical:
+            # CRITICAL: confirmed malware - AUTO-QUARANTINE by default
+            critical_files.append((file_path, result))
+            file_hash = hasher.hash_file(file_path)
+            print(f"\n  🚨 CRITICAL: {file_path.name}")
+            print(f"      Severity: CRITICAL (confirmed threat)")
+            print(f"      Reason: {result.reason}")
+            print(f"      Check: {result.validation_check}")
+            print(f"      Hash: {file_hash}")
+
+            # Auto-quarantine CRITICAL unless --no-quarantine
+            if not args.no_quarantine:
+                quarantined = quarantine.quarantine_file(
+                    file_path,
+                    result.reason,
+                    result.validation_check,
+                    file_hash
+                )
+                if quarantined:
+                    print(f"      → Auto-quarantined")
+
+                    # Delete from database
+                    deleted = _delete_document_from_db(db_path, file_path)
+                    if deleted:
+                        print(f"      → Removed from database ({deleted} chunks deleted)")
+            else:
+                print(f"      → Quarantine skipped (--no-quarantine)")
+
+        elif result.severity == SecuritySeverity.WARNING or result.matches or not result.is_valid:
+            # WARNING: suspicious but not confirmed
+            warning_files.append((file_path, result))
+            file_hash = hasher.hash_file(file_path)
+            print(f"\n  ⚠️  WARNING: {file_path.name}")
+            print(f"      Severity: WARNING (suspicious pattern)")
+            print(f"      Reason: {result.reason}")
+            print(f"      Check: {result.validation_check}")
+
+            # Show match details
+            for match in result.matches:
+                print(f"      Match: {match.rule_name}")
+                if match.context:
+                    print(f"             {match.context}")
+                if match.offset:
+                    print(f"             Offset: 0x{match.offset:X}")
+
+            # Actionable guidance
+            print(f"      Actions:")
+            print(f"        - Review file manually")
+            print(f"        - Allowlist: echo '{file_hash}' >> data/security_allowlist.txt")
+            if args.force_quarantine:
+                quarantined = quarantine.quarantine_file(
+                    file_path, result.reason, result.validation_check, file_hash
+                )
+                if quarantined:
+                    print(f"      → Force-quarantined")
+
+    # Summary
+    print(f"\n{'='*80}")
+    print(f"Scan complete:")
+    print(f"  Clean files:     {len(clean_files)}")
+    quarantine_status = "(auto-quarantined)" if not args.no_quarantine else "(quarantine disabled)"
+    print(f"  Critical (🚨):   {len(critical_files)} {quarantine_status}")
+    print(f"  Warnings (⚠️):    {len(warning_files)} (review recommended)")
+
+    if critical_files:
+        print(f"\nCRITICAL files (confirmed threats):")
+        for file_path, result in critical_files:
+            status = "quarantined" if not args.no_quarantine else "NOT quarantined"
+            print(f"  🚨 {file_path.name}: {result.reason} [{status}]")
+
+    if warning_files:
+        print(f"\nWARNING files (non-critical - review recommended):")
+        for file_path, result in warning_files[:10]:  # Show first 10
+            print(f"  ⚠️  {file_path.name}: {result.reason}")
+        if len(warning_files) > 10:
+            print(f"  ... and {len(warning_files) - 10} more")
+        print(f"\n  To allowlist a file after manual review:")
+        print(f"    sha256sum <filename> >> data/security_allowlist.txt")
+
+    if critical_files and args.no_quarantine:
+        print(f"\n⚠️  {len(critical_files)} CRITICAL files found but NOT quarantined!")
+        print(f"   Run without --no-quarantine to auto-quarantine them")
+
+    print(f"{'='*80}\n")
+
+    return 0 if len(critical_files) == 0 else 1
+
+
+def _delete_document_from_db(db_path: str, file_path: Path) -> int:
+    """Delete document and its chunks from database
+
+    Args:
+        db_path: Path to database
+        file_path: Path to the quarantined file
+
+    Returns:
+        Number of chunks deleted (0 if not found)
+    """
+    conn = sqlite3.connect(db_path)
+    try:
+        # Find the document by file path
+        cursor = conn.execute(
+            'SELECT id FROM documents WHERE file_path LIKE ?',
+            (f'%{file_path.name}',)
+        )
+        row = cursor.fetchone()
+
+        if not row:
+            return 0
+
+        doc_id = row[0]
+
+        # Count chunks before deletion
+        cursor = conn.execute(
+            'SELECT COUNT(*) FROM chunks WHERE document_id = ?',
+            (doc_id,)
+        )
+        chunk_count = cursor.fetchone()[0]
+
+        # Delete chunks first (foreign key constraint)
+        conn.execute('DELETE FROM chunks WHERE document_id = ?', (doc_id,))
+
+        # Delete document
+        conn.execute('DELETE FROM documents WHERE id = ?', (doc_id,))
+
+        conn.commit()
+        return chunk_count
+
+    except Exception as e:
+        print(f"      ⚠️  DB cleanup failed: {e}")
+        return 0
+    finally:
+        conn.close()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='RAG Knowledge Base Maintenance CLI',
@@ -385,6 +584,16 @@ def main():
     p.add_argument('--dry-run', action='store_true', help='Show what would be re-indexed')
     p.add_argument('-y', '--yes', action='store_true', help='Skip confirmation')
     p.set_defaults(func=cmd_reindex_incomplete)
+
+    # scan-existing
+    p = subparsers.add_parser('scan-existing', help='Scan existing files for security issues')
+    p.add_argument('--no-quarantine', action='store_true',
+                   help='Disable auto-quarantine for CRITICAL files (dry run)')
+    p.add_argument('--force-quarantine', action='store_true',
+                   help='Also quarantine WARNING files (not recommended)')
+    p.add_argument('-v', '--verbose', action='store_true',
+                   help='Show all files (including clean ones)')
+    p.set_defaults(func=cmd_scan_existing)
 
     args = parser.parse_args()
     sys.exit(args.func(args))

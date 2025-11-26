@@ -40,6 +40,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    sudo \
     tesseract-ocr \
     tesseract-ocr-eng \
     libgl1 \
@@ -53,6 +54,11 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     lmodern \
     ghostscript \
     chromium \
+    clamav \
+    clamav-daemon \
+    clamav-freshclam \
+    libyara10 \
+    yara \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
@@ -70,13 +76,27 @@ RUN mkdir -p /app/data /app/.cache/deepsearch_glm
 RUN mkdir -p /opt/venv/lib/python3.13/site-packages/deepsearch_glm/resources/models/crf/part-of-speech && \
     mkdir -p /opt/venv/lib/python3.13/site-packages/rapidocr/models
 
+# Setup ClamAV directories and permissions
+RUN mkdir -p /var/lib/clamav /var/log/clamav /run/clamav && \
+    chown -R clamav:clamav /var/lib/clamav /var/log/clamav /run/clamav
+
+# Initialize ClamAV virus database (download signatures)
+# Note: This may take a while on first build
+RUN freshclam || echo "ClamAV signatures will update on first run"
+
+# Copy and set up entrypoint script
+COPY docker-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # Run as non-root user for security
 RUN useradd -m -u 1000 appuser && \
     chown -R appuser:appuser /app && \
-    chown -R appuser:appuser /opt/venv
+    chown -R appuser:appuser /opt/venv && \
+    echo "appuser ALL=(clamav) NOPASSWD: /usr/sbin/clamd" >> /etc/sudoers
 
 USER appuser
 
 EXPOSE 8000
 
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

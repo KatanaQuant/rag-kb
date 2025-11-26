@@ -1,8 +1,8 @@
-# Operational Controls & API Reference
+# API Reference
 
 Complete guide to managing and monitoring your RAG-KB instance via API endpoints.
 
-**Version**: v0.11.0-alpha+
+**Version**: v1.6.0+
 
 ---
 

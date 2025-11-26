@@ -120,6 +120,7 @@ class SchemaManager:
         self._create_fts_table()
         self._create_processing_progress_table()
         self._create_graph_tables()
+        self._create_security_scan_cache_table()
         self.conn.commit()
 
     def _create_documents_table(self):
@@ -277,6 +278,31 @@ class SchemaManager:
         """)
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_chunk_graph_chunk ON chunk_graph_links(chunk_id)")
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_chunk_graph_node ON chunk_graph_links(node_id)")
+
+    def _create_security_scan_cache_table(self):
+        """Create table for caching security scan results by file hash
+
+        This allows skipping expensive ClamAV/YARA scans for files that have
+        already been scanned. Cache entries are keyed by file hash (SHA256),
+        so if a file changes, it will be re-scanned.
+        """
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS security_scan_cache (
+                file_hash TEXT PRIMARY KEY,
+                is_valid BOOLEAN NOT NULL,
+                severity TEXT,
+                reason TEXT,
+                validation_check TEXT,
+                matches_json TEXT,
+                scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                scanner_version TEXT
+            )
+        """)
+        self.conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_security_scan_scanned_at
+            ON security_scan_cache(scanned_at)
+        """)
+
 
 class VectorRepository:
     """Facade that delegates to focused repositories.

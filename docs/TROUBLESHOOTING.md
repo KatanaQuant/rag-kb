@@ -288,7 +288,7 @@ sudo apt install -y nodejs
 
 **Symptom**: Claude answers from general knowledge instead of RAG
 
-See [CLAUDE_CODE_INTEGRATION.md](CLAUDE_CODE_INTEGRATION.md#using-claude-code-with-your-knowledge-base) for custom instructions to prioritize RAG queries.
+See [MCP_INTEGRATION.md](MCP_INTEGRATION.md) for custom instructions to prioritize RAG queries.
 
 ## Docker Issues
 

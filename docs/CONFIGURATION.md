@@ -293,7 +293,7 @@ The queue system uses two priority levels:
 curl -X POST "http://localhost:8000/indexing/priority/knowledge_base/important.pdf"
 ```
 
-See [OPERATIONAL_CONTROLS.md](OPERATIONAL_CONTROLS.md) for complete queue management API.
+See [API.md](API.md) for complete queue management API.
 
 ## Auto-Sync Configuration
 

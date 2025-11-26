@@ -17,17 +17,22 @@ from dataclasses import dataclass, asdict
 
 
 # Validation checks that should trigger quarantine (dangerous)
+# These are CRITICAL severity - confirmed malware or high-risk files
 QUARANTINE_CHECKS = {
     'ExtensionMismatchStrategy',      # Executables as documents
     'ArchiveBombStrategy',            # Zip bombs
     'ExecutablePermissionStrategy',   # Scripts with +x
+    'ClamAVStrategy',                 # Confirmed virus detection
+    'HashBlacklistStrategy',          # Known malware hash
 }
 
 # Validation checks that should NOT quarantine (non-dangerous)
+# These are WARNING or INFO severity - user should review
 TRACK_ONLY_CHECKS = {
     'FileSizeStrategy',               # Just large files, not malicious
     'FileExistenceStrategy',          # Empty files (normal in code repos)
     'PDFIntegrityStrategy',           # Partial downloads, can be fixed
+    'YARAStrategy',                   # Pattern matches - often false positives
 }
 
 

@@ -57,7 +57,6 @@ class IndexingWorker:
     def _process_item(self, item):
         """Route a single queue item to the pipeline"""
         try:
-            print(f"Routing to pipeline: {item.path.name}")
             self.pipeline_coordinator.add_file(item)
         except Exception as e:
             print(f"Worker error routing {item.path}: {e}")

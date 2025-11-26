@@ -34,6 +34,8 @@ from routes.database import router as database_router
 from routes.documents import router as documents_router
 from routes.queue import router as queue_router
 from routes.completeness import router as completeness_router
+from routes.security import router as security_router
+from routes.maintenance import router as maintenance_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -75,6 +77,8 @@ app.include_router(database_router)
 app.include_router(documents_router)
 app.include_router(queue_router)
 app.include_router(completeness_router)
+app.include_router(security_router)
+app.include_router(maintenance_router)
 
 # All routes extracted to routes/ modules following POODR principles
 # - routes/health.py: Health and info endpoints

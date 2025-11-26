@@ -36,7 +36,7 @@ class PipelineCoordinator:
         self.indexer = indexer
         self.embedding_service = embedding_service
         self.progress_logger = ProgressLogger()
-        self.skip_batcher = SkipBatcher(interval=5.0)
+        self.skip_batcher = SkipBatcher(interval=10.0)  # Print skip summaries every 10 seconds
 
         # Create pipeline queues
         self.queues = PipelineQueues()

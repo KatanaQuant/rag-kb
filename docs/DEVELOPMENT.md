@@ -284,7 +284,7 @@ def test_my_new_endpoint():
 ```
 
 3. **Update documentation**:
-- Add to `docs/OPERATIONAL_CONTROLS.md` if it's an API endpoint
+- Add to `docs/API.md` if it's an API endpoint
 - Add to relevant user-facing docs
 
 4. **Test thoroughly**:

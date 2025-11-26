@@ -89,13 +89,22 @@ class FileValidationConfig:
 
 @dataclass
 class MalwareDetectionConfig:
-    """Advanced malware detection configuration"""
-    clamav_enabled: bool = False
+    """Advanced malware detection configuration
+
+    Severity tiers:
+    - CRITICAL: ClamAV + Hash blacklist (auto-quarantine)
+    - WARNING: YARA rules (logged, user decides)
+    """
+    clamav_enabled: bool = True  # Enabled by default (standalone in container)
     clamav_socket: str = "/var/run/clamav/clamd.ctl"
-    hash_blacklist_enabled: bool = False
+    hash_blacklist_enabled: bool = True  # Enabled by default with curated list
     hash_blacklist_path: str = "/app/data/malware_hashes.txt"
-    yara_enabled: bool = False
+    yara_enabled: bool = True  # Enabled by default with document-focused rules
     yara_rules_path: str = "/app/yara_config/yara_rules.yar"
+    # Allowlist for known-safe files (skip all security checks)
+    allowlist_path: str = "/app/data/security_allowlist.txt"
+    # YARA rules produce warnings by default (not blocks)
+    yara_warning_only: bool = True
 
 @dataclass
 class Config:

@@ -22,7 +22,7 @@ class SkipBatcher:
     """Batches skip events and prints periodic summaries
 
     Usage:
-        batcher = SkipBatcher(interval=5)  # Print every 5 seconds
+        batcher = SkipBatcher(interval=10)  # Print every 10 seconds
         batcher.start()
 
         # During processing
@@ -32,11 +32,11 @@ class SkipBatcher:
         batcher.stop()  # Prints final summary
     """
 
-    def __init__(self, interval: float = 5.0, time_source=None):
+    def __init__(self, interval: float = 10.0, time_source=None):
         """Initialize batcher
 
         Args:
-            interval: Seconds between summary prints
+            interval: Seconds between summary prints (default: 10)
             time_source: Injectable time source for testing
         """
         self.interval = interval
@@ -45,7 +45,7 @@ class SkipBatcher:
         self._lock = threading.Lock()
         self._skips: dict = defaultdict(int)  # reason -> count
         self._total_skipped = 0
-        self._last_print = self.time_source()
+        self._last_printed_count = 0  # Track what we last printed
 
         self._stop_flag = threading.Event()
         self._thread: Optional[threading.Thread] = None
@@ -88,10 +88,10 @@ class SkipBatcher:
             if self._total_skipped == 0:
                 return
 
-            # Only print if we have new skips
-            current_total = self._total_skipped
-            if current_total > 0:
+            # Only print if we have NEW skips since last print
+            if self._total_skipped > self._last_printed_count:
                 self._print_current_summary()
+                self._last_printed_count = self._total_skipped
 
     def _print_current_summary(self):
         """Print current skip summary (called with lock held)"""
@@ -128,6 +128,7 @@ class SkipBatcher:
         with self._lock:
             self._skips.clear()
             self._total_skipped = 0
+            self._last_printed_count = 0
 
 
 # Singleton instance for global use

@@ -115,11 +115,11 @@ class EnvironmentConfigLoader:
     def _load_malware_detection_config(self) -> MalwareDetectionConfig:
         """Load malware detection configuration from environment"""
         return MalwareDetectionConfig(
-            clamav_enabled=self._get_bool("CLAMAV_ENABLED", False),
+            clamav_enabled=self._get_bool("CLAMAV_ENABLED", True),  # Enabled by default
             clamav_socket=self._get_optional("CLAMAV_SOCKET", "/var/run/clamav/clamd.ctl"),
-            hash_blacklist_enabled=self._get_bool("HASH_BLACKLIST_ENABLED", False),
+            hash_blacklist_enabled=self._get_bool("HASH_BLACKLIST_ENABLED", True),  # Enabled by default
             hash_blacklist_path=self._get_optional("HASH_BLACKLIST_PATH", "/app/data/malware_hashes.txt"),
-            yara_enabled=self._get_bool("YARA_ENABLED", False),
+            yara_enabled=self._get_bool("YARA_ENABLED", True),  # Enabled by default
             yara_rules_path=self._get_optional("YARA_RULES_PATH", "/app/yara_config/yara_rules.yar")
         )
 
