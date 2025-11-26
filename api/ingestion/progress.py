@@ -98,6 +98,19 @@ class ProcessingProgressTracker:
         self.conn.commit()
         return ProcessingProgress(file_path, file_hash, started_at=now, last_updated=now)
 
+    def set_total_chunks(self, file_path: str, total_chunks: int):
+        """Set expected total chunk count for document
+
+        Called after extraction to record how many chunks were created.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        self.conn.execute("""
+            UPDATE processing_progress
+            SET total_chunks = ?, last_updated = ?
+            WHERE file_path = ?
+        """, (total_chunks, now, file_path))
+        self.conn.commit()
+
     def update_progress(self, file_path: str, chunks_processed: int, last_chunk_end: int):
         """Update progress after batch"""
         now = datetime.now(timezone.utc).isoformat()

@@ -265,8 +265,11 @@ class DocumentProcessor:
             enriched = self.enricher.enrich([chunk_dict], doc_file.path)
             all_chunks.extend(enriched)
 
-        # Update progress tracker
+        # Update progress tracker with chunk count for completeness verification
         if self.tracker:
+            chunk_count = len(all_chunks)
+            self.tracker.set_total_chunks(str(doc_file.path), chunk_count)
+            self.tracker.update_progress(str(doc_file.path), chunk_count, chunk_count)
             self.tracker.mark_completed(str(doc_file.path))
 
         return all_chunks

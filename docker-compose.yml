@@ -16,6 +16,13 @@ services:
       - ./knowledge_base:/app/knowledge_base
       - ./data:/app/data
       - ./tests:/app/tests  # Mount tests directory for test execution
+      - ./api/ingestion:/app/ingestion  # Dev mount for new modules
+      - ./api/api_services:/app/api_services  # Dev mount for new services
+      - ./api/routes:/app/routes  # Dev mount for new routes
+      - ./api/services:/app/services  # Dev mount for services
+      - ./api/main.py:/app/main.py  # Dev mount for main.py changes
+      - ./api/manage.py:/app/manage.py  # Maintenance CLI
+      - ./api/migrations:/app/migrations  # Migration scripts
       - ./.cache/deepsearch_glm:/app/.cache/deepsearch_glm  # DeepSearch GLM cache
       - ./.cache/docling:/home/appuser/.cache/docling  # Docling model cache
       - ./.cache/huggingface:/home/appuser/.cache/huggingface  # Hugging Face model cache (Docling models)
@@ -46,5 +53,5 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '${MAX_CPUS:-11.0}'
-          memory: ${MAX_MEMORY:-21G}
+          cpus: '${MAX_CPUS:-4.0}'
+          memory: ${MAX_MEMORY:-6G}

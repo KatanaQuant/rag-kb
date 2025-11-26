@@ -19,6 +19,7 @@ from services.pipeline_queues import (
 from services.pipeline_workers import StageWorker, EmbedWorkerPool
 from services.indexing_queue import QueueItem
 from services.progress_logger import ProgressLogger
+from services.skip_batcher import SkipBatcher
 from domain_models import DocumentFile
 
 class PipelineCoordinator:
@@ -35,6 +36,7 @@ class PipelineCoordinator:
         self.indexer = indexer
         self.embedding_service = embedding_service
         self.progress_logger = ProgressLogger()
+        self.skip_batcher = SkipBatcher(interval=5.0)
 
         # Create pipeline queues
         self.queues = PipelineQueues()
@@ -68,6 +70,7 @@ class PipelineCoordinator:
     def start(self):
         """Start all pipeline workers"""
         print(f"Starting concurrent pipeline with {len(self.chunk_pool.workers)} chunk workers, {len(self.embed_pool.workers)} embed workers...")
+        self.skip_batcher.start()
         self.chunk_pool.start()
         self.embed_pool.start()
         self.store_worker.start()
@@ -77,6 +80,7 @@ class PipelineCoordinator:
         self.chunk_pool.stop()
         self.embed_pool.stop()
         self.store_worker.stop()
+        self.skip_batcher.stop()  # Print final skip summary
 
     def add_file(self, item: QueueItem):
         """Add file to processing queue"""
@@ -129,7 +133,7 @@ class PipelineCoordinator:
         if item.force:
             return False
         if self.embedding_service.store.is_document_indexed(str(item.path), doc_file.hash):
-            print(f"[Skip] {item.path.name} - already indexed")
+            self.skip_batcher.record_skip(item.path.name, "already indexed")
             return True
         return False
 

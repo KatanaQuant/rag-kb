@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from config import default_config
 from domain_models import ExtractionResult
 from ingestion.helpers import GhostscriptHelper
+from ingestion.pdf_integrity import PDFIntegrityValidator
 from ingestion.extractors._docling_availability import (
     DOCLING_AVAILABLE,
     DOCLING_CHUNKING_AVAILABLE
@@ -68,13 +69,33 @@ class DoclingExtractor:
 
         Returns:
             ExtractionResult with pages extracted using Docling + HybridChunker
+
+        Raises:
+            ValueError: If PDF integrity check fails (corrupted/truncated file)
         """
+        # Pre-flight integrity check for PDFs
+        if path.suffix.lower() == '.pdf':
+            DoclingExtractor._validate_pdf_integrity(path)
+
         try:
             return DoclingExtractor._convert_with_docling(path)
         except Exception as e:
             if DoclingExtractor._should_retry_with_ghostscript(path, retry_with_ghostscript):
                 return DoclingExtractor._retry_after_ghostscript_fix(path, e)
             raise
+
+    @staticmethod
+    def _validate_pdf_integrity(path: Path) -> None:
+        """Validate PDF integrity before extraction
+
+        Raises:
+            ValueError: If PDF is corrupted, truncated, or incomplete
+        """
+        result = PDFIntegrityValidator.validate(path)
+        if not result.is_valid:
+            raise ValueError(
+                f"PDF integrity check failed for {path.name}: {result.error}"
+            )
 
     @staticmethod
     def _convert_with_docling(path: Path) -> ExtractionResult:
