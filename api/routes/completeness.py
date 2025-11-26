@@ -10,6 +10,7 @@ Following Sandi Metz patterns:
 from fastapi import APIRouter, Request, HTTPException
 
 from operations.completeness_reporter import CompletenessReporter
+from routes.deps import get_app_state
 
 
 router = APIRouter()
@@ -32,10 +33,10 @@ async def get_integrity_report(request: Request):
         issues: List of specific issues found
     """
     try:
-        app_state = request.app.state.app_state
+        app_state = get_app_state(request)
         reporter = CompletenessReporter(
-            progress_tracker=app_state.core.progress_tracker,
-            vector_store=app_state.core.async_vector_store
+            progress_tracker=app_state.get_progress_tracker(),
+            vector_store=app_state.get_async_vector_store()
         )
         return reporter.generate_report()
     except Exception as e:
@@ -56,10 +57,10 @@ async def get_document_integrity(file_path: str, request: Request):
         Integrity status and any issues found
     """
     try:
-        app_state = request.app.state.app_state
+        app_state = get_app_state(request)
         reporter = CompletenessReporter(
-            progress_tracker=app_state.core.progress_tracker,
-            vector_store=app_state.core.async_vector_store
+            progress_tracker=app_state.get_progress_tracker(),
+            vector_store=app_state.get_async_vector_store()
         )
         result = reporter.analyze_single(file_path)
 

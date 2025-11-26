@@ -145,7 +145,7 @@ class TestSecurityScanEndpoint:
         test_file.write_bytes(b"%PDF-1.4 test content")
 
         with patch('routes.security.default_config') as mock_config, \
-             patch('routes.security.FileTypeValidator') as mock_validator_cls:
+             patch('pipeline.security_scanner.FileTypeValidator') as mock_validator_cls:
             mock_config.paths.knowledge_base = str(temp_kb_dir)
             mock_config.database.path = ':memory:'
 
@@ -217,9 +217,9 @@ class TestSecurityScanEndpoint:
         from ingestion.validation_result import SecuritySeverity
 
         with patch('routes.security.default_config') as mock_config, \
-             patch('routes.security.FileTypeValidator') as mock_validator_cls, \
+             patch('pipeline.security_scanner.FileTypeValidator') as mock_validator_cls, \
              patch('routes.security.QuarantineManager') as mock_qm_cls, \
-             patch('routes.security.FileHasher') as mock_hasher_cls:
+             patch('pipeline.security_scanner.FileHasher') as mock_hasher_cls:
             mock_config.paths.knowledge_base = str(temp_kb_dir)
             mock_config.database.path = ':memory:'
 
@@ -266,8 +266,8 @@ class TestSecurityScanEndpoint:
         from ingestion.validation_result import SecuritySeverity
 
         with patch('routes.security.default_config') as mock_config, \
-             patch('routes.security.FileTypeValidator') as mock_validator_cls, \
-             patch('routes.security.FileHasher') as mock_hasher_cls:
+             patch('pipeline.security_scanner.FileTypeValidator') as mock_validator_cls, \
+             patch('pipeline.security_scanner.FileHasher') as mock_hasher_cls:
             mock_config.paths.knowledge_base = str(temp_kb_dir)
             mock_config.database.path = ':memory:'
 
@@ -497,8 +497,8 @@ class TestSecurityFindingResponse:
         from ingestion.validation_result import SecuritySeverity, SecurityMatch
 
         with patch('routes.security.default_config') as mock_config, \
-             patch('routes.security.FileTypeValidator') as mock_validator_cls, \
-             patch('routes.security.FileHasher') as mock_hasher_cls:
+             patch('pipeline.security_scanner.FileTypeValidator') as mock_validator_cls, \
+             patch('pipeline.security_scanner.FileHasher') as mock_hasher_cls:
             mock_config.paths.knowledge_base = str(temp_kb_dir)
             mock_config.database.path = ':memory:'
 

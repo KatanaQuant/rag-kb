@@ -8,6 +8,7 @@ Extracted from main.py following POODR principles:
 from fastapi import APIRouter, Request, HTTPException
 from models import QueryRequest, QueryResponse
 from operations.query_executor import QueryExecutor
+from routes.deps import get_app_state
 
 router = APIRouter()
 
@@ -25,7 +26,7 @@ async def query(request_data: QueryRequest, request: Request):
         QueryResponse with search results
     """
     try:
-        app_state = request.app.state.app_state
+        app_state = get_app_state(request)
         executor = QueryExecutor(
             app_state.get_model(),
             app_state.get_async_vector_store(),

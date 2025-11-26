@@ -7,18 +7,13 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 from datetime import datetime
-import sqlite3
 import uuid
-import asyncio
 from concurrent.futures import ThreadPoolExecutor
-import threading
 
 from ingestion.progress import ProcessingProgressTracker
-from pipeline.quarantine_manager import QuarantineManager, QUARANTINE_CHECKS
+from pipeline.quarantine_manager import QuarantineManager
 from pipeline.security_scan_cache import get_security_cache
-from ingestion.file_type_validator import FileTypeValidator
-from ingestion.validation_result import SecuritySeverity
-from ingestion.helpers import FileHasher
+from pipeline.security_scanner import SecurityScanner
 from config import default_config
 
 router = APIRouter(prefix="/api/security", tags=["security"])
@@ -335,197 +330,62 @@ async def purge_old_quarantined_files(request: PurgeRequest):
 # Security Scanning Endpoint
 # ============================================================================
 
-# Number of parallel scan workers (I/O bound, so threads work well)
-SCAN_WORKERS = 8
-
-
-def _scan_single_file(file_path: Path, validator, hasher) -> dict:
-    """Scan a single file and return result dict
-
-    Thread-safe function for parallel scanning.
-    Returns dict with scan result, not SecurityFinding (to avoid shared state).
-    """
-    try:
-        result = validator.validate(file_path)
-        file_hash = hasher.hash_file(file_path) if not result.is_valid or result.matches else None
-
-        return {
-            'file_path': file_path,
-            'is_valid': result.is_valid,
-            'severity': result.severity,
-            'reason': result.reason,
-            'validation_check': result.validation_check,
-            'matches': result.matches,
-            'file_hash': file_hash
-        }
-    except Exception as e:
-        return {
-            'file_path': file_path,
-            'is_valid': False,
-            'severity': SecuritySeverity.WARNING,
-            'reason': f"Scan error: {e}",
-            'validation_check': 'ScanError',
-            'matches': [],
-            'file_hash': None
-        }
-
 
 def _run_scan_job(job_id: str, auto_quarantine: bool, verbose: bool):
     """Background worker function for security scanning
 
-    Runs in a separate thread to prevent blocking the event loop.
-    Uses ThreadPoolExecutor for parallel file scanning (I/O bound).
+    Delegates to SecurityScanner class which handles all scanning logic.
     Updates _scan_jobs dict with progress and results.
     """
     try:
         _scan_jobs[job_id]['status'] = 'running'
-        print(f"\n[Security] Starting security scan (job {job_id})...")
 
         kb_path = Path(default_config.paths.knowledge_base)
-        validator = FileTypeValidator()
-        quarantine = QuarantineManager(kb_path)
-        hasher = FileHasher()
         db_path = default_config.database.path
+        scanner = SecurityScanner(kb_path, db_path)
 
-        # Find all files in knowledge base
-        all_files = []
-        for ext in ['.pdf', '.md', '.markdown', '.docx', '.epub', '.py', '.java',
-                    '.ts', '.tsx', '.js', '.jsx', '.cs', '.go', '.ipynb', '.txt']:
-            all_files.extend(kb_path.rglob(f'*{ext}'))
+        def update_progress(count: int):
+            _scan_jobs[job_id]['progress'] = count
 
-        # Exclude quarantine directory and problematic directory
-        all_files = [f for f in all_files
-                     if '.quarantine' not in f.parts and 'problematic' not in f.parts]
-
-        _scan_jobs[job_id]['total_files'] = len(all_files)
+        # Count files first for progress tracking
+        files = scanner.collector.collect()
+        _scan_jobs[job_id]['total_files'] = len(files)
         _scan_jobs[job_id]['progress'] = 0
 
-        if not all_files:
-            _scan_jobs[job_id]['status'] = 'completed'
-            _scan_jobs[job_id]['result'] = ScanResponse(
-                total_files=0,
-                clean_files=0,
-                critical_count=0,
-                warning_count=0,
-                critical_findings=[],
-                warning_findings=[],
-                auto_quarantine=auto_quarantine,
-                message="No files found in knowledge base"
-            )
-            return
-
-        # Parallel scan using ThreadPoolExecutor (I/O bound work)
-        clean_count = 0
-        critical_findings = []
-        warning_findings = []
-        progress_counter = 0
-        progress_lock = threading.Lock()
-
-        def scan_with_progress(file_path):
-            """Wrapper to update progress after each scan"""
-            nonlocal progress_counter
-            result = _scan_single_file(file_path, validator, hasher)
-            with progress_lock:
-                progress_counter += 1
-                _scan_jobs[job_id]['progress'] = progress_counter
-            return result
-
-        # Use ThreadPoolExecutor for parallel scanning
-        with ThreadPoolExecutor(max_workers=SCAN_WORKERS) as executor:
-            results = list(executor.map(scan_with_progress, all_files))
-
-        # Process results (sequential - handles quarantine which needs serialization)
-        for scan_result in results:
-            file_path = scan_result['file_path']
-            is_valid = scan_result['is_valid']
-            severity = scan_result['severity']
-            matches = scan_result['matches']
-
-            # Determine if this is truly CRITICAL (quarantinable)
-            is_critical = (
-                severity == SecuritySeverity.CRITICAL or
-                (not is_valid and scan_result['validation_check'] in QUARANTINE_CHECKS)
-            )
-
-            if is_valid and not matches:
-                clean_count += 1
-
-            elif is_critical:
-                file_hash = scan_result['file_hash'] or hasher.hash_file(file_path)
-                action_taken = None
-
-                # Auto-quarantine CRITICAL (sequential to avoid race conditions)
-                if auto_quarantine:
-                    quarantined = quarantine.quarantine_file(
-                        file_path, scan_result['reason'],
-                        scan_result['validation_check'], file_hash
-                    )
-                    if quarantined:
-                        action_taken = "quarantined"
-                        deleted = _delete_document_from_db(db_path, file_path)
-                        if deleted > 0:
-                            action_taken = f"quarantined, {deleted} chunks removed"
-
-                critical_findings.append(SecurityFinding(
-                    file_path=str(file_path),
-                    filename=file_path.name,
-                    severity="CRITICAL",
-                    reason=scan_result['reason'],
-                    validation_check=scan_result['validation_check'],
-                    file_hash=file_hash,
-                    matches=[
-                        {"rule": m.rule_name, "severity": m.severity.value, "context": m.context}
-                        for m in matches
-                    ],
-                    action_taken=action_taken
-                ))
-
-            elif severity == SecuritySeverity.WARNING or matches or not is_valid:
-                file_hash = scan_result['file_hash'] or hasher.hash_file(file_path)
-                warning_findings.append(SecurityFinding(
-                    file_path=str(file_path),
-                    filename=file_path.name,
-                    severity="WARNING",
-                    reason=scan_result['reason'],
-                    validation_check=scan_result['validation_check'],
-                    file_hash=file_hash,
-                    matches=[
-                        {"rule": m.rule_name, "severity": m.severity.value, "context": m.context}
-                        for m in matches
-                    ],
-                    action_taken=None
-                ))
-
-        # Build message
-        critical_msg = f"{len(critical_findings)} CRITICAL"
-        if auto_quarantine and critical_findings:
-            critical_msg += " (quarantined)"
-        message = f"Scan complete: {critical_msg}, {len(warning_findings)} warnings"
-
-        # Log completion summary
-        print(f"\n[Security] ══════════════════════════════════════════════════════════════════")
-        print(f"[Security] Scan complete: {len(all_files)} files scanned")
-        print(f"[Security]   ✓ {clean_count} clean")
-        if critical_findings:
-            print(f"[Security]   ✗ {len(critical_findings)} CRITICAL (quarantined)" if auto_quarantine else f"[Security]   ✗ {len(critical_findings)} CRITICAL")
-            for f in critical_findings:
-                print(f"[Security]     - {f.filename}: {f.reason}")
-        if warning_findings:
-            print(f"[Security]   ⚠ {len(warning_findings)} warnings")
-            for f in warning_findings:
-                print(f"[Security]     - {f.filename}: {f.reason}")
-        print(f"[Security] ══════════════════════════════════════════════════════════════════\n")
+        summary = scanner.scan(job_id, auto_quarantine, update_progress)
 
         _scan_jobs[job_id]['status'] = 'completed'
         _scan_jobs[job_id]['result'] = ScanResponse(
-            total_files=len(all_files),
-            clean_files=clean_count,
-            critical_count=len(critical_findings),
-            warning_count=len(warning_findings),
-            critical_findings=critical_findings,
-            warning_findings=warning_findings,
-            auto_quarantine=auto_quarantine,
-            message=message
+            total_files=summary.total_files,
+            clean_files=summary.clean_files,
+            critical_count=len(summary.critical_findings),
+            warning_count=len(summary.warning_findings),
+            critical_findings=[
+                SecurityFinding(
+                    file_path=f.file_path,
+                    filename=f.filename,
+                    severity=f.severity,
+                    reason=f.reason,
+                    validation_check=f.validation_check,
+                    file_hash=f.file_hash,
+                    matches=f.matches,
+                    action_taken=f.action_taken
+                ) for f in summary.critical_findings
+            ],
+            warning_findings=[
+                SecurityFinding(
+                    file_path=f.file_path,
+                    filename=f.filename,
+                    severity=f.severity,
+                    reason=f.reason,
+                    validation_check=f.validation_check,
+                    file_hash=f.file_hash,
+                    matches=f.matches,
+                    action_taken=f.action_taken
+                ) for f in summary.warning_findings
+            ],
+            auto_quarantine=summary.auto_quarantine,
+            message=summary.message
         )
 
     except Exception as e:
@@ -798,49 +658,3 @@ async def clear_cache():
         "entries_cleared": cleared,
         "message": "Cache cleared. Next scan will re-validate all files."
     }
-
-
-def _delete_document_from_db(db_path: str, file_path: Path) -> int:
-    """Delete document and its chunks from database
-
-    Args:
-        db_path: Path to database
-        file_path: Path to the quarantined file
-
-    Returns:
-        Number of chunks deleted (0 if not found)
-    """
-    conn = sqlite3.connect(db_path)
-    try:
-        # Find the document by file path
-        cursor = conn.execute(
-            'SELECT id FROM documents WHERE file_path LIKE ?',
-            (f'%{file_path.name}',)
-        )
-        row = cursor.fetchone()
-
-        if not row:
-            return 0
-
-        doc_id = row[0]
-
-        # Count chunks before deletion
-        cursor = conn.execute(
-            'SELECT COUNT(*) FROM chunks WHERE document_id = ?',
-            (doc_id,)
-        )
-        chunk_count = cursor.fetchone()[0]
-
-        # Delete chunks first (foreign key constraint)
-        conn.execute('DELETE FROM chunks WHERE document_id = ?', (doc_id,))
-
-        # Delete document
-        conn.execute('DELETE FROM documents WHERE id = ?', (doc_id,))
-
-        conn.commit()
-        return chunk_count
-
-    except Exception:
-        return 0
-    finally:
-        conn.close()

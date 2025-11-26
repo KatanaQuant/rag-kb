@@ -8,6 +8,7 @@ Extracted from main.py following POODR principles:
 from fastapi import APIRouter, Request
 from models import HealthResponse
 from config import default_config
+from routes.deps import get_app_state
 
 router = APIRouter()
 
@@ -29,7 +30,7 @@ async def health(request: Request):
 
     Returns system statistics and operational status
     """
-    app_state = request.app.state.app_state
+    app_state = get_app_state(request)
     stats = await app_state.get_vector_store_stats()
 
     return HealthResponse(

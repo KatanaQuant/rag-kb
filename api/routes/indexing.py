@@ -12,6 +12,7 @@ from models import IndexRequest, IndexResponse
 from config import default_config
 from operations.file_walker import FileWalker
 from pipeline import Priority
+from routes.deps import get_app_state
 
 router = APIRouter()
 
@@ -27,7 +28,7 @@ async def index(request_data: IndexRequest, request: Request, background_tasks: 
     File scanning happens in background to prevent API blocking.
     """
     try:
-        app_state = request.app.state.app_state
+        app_state = get_app_state(request)
         if not app_state.indexing.queue:
             raise HTTPException(status_code=400, detail="Indexing queue not initialized")
 
@@ -35,13 +36,13 @@ async def index(request_data: IndexRequest, request: Request, background_tasks: 
         def scan_and_queue():
             """Background task: Scan files and add to queue"""
             kb_path = default_config.paths.knowledge_base
-            walker = FileWalker(kb_path, app_state.core.processor.SUPPORTED_EXTENSIONS)
+            walker = FileWalker(kb_path, app_state.get_processor().SUPPORTED_EXTENSIONS)
             all_files = list(walker.walk())
 
             priority = Priority.HIGH if request_data.force_reindex else Priority.NORMAL
             app_state.indexing.queue.add_many(all_files, priority=priority, force=request_data.force_reindex)
 
-            print(f"✓ Background scan complete: Queued {len(all_files)} files (force={request_data.force_reindex})")
+            print(f"+ Background scan complete: Queued {len(all_files)} files (force={request_data.force_reindex})")
 
         background_tasks.add_task(scan_and_queue)
 
@@ -65,7 +66,7 @@ async def pause_indexing(request: Request):
     but no new files will be processed until resume is called.
     """
     try:
-        app_state = request.app.state.app_state
+        app_state = get_app_state(request)
         if not app_state.indexing.queue:
             raise HTTPException(status_code=400, detail="Indexing queue not initialized")
 
@@ -73,7 +74,7 @@ async def pause_indexing(request: Request):
         return {
             "status": "success",
             "message": "Indexing paused",
-            "queue_size": app_state.indexing.queue.size()
+            "queue_size": app_state.queue_size()
         }
     except HTTPException:
         raise
@@ -88,7 +89,7 @@ async def resume_indexing(request: Request):
     Resumes the indexing worker to process files from the queue.
     """
     try:
-        app_state = request.app.state.app_state
+        app_state = get_app_state(request)
         if not app_state.indexing.queue:
             raise HTTPException(status_code=400, detail="Indexing queue not initialized")
 
@@ -96,7 +97,7 @@ async def resume_indexing(request: Request):
         return {
             "status": "success",
             "message": "Indexing resumed",
-            "queue_size": app_state.indexing.queue.size()
+            "queue_size": app_state.queue_size()
         }
     except HTTPException:
         raise
@@ -112,7 +113,7 @@ async def clear_indexing_queue(request: Request):
     Files currently being processed will complete.
     """
     try:
-        app_state = request.app.state.app_state
+        app_state = get_app_state(request)
         if not app_state.indexing.queue:
             raise HTTPException(status_code=400, detail="Indexing queue not initialized")
 
@@ -120,7 +121,7 @@ async def clear_indexing_queue(request: Request):
         return {
             "status": "success",
             "message": "Indexing queue cleared",
-            "queue_size": app_state.indexing.queue.size()
+            "queue_size": app_state.queue_size()
         }
     except HTTPException:
         raise
@@ -139,7 +140,7 @@ async def add_priority_file(file_path: str, request: Request, force: bool = Fals
     Use this to prioritize testing or critical files over the background queue.
     """
     try:
-        app_state = request.app.state.app_state
+        app_state = get_app_state(request)
         if not app_state.indexing.queue:
             raise HTTPException(status_code=400, detail="Indexing queue not initialized")
 
@@ -156,7 +157,7 @@ async def add_priority_file(file_path: str, request: Request, force: bool = Fals
         return {
             "status": "success",
             "message": f"Added {file_path} to queue with HIGH priority",
-            "queue_size": app_state.indexing.queue.size(),
+            "queue_size": app_state.queue_size(),
             "force": force
         }
     except HTTPException:
@@ -172,7 +173,7 @@ async def get_indexing_status(request: Request):
     Returns information about the indexing queue and worker state.
     """
     try:
-        app_state = request.app.state.app_state
+        app_state = get_app_state(request)
         if not app_state.indexing.queue or not app_state.indexing.worker:
             raise HTTPException(status_code=400, detail="Indexing queue not initialized")
 
@@ -180,7 +181,7 @@ async def get_indexing_status(request: Request):
             "queue_size": app_state.queue_size(),
             "paused": app_state.is_queue_paused(),
             "worker_running": app_state.is_worker_running(),
-            "indexing_in_progress": app_state.runtime.indexing_in_progress
+            "indexing_in_progress": app_state.is_indexing_in_progress()
         }
     except HTTPException:
         raise

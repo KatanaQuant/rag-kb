@@ -8,6 +8,7 @@ __pycache__/
 env/
 venv/
 *.egg-info/
+.python-version
 
 # Node
 node_modules/

@@ -8,6 +8,7 @@ Extracted from main.py following POODR principles:
 from fastapi import APIRouter, Request, HTTPException
 
 from operations.orphan_detector import OrphanDetector
+from routes.deps import get_app_state
 
 router = APIRouter()
 
@@ -21,14 +22,15 @@ async def reindex_orphaned_files(request: Request):
     the documents table. Queues them for reindexing with HIGH priority.
     """
     try:
-        app_state = request.app.state.app_state
-        if not app_state.core.progress_tracker:
+        app_state = get_app_state(request)
+        progress_tracker = app_state.get_progress_tracker()
+        if not progress_tracker:
             raise HTTPException(
                 status_code=400,
                 detail="Progress tracking not enabled"
             )
 
-        detector = OrphanDetector(app_state.core.progress_tracker, app_state.core.vector_store)
+        detector = OrphanDetector(progress_tracker, app_state.get_vector_store())
         orphans = detector.detect_orphans()
 
         if not orphans:
@@ -40,7 +42,7 @@ async def reindex_orphaned_files(request: Request):
             }
 
         # Repair orphans by adding to queue with HIGH priority
-        queued = detector.repair_orphans(app_state.indexing.queue)
+        queued = detector.repair_orphans(app_state.get_indexing_queue())
 
         return {
             "status": "success",
@@ -67,8 +69,8 @@ async def find_duplicate_chunks(request: Request):
     Cross-document duplicates may be intentional (shared content like headers).
     """
     try:
-        app_state = request.app.state.app_state
-        conn = app_state.core.vector_store.conn
+        app_state = get_app_state(request)
+        conn = app_state.get_vector_store().conn
         cursor = conn.cursor()
 
         # Get total stats
@@ -143,8 +145,8 @@ async def delete_duplicate_chunks(request: Request):
     Returns the number of duplicate chunks removed.
     """
     try:
-        app_state = request.app.state.app_state
-        conn = app_state.core.vector_store.conn
+        app_state = get_app_state(request)
+        conn = app_state.get_vector_store().conn
         cursor = conn.cursor()
 
         # Find duplicate chunks within same document

@@ -8,6 +8,8 @@ Extracted from main.py following POODR principles:
 from fastapi import APIRouter, Request, HTTPException
 from typing import Optional
 
+from routes.deps import get_app_state
+
 router = APIRouter()
 
 
@@ -71,7 +73,7 @@ async def get_queue_jobs(request: Request):
     - Worker running status for each stage
     """
     try:
-        app_state = request.app.state.app_state
+        app_state = get_app_state(request)
         _validate_indexing_components(app_state)
 
         # Get pipeline statistics
@@ -85,9 +87,9 @@ async def get_queue_jobs(request: Request):
         workers["security_scan"] = security_scan is not None and security_scan.get('status') == 'running'
 
         return {
-            "input_queue_size": app_state.indexing.queue.size(),
-            "paused": app_state.indexing.queue.is_paused(),
-            "worker_running": app_state.indexing.worker.is_running(),
+            "input_queue_size": app_state.queue_size(),
+            "paused": app_state.is_queue_paused(),
+            "worker_running": app_state.is_worker_running(),
             "queue_sizes": pipeline_stats["queue_sizes"],
             "active_jobs": pipeline_stats["active_jobs"],
             "workers_running": workers,

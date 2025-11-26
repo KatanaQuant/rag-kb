@@ -11,6 +11,7 @@ import sqlite3
 
 from config import default_config
 from pipeline.indexing_queue import Priority
+from routes.deps import get_app_state
 
 router = APIRouter(prefix="/api/maintenance", tags=["maintenance"])
 
@@ -221,68 +222,34 @@ async def reindex_failed_documents(http_request: Request, request: ReindexReques
         request = ReindexRequest()
 
     try:
-        app_state = http_request.app.state.app_state
+        from operations.failed_document_reindexer import FailedDocumentReindexer
 
-        # Get integrity report directly (no HTTP call needed)
-        from operations.completeness_reporter import CompletenessReporter
-        reporter = CompletenessReporter(
-            progress_tracker=app_state.core.progress_tracker,
-            vector_store=app_state.core.async_vector_store
+        app_state = get_app_state(http_request)
+        reindexer = FailedDocumentReindexer(
+            progress_tracker=app_state.get_progress_tracker(),
+            vector_store=app_state.get_async_vector_store(),
+            indexing_queue=app_state.get_indexing_queue()
         )
-        report = reporter.generate_report()
 
-        # Filter by issue types if specified
-        allowed_issues = request.issue_types or ['zero_chunks', 'processing_incomplete', 'missing_embeddings']
-        incomplete = [
-            i for i in report.get('issues', [])
-            if i['issue'] in allowed_issues
-        ]
-
-        if not incomplete:
-            return ReindexResponse(
-                documents_found=0,
-                documents_queued=0,
-                dry_run=request.dry_run,
-                documents=[],
-                message="No incomplete documents found"
-            )
-
-        # Build result list
-        documents = [
-            ReindexResult(
-                file_path=item['file_path'],
-                filename=Path(item['file_path']).name,
-                success=True,
-                error=None
-            )
-            for item in incomplete[:100]  # Limit response size
-        ]
-
-        queued_count = 0
-        if not request.dry_run:
-            # Queue all documents with HIGH priority
-            queue = app_state.indexing.queue
-            if queue:
-                for item in incomplete:
-                    path = Path(item['file_path'])
-                    if path.exists():
-                        queue.add(path, priority=Priority.HIGH, force=True)
-                        queued_count += 1
-            else:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Indexing queue not available"
-                )
+        summary = reindexer.reindex(
+            issue_types=request.issue_types,
+            dry_run=request.dry_run
+        )
 
         return ReindexResponse(
-            documents_found=len(incomplete),
-            documents_queued=queued_count if not request.dry_run else 0,
-            dry_run=request.dry_run,
-            documents=documents,
-            message=f"{'Would queue' if request.dry_run else 'Queued'} {len(incomplete)} documents for reindexing with HIGH priority"
+            documents_found=summary.documents_found,
+            documents_queued=summary.documents_queued,
+            dry_run=summary.dry_run,
+            documents=[
+                ReindexResult(
+                    file_path=r.file_path,
+                    filename=r.filename,
+                    success=r.success,
+                    error=r.error
+                ) for r in summary.results
+            ],
+            message=summary.message
         )
 
-    except HTTPException:
-        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Reindex failed: {e}")

@@ -10,6 +10,7 @@ from fastapi import APIRouter, Request, HTTPException
 from models import DocumentInfoResponse
 from operations.document_lister import DocumentLister
 from operations.document_searcher import DocumentSearcher
+from routes.deps import get_app_state
 
 router = APIRouter()
 
@@ -18,8 +19,8 @@ router = APIRouter()
 async def get_document_info(filename: str, request: Request):
     """Get document information including extraction method"""
     try:
-        app_state = request.app.state.app_state
-        info = await app_state.core.async_vector_store.get_document_info(filename)
+        app_state = get_app_state(request)
+        info = await app_state.get_async_vector_store().get_document_info(filename)
         if not info:
             raise HTTPException(status_code=404, detail=f"Document not found: {filename}")
         return DocumentInfoResponse(**info)
@@ -33,8 +34,8 @@ async def get_document_info(filename: str, request: Request):
 async def list_documents(request: Request):
     """List all documents"""
     try:
-        app_state = request.app.state.app_state
-        lister = DocumentLister(app_state.core.async_vector_store)
+        app_state = get_app_state(request)
+        lister = DocumentLister(app_state.get_async_vector_store())
         return await lister.list_all()
     except Exception as e:
         raise HTTPException(
@@ -80,14 +81,15 @@ async def delete_document(file_path: str, request: Request):
         Deletion statistics including chunks deleted
     """
     try:
-        app_state = request.app.state.app_state
+        app_state = get_app_state(request)
         # Delete from vector store (documents + chunks)
-        result = await app_state.core.async_vector_store.delete_document(file_path)
+        result = await app_state.get_async_vector_store().delete_document(file_path)
 
         # Delete from processing progress
-        if app_state.core.progress_tracker:
+        progress_tracker = app_state.get_progress_tracker()
+        if progress_tracker:
             try:
-                app_state.core.progress_tracker.delete_document(file_path)
+                progress_tracker.delete_document(file_path)
             except Exception as e:
                 print(f"Warning: Failed to delete progress record: {e}")
 

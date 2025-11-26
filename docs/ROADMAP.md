@@ -11,6 +11,7 @@ This document outlines the journey from v1.x to v2.0.0 and beyond.
   - [v1.8.x - Content Expansion](#v18x---content-expansion)
   - [v1.9.x - Pre-v2 Stabilization](#v19x---pre-v2-stabilization)
   - [v2.0.0 - GPU & Advanced Features](#v200---gpu--advanced-features)
+- [IDE Integration](#ide-integration)
 - [Feature Backlog](#feature-backlog)
 - [Decision Log](#decision-log)
 - [Contributing](#contributing)
@@ -147,17 +148,102 @@ v1.6.5 (CURRENT)
 
 ---
 
+## IDE Integration
+
+### Claude Code (Current)
+
+RAG-KB integrates with Claude Code via MCP (Model Context Protocol):
+
+```json
+// ~/.claude.json
+{
+  "mcpServers": {
+    "rag-kb": {
+      "command": "docker",
+      "args": ["exec", "-i", "rag-api", "python3", "/app/mcp_server.py"]
+    }
+  }
+}
+```
+
+**Features**:
+- `query_knowledge_base` - Semantic search across indexed documents
+- `list_indexed_documents` - Browse indexed files
+- `get_kb_stats` - Knowledge base statistics
+- Same hooks system as standard Claude Code
+
+### Codex (OpenAI) Integration Options
+
+OpenAI Codex in VSCode does **not** support MCP. Alternative integration approaches:
+
+| Approach | Complexity | Description |
+|----------|------------|-------------|
+| **REST API Direct** | Low | Call RAG-KB REST endpoints directly via HTTP |
+| **Custom Extension** | Medium | VSCode extension wrapping RAG-KB API |
+| **OpenAI Functions** | Medium | Wrap RAG-KB as OpenAI function calling |
+| **LangChain Tool** | Medium | Create LangChain tool for Codex agents |
+
+**REST API Integration** (Simplest):
+```python
+# In your Codex workflow
+import requests
+
+def query_rag(query: str) -> str:
+    response = requests.post(
+        "http://localhost:8000/query",
+        json={"query": query, "top_k": 5}
+    )
+    return response.json()["results"]
+```
+
+**OpenAI Function Calling**:
+```python
+tools = [{
+    "type": "function",
+    "function": {
+        "name": "query_knowledge_base",
+        "description": "Search personal knowledge base for relevant information",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"}
+            },
+            "required": ["query"]
+        }
+    }
+}]
+```
+
+### Other IDE/LLM Integrations
+
+| Tool | Protocol | Integration Path |
+|------|----------|------------------|
+| **Cursor** | MCP | Same as Claude Code config |
+| **Continue.dev** | Custom | REST API or LangChain |
+| **Cody (Sourcegraph)** | Custom | REST API wrapper |
+| **GitHub Copilot** | None | Not directly integrable |
+| **Ollama** | REST | Direct API calls |
+| **LM Studio** | OpenAI-compat | Function calling wrapper |
+
+### Future: Universal MCP Support
+
+MCP is becoming a standard for LLM-tool integration. Once Codex/other tools adopt MCP, the existing RAG-KB MCP server will work unchanged.
+
+---
+
 ## Feature Backlog
 
 Lower priority items for future releases:
 
 | Feature | Description |
 |---------|-------------|
+| Processing Webhooks | Pause/resume processing of specific files via webhook |
 | Remote Processing | Offload to cloud GPU/TPU workers |
 | Web UI | Visual library, drag-drop upload, tagging |
 | Multi-Vector | Multiple embeddings per chunk for diversity |
 | Advanced Metadata | Author extraction, LLM tagging, relationship mapping |
 | Multi-Language | Non-English docs, language detection |
+| **Universal MCP Adapter** | Wrapper for non-MCP LLM tools (REST→MCP bridge) |
 
 ---
 
