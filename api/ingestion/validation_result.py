@@ -20,3 +20,4 @@ class ValidationResult:
     is_valid: bool
     file_type: str
     reason: str = ""
+    validation_check: str = ""  # Strategy that performed the check (e.g., "FileSizeStrategy")

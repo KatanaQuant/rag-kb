@@ -75,7 +75,8 @@ class FileSizeStrategy:
             return ValidationResult(
                 is_valid=False,
                 file_type=expected_type,
-                reason=f'File too large: {size_mb:.1f} MB (max: {max_mb:.0f} MB)'
+                reason=f'File too large: {size_mb:.1f} MB (max: {max_mb:.0f} MB)',
+                validation_check='FileSizeStrategy'
             )
 
         # Soft limit - warn but allow
@@ -176,7 +177,8 @@ class ArchiveBombStrategy:
                     return ValidationResult(
                         is_valid=False,
                         file_type=expected_type,
-                        reason=f'Archive bomb: Uncompressed size {uncompressed_size // (1024*1024)} MB exceeds limit'
+                        reason=f'Archive bomb: Uncompressed size {uncompressed_size // (1024*1024)} MB exceeds limit',
+                        validation_check='ArchiveBombStrategy'
                     )
 
                 # Check compression ratio
@@ -186,7 +188,8 @@ class ArchiveBombStrategy:
                         return ValidationResult(
                             is_valid=False,
                             file_type=expected_type,
-                            reason=f'Archive bomb: Compression ratio {ratio:.0f}:1 is suspicious'
+                            reason=f'Archive bomb: Compression ratio {ratio:.0f}:1 is suspicious',
+                            validation_check='ArchiveBombStrategy'
                         )
 
                 # Check for nested archives (basic check)
@@ -196,14 +199,16 @@ class ArchiveBombStrategy:
                     return ValidationResult(
                         is_valid=False,
                         file_type=expected_type,
-                        reason=f'Archive bomb: Contains {nested_count} nested archives'
+                        reason=f'Archive bomb: Contains {nested_count} nested archives',
+                        validation_check='ArchiveBombStrategy'
                     )
 
         except zipfile.BadZipFile:
             return ValidationResult(
                 is_valid=False,
                 file_type='unknown',
-                reason='Corrupted ZIP archive'
+                reason='Corrupted ZIP archive',
+                validation_check='ArchiveBombStrategy'
             )
         except Exception as e:
             # If we can't read the archive, let it through
@@ -230,7 +235,8 @@ class ArchiveBombStrategy:
                     return ValidationResult(
                         is_valid=False,
                         file_type=expected_type,
-                        reason=f'Archive bomb: Uncompressed size {uncompressed_size // (1024*1024)} MB exceeds limit'
+                        reason=f'Archive bomb: Uncompressed size {uncompressed_size // (1024*1024)} MB exceeds limit',
+                        validation_check='ArchiveBombStrategy'
                     )
 
                 # Check compression ratio
@@ -240,14 +246,16 @@ class ArchiveBombStrategy:
                         return ValidationResult(
                             is_valid=False,
                             file_type=expected_type,
-                            reason=f'Archive bomb: Compression ratio {ratio:.0f}:1 is suspicious'
+                            reason=f'Archive bomb: Compression ratio {ratio:.0f}:1 is suspicious',
+                            validation_check='ArchiveBombStrategy'
                         )
 
         except (tarfile.TarError, EOFError):
             return ValidationResult(
                 is_valid=False,
                 file_type='unknown',
-                reason='Corrupted TAR archive'
+                reason='Corrupted TAR archive',
+                validation_check='ArchiveBombStrategy'
             )
         except Exception:
             # If we can't read the archive, let it through
@@ -299,7 +307,8 @@ class ExtensionMismatchStrategy:
                 return ValidationResult(
                     is_valid=False,
                     file_type='executable',
-                    reason=f'Executable masquerading as {expected_type} (extension mismatch)'
+                    reason=f'Executable masquerading as {expected_type} (extension mismatch)',
+                    validation_check='ExtensionMismatchStrategy'
                 )
 
             # Check for specific mismatches
@@ -309,7 +318,8 @@ class ExtensionMismatchStrategy:
                     return ValidationResult(
                         is_valid=False,
                         file_type=actual_type,
-                        reason=f'Extension claims {expected_type} but file is {actual_type}'
+                        reason=f'Extension claims {expected_type} but file is {actual_type}',
+                        validation_check='ExtensionMismatchStrategy'
                     )
 
         return ValidationResult(
@@ -385,7 +395,8 @@ class ExecutablePermissionStrategy:
                     return ValidationResult(
                         is_valid=False,
                         file_type='script',
-                        reason=f'File has executable permissions and shebang (script masquerading as {expected_type})'
+                        reason=f'File has executable permissions and shebang (script masquerading as {expected_type})',
+                        validation_check='ExecutablePermissionStrategy'
                     )
                 else:
                     # Just warn but allow (might be accidental chmod)

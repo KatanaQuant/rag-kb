@@ -85,7 +85,7 @@ class ProcessingConfig:
 class FileValidationConfig:
     """File type validation configuration"""
     enabled: bool = True
-    action: str = "warn"  # reject|warn|skip
+    action: str = "reject"  # reject|warn|skip (changed from warn in v1.3.0 for security)
 
 @dataclass
 class Config:

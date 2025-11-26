@@ -6,6 +6,7 @@ Usage:
     python manage.py health              # Check completeness health
     python manage.py fix-tracking        # Backfill chunk counts
     python manage.py delete-orphans      # Delete orphan document records
+    python manage.py list-rejected       # List rejected files
     python manage.py list-incomplete     # List incomplete documents
     python manage.py reindex-incomplete  # Re-index all incomplete documents
 
@@ -125,6 +126,40 @@ def cmd_delete_orphans(args):
 
     print(f"Deleted {deleted_docs} document records")
     print(f"Deleted {deleted_progress} progress records")
+    return 0
+
+
+def cmd_list_rejected(args):
+    """List rejected files"""
+    from ingestion.progress import ProcessingProgressTracker
+
+    db_path = get_db_path()
+    tracker = ProcessingProgressTracker(db_path)
+    rejected = tracker.get_rejected_files()
+
+    if not rejected:
+        print("No rejected files found.")
+        return 0
+
+    print(f"Rejected files ({len(rejected)} total):\n")
+
+    for r in rejected:
+        filename = Path(r.file_path).name
+        check_name = ""
+        reason = r.error_message or "Unknown reason"
+
+        # Extract check name from error message if present
+        if "(" in reason and ")" in reason:
+            check_name = reason[reason.find("(")+1:reason.find(")")]
+            reason = reason[reason.find(":")+2:].strip() if ":" in reason else reason
+
+        print(f"  {filename}")
+        print(f"    Path: {r.file_path}")
+        print(f"    Reason: {reason}")
+        if r.last_updated:
+            print(f"    Rejected: {r.last_updated}")
+        print()
+
     return 0
 
 
@@ -252,6 +287,10 @@ def main():
     p.add_argument('--dry-run', action='store_true', help='Show what would be deleted')
     p.add_argument('-y', '--yes', action='store_true', help='Skip confirmation')
     p.set_defaults(func=cmd_delete_orphans)
+
+    # list-rejected
+    p = subparsers.add_parser('list-rejected', help='List rejected files')
+    p.set_defaults(func=cmd_list_rejected)
 
     # list-incomplete
     p = subparsers.add_parser('list-incomplete', help='List incomplete documents')

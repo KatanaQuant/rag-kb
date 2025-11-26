@@ -19,7 +19,19 @@ class FileExistenceStrategy:
     """Validates file exists and is not empty
 
     First check in validation chain - no point continuing if file doesn't exist.
+
+    Empty file whitelist:
+    - __init__.py, __init__.pyi - Python package markers (often intentionally empty)
+    - .gitkeep, .keep - Git placeholder files
     """
+
+    # Filenames that are allowed to be empty
+    EMPTY_FILE_WHITELIST = {
+        '__init__.py',
+        '__init__.pyi',
+        '.gitkeep',
+        '.keep'
+    }
 
     def validate(self, file_path: Path) -> ValidationResult:
         """Check file exists and has content
@@ -35,15 +47,25 @@ class FileExistenceStrategy:
             return ValidationResult(
                 is_valid=False,
                 file_type='unknown',
-                reason=f'File does not exist: {file_path}'
+                reason=f'File does not exist: {file_path}',
+                validation_check='FileExistenceStrategy'
             )
 
-        # Check file is not empty
+        # Check file is not empty (with whitelist exception)
         if file_path.stat().st_size == 0:
+            # Allow empty files if whitelisted
+            if file_path.name in self.EMPTY_FILE_WHITELIST:
+                return ValidationResult(
+                    is_valid=True,
+                    file_type='unknown',
+                    reason=''
+                )
+
             return ValidationResult(
                 is_valid=False,
                 file_type='unknown',
-                reason='File is empty'
+                reason='File is empty',
+                validation_check='FileExistenceStrategy'
             )
 
         return ValidationResult(

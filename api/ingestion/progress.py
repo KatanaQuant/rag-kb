@@ -141,6 +141,39 @@ class ProcessingProgressTracker:
         """, (error_message, now, file_path))
         self.conn.commit()
 
+    def mark_rejected(self, file_path: str, reason: str, validation_check: str = None):
+        """Mark file as rejected due to validation failure
+
+        Args:
+            file_path: Path to rejected file
+            reason: Rejection reason (e.g., "File too large: 600 MB")
+            validation_check: Strategy name that rejected it (e.g., "FileSizeStrategy")
+        """
+        now = datetime.now(timezone.utc).isoformat()
+
+        # Create or update progress record with rejected status
+        existing = self.get_progress(file_path)
+
+        error_msg = f"Validation failed: {reason}"
+        if validation_check:
+            error_msg = f"Validation failed ({validation_check}): {reason}"
+
+        if existing:
+            self.conn.execute("""
+                UPDATE processing_progress
+                SET status = 'rejected', error_message = ?, last_updated = ?
+                WHERE file_path = ?
+            """, (error_msg, now, file_path))
+        else:
+            # Create new record for rejected file (no hash available)
+            self.conn.execute("""
+                INSERT INTO processing_progress
+                (file_path, file_hash, status, error_message, started_at, last_updated)
+                VALUES (?, '', 'rejected', ?, ?, ?)
+            """, (file_path, error_msg, now, now))
+
+        self.conn.commit()
+
     def get_incomplete_files(self) -> List[ProcessingProgress]:
         """Get all incomplete files"""
         cursor = self.conn.execute("""
@@ -149,6 +182,18 @@ class ProcessingProgressTracker:
                    last_updated, completed_at
             FROM processing_progress
             WHERE status = 'in_progress'
+        """)
+        return [self._row_to_progress(row) for row in cursor.fetchall()]
+
+    def get_rejected_files(self) -> List[ProcessingProgress]:
+        """Get all rejected files"""
+        cursor = self.conn.execute("""
+            SELECT file_path, file_hash, total_chunks, chunks_processed,
+                   status, last_chunk_end, error_message, started_at,
+                   last_updated, completed_at
+            FROM processing_progress
+            WHERE status = 'rejected'
+            ORDER BY last_updated DESC
         """)
         return [self._row_to_progress(row) for row in cursor.fetchall()]
 

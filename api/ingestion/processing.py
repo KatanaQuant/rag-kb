@@ -184,11 +184,25 @@ class DocumentProcessor:
         """Handle validation failure based on configured action"""
         if self.validation_action == 'reject':
             print(f"REJECTED (security): {doc_file.name} - {validation_result.reason}")
+            # Track rejected file in database
+            if self.tracker:
+                self.tracker.mark_rejected(
+                    str(doc_file.path),
+                    validation_result.reason,
+                    validation_result.validation_check
+                )
             return False
         elif self.validation_action == 'warn':
             print(f"WARNING (security): {doc_file.name} - {validation_result.reason}")
             return True
         elif self.validation_action == 'skip':
+            # Track skipped files too
+            if self.tracker:
+                self.tracker.mark_rejected(
+                    str(doc_file.path),
+                    validation_result.reason,
+                    validation_result.validation_check
+                )
             return False
         return True
 
