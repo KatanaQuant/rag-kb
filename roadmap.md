@@ -17,17 +17,24 @@ Validates that indexed documents are complete and intact.
 **Remaining:**
 - Performance optimization (batch queries instead of N+1)
 
+### Anti-Malware / Security Validation ✅ (v1.2.0)
+Prevents indexing of malicious or problematic files.
+
+**Implemented:**
+- ✅ File size validation (default: 500 MB max, 100 MB warn)
+- ✅ Archive bomb detection (compression ratio, uncompressed size limits)
+- ✅ Extension mismatch detection (executable renamed as document)
+- ✅ Executable permission detection (files with +x bit, shebang)
+- ✅ Integration with existing ExecutableCheckStrategy (ELF, PE, Mach-O)
+
+**What it blocks:**
+- Zip bombs (42.zip style attacks)
+- File size bombs (> 500 MB files)
+- Executables masquerading as documents
+- Scripts with executable permissions
+- Suspicious extension/content mismatches
+
 ## Planned Features
-
-### Anti-Malware / Security Validation (NEXT)
-Prevent indexing of malicious or problematic files.
-
-**Needed:**
-- Executable detection (ELF, PE, Mach-O headers)
-- Script detection (shell, Python, etc with shebang or exec permissions)
-- Archive bomb detection (nested archives, compression ratios)
-- File size limits and validation
-- Suspicious extension mismatches
 
 ### Performance Optimization
 The completeness API is slow (~3 minutes for 1300 documents).

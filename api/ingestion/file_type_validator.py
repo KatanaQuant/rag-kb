@@ -15,6 +15,12 @@ from ingestion.validation_strategies import (
     ExecutableCheckStrategy,
     MagicSignatureStrategy
 )
+from ingestion.security_strategies import (
+    FileSizeStrategy,
+    ArchiveBombStrategy,
+    ExtensionMismatchStrategy,
+    ExecutablePermissionStrategy
+)
 
 
 class FileTypeValidator:
@@ -23,12 +29,18 @@ class FileTypeValidator:
     REFACTORED: Uses Strategy pattern to compose validation logic.
     Reduced cyclomatic complexity from CC: 12 to CC: 3.
 
-    Strategies:
+    Validation Strategies:
     - FileExistenceStrategy: Check file exists and not empty
     - ExtensionStrategy: Validate extension is supported
     - TextFileStrategy: Validate text-based files
     - ExecutableCheckStrategy: Detect executables (security)
     - MagicSignatureStrategy: Validate binary file signatures
+
+    Security Strategies (Anti-Malware):
+    - FileSizeStrategy: Prevent file size bombs
+    - ArchiveBombStrategy: Detect compression bombs
+    - ExtensionMismatchStrategy: Catch executables renamed as documents
+    - ExecutablePermissionStrategy: Detect files with exec permissions
     """
 
     # Text-based file types (no magic bytes needed)
@@ -38,12 +50,19 @@ class FileTypeValidator:
     }
 
     def __init__(self):
-        """Initialize validation strategies"""
+        """Initialize validation and security strategies"""
+        # Core validation strategies
         self.existence = FileExistenceStrategy()
         self.extension = ExtensionStrategy()
         self.text_file = TextFileStrategy()
         self.executable_check = ExecutableCheckStrategy()
         self.magic_signature = MagicSignatureStrategy()
+
+        # Security strategies (anti-malware)
+        self.file_size = FileSizeStrategy(max_size_mb=500, warn_size_mb=100)
+        self.archive_bomb = ArchiveBombStrategy()
+        self.extension_mismatch = ExtensionMismatchStrategy()
+        self.exec_permission = ExecutablePermissionStrategy()
 
     def validate(self, file_path: Path) -> ValidationResult:
         """Validate file type matches extension using strategy composition
@@ -52,8 +71,12 @@ class FileTypeValidator:
 
         Validation chain:
         1. FileExistenceStrategy - file exists and not empty
-        2. ExtensionStrategy - extension is supported
-        3. TextFileStrategy OR (ExecutableCheckStrategy + MagicSignatureStrategy)
+        2. FileSizeStrategy - file size within limits (anti-malware)
+        3. ExtensionStrategy - extension is supported
+        4. ExecutablePermissionStrategy - no exec permissions (anti-malware)
+        5. ExtensionMismatchStrategy - extension matches content (anti-malware)
+        6. ArchiveBombStrategy - compression ratio safe (anti-malware)
+        7. TextFileStrategy OR (ExecutableCheckStrategy + MagicSignatureStrategy)
 
         Args:
             file_path: Path to file to validate
@@ -61,19 +84,39 @@ class FileTypeValidator:
         Returns:
             ValidationResult with is_valid, file_type, and reason
         """
-        # Strategy 1: Check file exists and not empty
+        # Step 1: Check file exists and not empty
         result = self.existence.validate(file_path)
         if not result.is_valid:
             return result
 
-        # Strategy 2: Check extension is supported
+        # Step 2: Security - Check file size limits
+        result = self.file_size.validate(file_path, 'unknown')
+        if not result.is_valid:
+            return result
+
+        # Step 3: Check extension is supported
         result = self.extension.validate(file_path)
         if not result.is_valid:
             return result
 
         expected_type = result.file_type
 
-        # Strategy 3: Choose validation path based on file type
+        # Step 4: Security - Check executable permissions
+        result = self.exec_permission.validate(file_path, expected_type)
+        if not result.is_valid:
+            return result
+
+        # Step 5: Security - Check extension/content mismatch
+        result = self.extension_mismatch.validate(file_path, expected_type)
+        if not result.is_valid:
+            return result
+
+        # Step 6: Security - Check for archive bombs
+        result = self.archive_bomb.validate(file_path, expected_type)
+        if not result.is_valid:
+            return result
+
+        # Step 7: Type-specific validation
         if expected_type in self.TEXT_TYPES:
             # Text files: validate they're actually text (not binary)
             return self.text_file.validate(file_path, expected_type)

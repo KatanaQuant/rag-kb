@@ -34,16 +34,19 @@ class TestFileTypeValidator:
 
     def test_valid_docx_passes_validation(self):
         """Test that valid DOCX file (ZIP format) passes validation"""
+        import zipfile
+
         validator = FileTypeValidator()
 
-        # Create temp file with ZIP magic bytes (DOCX is a ZIP)
+        # Create temp file with valid DOCX structure (minimal ZIP)
         with NamedTemporaryFile(suffix='.docx', delete=False) as f:
-            # ZIP magic bytes: PK (0x50 0x4B)
-            f.write(b'PK\x03\x04')
-            f.write(b'\x00' * 100)  # Padding
             temp_path = Path(f.name)
 
         try:
+            # Create valid ZIP/DOCX file
+            with zipfile.ZipFile(temp_path, 'w') as zf:
+                zf.writestr('word/document.xml', '<document/>')
+
             result = validator.validate(temp_path)
             assert result.is_valid
             assert result.file_type == 'docx'
