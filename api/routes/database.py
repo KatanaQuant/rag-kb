@@ -7,17 +7,18 @@ Extracted from main.py following POODR principles:
 """
 from fastapi import APIRouter, Request, HTTPException
 
-from api_services.orphan_detector import OrphanDetector
+from operations.orphan_detector import OrphanDetector
 
 router = APIRouter()
 
 
-@router.post("/repair-orphans")
-async def repair_orphans(request: Request):
-    """Repair orphaned files (processed but not embedded)
+@router.post("/api/maintenance/reindex-orphaned-files")
+async def reindex_orphaned_files(request: Request):
+    """Reindex files that were processed but never fully indexed
 
-    Orphaned files occur when processing completes but embedding fails.
-    This endpoint detects and repairs them by reindexing.
+    Orphaned files occur when processing completes but embedding/storage fails.
+    These are files marked 'completed' in progress tracking but missing from
+    the documents table. Queues them for reindexing with HIGH priority.
     """
     try:
         app_state = request.app.state.app_state
@@ -57,13 +58,13 @@ async def repair_orphans(request: Request):
         )
 
 
-@router.get("/database/check-duplicates")
-async def check_database_duplicates(request: Request):
-    """Check for duplicate chunks in the database
+@router.get("/api/maintenance/find-duplicate-chunks")
+async def find_duplicate_chunks(request: Request):
+    """Find duplicate chunks in the database
 
     Returns statistics about duplicate chunks within documents and across documents.
     Within-document duplicates are usually problematic and should be cleaned up.
-    Cross-document duplicates may be intentional (shared content).
+    Cross-document duplicates may be intentional (shared content like headers).
     """
     try:
         app_state = request.app.state.app_state
@@ -121,7 +122,7 @@ async def check_database_duplicates(request: Request):
                 ],
                 "impact": "May be intentional (shared content like headers, footers)"
             },
-            "recommendation": "Run /database/cleanup-duplicates to remove within-document duplicates" if duplicate_chunks_count > 0 else "Database is clean"
+            "recommendation": "Run /api/maintenance/delete-duplicate-chunks to remove within-document duplicates" if duplicate_chunks_count > 0 else "Database is clean"
         }
 
     except Exception as e:
@@ -131,9 +132,9 @@ async def check_database_duplicates(request: Request):
         )
 
 
-@router.post("/database/cleanup-duplicates")
-async def cleanup_database_duplicates(request: Request):
-    """Clean up duplicate chunks within documents
+@router.post("/api/maintenance/delete-duplicate-chunks")
+async def delete_duplicate_chunks(request: Request):
+    """Delete duplicate chunks within documents
 
     Removes duplicate chunks that appear multiple times within the same document.
     Keeps the first occurrence and deletes the rest.

@@ -10,16 +10,16 @@ import os
 from pathlib import Path
 from typing import Optional
 
-from services.pipeline_queues import (
+from pipeline.pipeline_queues import (
     PipelineQueues,
     ExtractedDocument,
     ChunkedDocument,
     EmbeddedDocument
 )
-from services.pipeline_workers import StageWorker, EmbedWorkerPool
-from services.indexing_queue import QueueItem
-from services.progress_logger import ProgressLogger
-from services.skip_batcher import SkipBatcher
+from pipeline.pipeline_workers import StageWorker, EmbedWorkerPool
+from pipeline.indexing_queue import QueueItem
+from pipeline.progress_logger import ProgressLogger
+from pipeline.skip_batcher import SkipBatcher
 from domain_models import DocumentFile
 
 class PipelineCoordinator:

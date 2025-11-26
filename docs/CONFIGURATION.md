@@ -243,7 +243,7 @@ IndexingQueue (Priority) → IndexingWorker → PipelineCoordinator
                                               ↓
                                       ChunkWorker (1 thread)
                                               ↓
-                                      EmbedWorkerPool (3 threads)
+                                      EmbedWorkerPool (2 threads, CPU default)
                                               ↓
                                       StoreWorker (1 thread)
 ```
@@ -254,13 +254,15 @@ Edit `.env`:
 
 ```bash
 CHUNK_WORKERS=1          # Number of parallel chunking threads (default: 1)
-EMBED_WORKERS=3          # Number of parallel embedding threads (default: 3)
+EMBEDDING_WORKERS=2      # Number of parallel embedding threads (default: 2)
 ```
+
+**CPU vs GPU builds**: The default of 2 embedding workers is optimized for CPU-only builds. CPU embedding is resource-intensive, and running 3+ concurrent embedding operations can cause slowdowns when using the device for other tasks. For GPU-accelerated builds, increase to 3-6 workers.
 
 ### Performance Benefits
 
 - **Before**: ~2 files/hour for large PDFs (sequential processing)
-- **After**: ~8 files/hour (4x improvement with 3 embedding workers)
+- **After**: ~6-8 files/hour (3-4x improvement with 2 embedding workers)
 
 ### Tuning for Your System
 
@@ -536,7 +538,7 @@ MAX_MEMORY=4G
 ```bash
 # Worker pools
 CHUNK_WORKERS=1
-EMBED_WORKERS=3
+EMBEDDING_WORKERS=2    # 2 for CPU builds, increase for GPU
 
 # Batch processing
 BATCH_SIZE=5

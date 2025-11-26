@@ -14,8 +14,8 @@ from concurrent.futures import ThreadPoolExecutor
 import threading
 
 from ingestion.progress import ProcessingProgressTracker
-from services.quarantine_manager import QuarantineManager, QUARANTINE_CHECKS
-from services.security_scan_cache import get_security_cache
+from pipeline.quarantine_manager import QuarantineManager, QUARANTINE_CHECKS
+from pipeline.security_scan_cache import get_security_cache
 from ingestion.file_type_validator import FileTypeValidator
 from ingestion.validation_result import SecuritySeverity
 from ingestion.helpers import FileHasher

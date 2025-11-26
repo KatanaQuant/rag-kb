@@ -6,11 +6,11 @@ from pathlib import Path
 from unittest.mock import Mock, MagicMock, patch
 
 from main import AppState, app
-from api_services.model_loader import ModelLoader
-from api_services.file_walker import FileWalker
+from operations.model_loader import ModelLoader
+from operations.file_walker import FileWalker
 from startup.manager import StartupManager
 from routes.documents import DocumentLister
-from api_services.query_executor import QueryExecutor
+from operations.query_executor import QueryExecutor
 from models import QueryRequest, QueryResponse
 from ingestion import DocumentProcessor
 from domain_models import ChunkData
@@ -42,7 +42,7 @@ class TestAppState:
 class TestModelLoader:
     """Tests for ModelLoader"""
 
-    @patch('api_services.model_loader.SentenceTransformer')
+    @patch('operations.model_loader.SentenceTransformer')
     def test_load(self, mock_transformer):
         """Test model loading with proper mock"""
         mock_model = Mock()

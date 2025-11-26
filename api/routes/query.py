@@ -7,7 +7,7 @@ Extracted from main.py following POODR principles:
 """
 from fastapi import APIRouter, Request, HTTPException
 from models import QueryRequest, QueryResponse
-from api_services.query_executor import QueryExecutor
+from operations.query_executor import QueryExecutor
 
 router = APIRouter()
 

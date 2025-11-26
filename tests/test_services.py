@@ -4,8 +4,8 @@
 """Tests for services."""
 
 from io import StringIO
-from services import Logger
-from services.logger import LogLevel
+from pipeline import Logger
+from pipeline.logger import LogLevel
 
 
 class TestLogger:

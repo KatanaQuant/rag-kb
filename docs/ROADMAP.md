@@ -19,14 +19,17 @@ This document outlines the journey from v1.x to v2.0.0 and beyond.
 
 ## Current State
 
-**Latest Release**: v1.6.2 (N+1 Query Fix)
+**Latest Release**: v1.6.5 (Codebase Refactoring)
 
 **What's Working**:
 - Production-ready document indexing (PDF, EPUB, Markdown, Code)
 - Concurrent 3-stage pipeline (Chunk → Embed → Store)
 - Async API (responsive during heavy indexing)
 - Comprehensive security scanning (ClamAV, YARA, hash blacklist)
-- 627 tests passing
+- Self-healing startup (auto-repair database issues)
+- REST API for security/maintenance operations
+- Clean architecture: `pipeline/` (background) + `operations/` (API)
+- 638 tests passing
 
 ---
 
@@ -34,7 +37,10 @@ This document outlines the journey from v1.x to v2.0.0 and beyond.
 
 | Version | Highlights |
 |---------|-----------|
-| **v1.6.2** | Fix N+1 query in completeness API (1300x faster) |
+| **v1.6.5** | Codebase refactoring: `services/`→`pipeline/`, `api_services/`→`operations/`, CPU-optimized defaults |
+| **v1.6.4** | Self-healing startup (auto-repair empty docs, backfill counts) |
+| **v1.6.3** | Fix ClamAV socket contention with thread-local connections |
+| **v1.6.2** | Fix N+1 query in integrity API (1300x faster) |
 | **v1.6.1** | Fix YARA is_valid logic bug |
 | **v1.6.0** | Security REST API, non-blocking scan jobs, parallel scanning |
 | **v1.5.0** | Advanced malware detection (ClamAV, YARA, hash blacklist) |
@@ -55,7 +61,7 @@ This document outlines the journey from v1.x to v2.0.0 and beyond.
 ## Journey to v2.0.0
 
 ```
-v1.6.2 (CURRENT)
+v1.6.5 (CURRENT)
     │
     ├── v1.7.x - Performance & Polish
     │   └── Chunking strategy improvements

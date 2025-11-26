@@ -16,10 +16,11 @@ services:
       - ./knowledge_base:/app/knowledge_base
       - ./data:/app/data
       - ./tests:/app/tests  # Mount tests directory for test execution
-      - ./api/ingestion:/app/ingestion  # Dev mount for new modules
-      - ./api/api_services:/app/api_services  # Dev mount for new services
-      - ./api/routes:/app/routes  # Dev mount for new routes
-      - ./api/services:/app/services  # Dev mount for services
+      - ./api/ingestion:/app/ingestion  # Dev mount for ingestion modules
+      - ./api/operations:/app/operations  # Dev mount for API operations (query, list, search)
+      - ./api/routes:/app/routes  # Dev mount for route handlers
+      - ./api/pipeline:/app/pipeline  # Dev mount for pipeline services (embedding, queue, workers)
+      - ./api/startup:/app/startup  # Dev mount for startup services
       - ./api/main.py:/app/main.py  # Dev mount for main.py changes
       - ./api/config.py:/app/config.py  # Config file
       - ./api/environment_config_loader.py:/app/environment_config_loader.py  # Environment loader
@@ -41,7 +42,7 @@ services:
       - CHUNK_MAX_TOKENS=${CHUNK_MAX_TOKENS:-512}  # Max tokens per semantic chunk
       - AUTO_REPAIR_ORPHANS=${AUTO_REPAIR_ORPHANS:-true}  # Auto-repair orphaned files on startup
       - CHUNK_WORKERS=${CHUNK_WORKERS:-1}  # Concurrent chunking threads
-      - EMBEDDING_WORKERS=${EMBEDDING_WORKERS:-3}  # Concurrent embedding threads
+      - EMBEDDING_WORKERS=${EMBEDDING_WORKERS:-2}  # Concurrent embedding threads (2 for CPU, increase for GPU)
       - MAX_PENDING_EMBEDDINGS=${MAX_PENDING_EMBEDDINGS:-6}  # Max queued embeddings before throttling
       - OMP_NUM_THREADS=2  # Limit OpenMP threads to prevent deadlock
       - MKL_NUM_THREADS=2  # Limit MKL threads

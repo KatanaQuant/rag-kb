@@ -21,7 +21,7 @@ class TestProgressLogger:
     def setup_method(self):
         """Set up test fixtures"""
         # Import here to avoid circular dependencies during test discovery
-        from services.progress_logger import ProgressLogger
+        from pipeline.progress_logger import ProgressLogger
         self.logger = ProgressLogger()
 
     def teardown_method(self):

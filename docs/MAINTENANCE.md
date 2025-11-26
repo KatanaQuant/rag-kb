@@ -1,15 +1,35 @@
 # RAG Knowledge Base Maintenance Guide
 
-This guide explains how to diagnose and fix document completeness issues.
+This guide explains how to diagnose and fix document integrity issues.
+
+## Self-Healing (Automatic)
+
+RAG-KB automatically repairs common database issues at startup:
+
+| Check | What It Does | Environment Variable |
+|-------|-------------|---------------------|
+| **Empty Documents** | Deletes document records with no chunks | `AUTO_SELF_HEAL=true` (default) |
+| **Chunk Count Backfill** | Fills missing `total_chunks` values | `AUTO_SELF_HEAL=true` (default) |
+| **Orphan Repair** | Re-queues files marked completed but missing from DB | `AUTO_REPAIR_ORPHANS=true` (default) |
+| **Incomplete Resume** | Resumes interrupted file processing | Always on |
+
+To disable automatic self-healing:
+```bash
+AUTO_SELF_HEAL=false docker-compose up -d
+```
+
+**Note**: Orphans created *during* initial indexing won't be caught until next restart. See [KNOWN_ISSUES.md](KNOWN_ISSUES.md#2-orphans-created-during-initial-indexing-not-auto-repaired).
+
+---
 
 ## Quick Health Check
 
 ```bash
-# Get completeness report
-curl http://localhost:8000/documents/completeness | python3 -m json.tool
+# Get integrity report
+curl http://localhost:8000/documents/integrity | python3 -m json.tool
 
 # Summary only
-curl -s http://localhost:8000/documents/completeness | python3 -c "
+curl -s http://localhost:8000/documents/integrity | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
 print(f'Total: {d[\"total_documents\"]} | Complete: {d[\"complete\"]} | Incomplete: {d[\"incomplete\"]}')"
@@ -140,7 +160,7 @@ docker-compose exec rag-api python3 migrations/backfill_chunk_counts.py
 import requests
 
 # Get incomplete documents
-resp = requests.get('http://localhost:8000/documents/completeness')
+resp = requests.get('http://localhost:8000/documents/integrity')
 data = resp.json()
 
 for issue in data['issues']:
@@ -175,6 +195,34 @@ for doc_id, file_path in orphans:
 conn.commit()
 ```
 
+## Maintenance REST API
+
+For manual repairs, use these endpoints:
+
+```bash
+# Reindex orphaned files (completed but missing from DB)
+curl -X POST http://localhost:8000/api/maintenance/reindex-orphaned-files
+
+# Delete empty document records (dry-run first)
+curl -X POST http://localhost:8000/api/maintenance/delete-empty-documents \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
+
+# Backfill chunk counts (dry-run first)
+curl -X POST http://localhost:8000/api/maintenance/backfill-chunk-counts \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
+
+# Reindex failed/incomplete documents
+curl -X POST http://localhost:8000/api/maintenance/reindex-failed-documents \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
+```
+
+See [API.md](API.md#maintenance-endpoints) for full endpoint documentation.
+
+---
+
 ## Monitoring
 
 ### Automated Health Check
@@ -185,7 +233,7 @@ Add to your monitoring/cron:
 #!/bin/bash
 # health_check.sh
 
-RESULT=$(curl -s http://localhost:8000/documents/completeness)
+RESULT=$(curl -s http://localhost:8000/documents/integrity)
 INCOMPLETE=$(echo $RESULT | python3 -c "import sys,json; print(json.load(sys.stdin)['incomplete'])")
 
 if [ "$INCOMPLETE" -gt 0 ]; then
@@ -200,12 +248,12 @@ fi
 
 1. Check the specific document:
    ```bash
-   curl "http://localhost:8000/documents/completeness/app/knowledge_base/myfile.pdf"
+   curl "http://localhost:8000/documents/integrity/app/knowledge_base/myfile.pdf"
    ```
 
 2. Look at the issue type and follow the relevant section above.
 
-### "Completeness check is slow"
+### "Integrity check is slow"
 
 The check queries all documents. For large knowledge bases:
 - Consider caching the result

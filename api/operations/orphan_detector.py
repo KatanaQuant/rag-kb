@@ -28,7 +28,7 @@ class OrphanDetector:
 
     def repair_orphans(self, queue):
         """Repair orphaned files by adding them to queue with HIGH priority"""
-        from services.indexing_queue import Priority
+        from pipeline.indexing_queue import Priority
 
         orphans = self.detect_orphans()
         if not orphans:
@@ -76,7 +76,7 @@ class OrphanDetector:
     def _queue_one(self, orphan, queue, stats):
         """Queue one orphaned file for reindexing"""
         from pathlib import Path
-        from services.indexing_queue import Priority
+        from pipeline.indexing_queue import Priority
 
         try:
             path = Path(orphan['path'])

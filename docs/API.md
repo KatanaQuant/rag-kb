@@ -70,24 +70,27 @@ The system has multiple layers of integrity checks:
 |-------|------|-----------------|--------|
 | **Orphan detection** | Startup | Files marked "completed" but missing from documents table | Auto-reindex (HIGH priority) |
 | **Incomplete resume** | Startup | Files with status != "completed" | Auto-reindex (HIGH priority) |
-| **Completeness analysis** | On-demand | Zero chunks, missing progress, chunk count mismatch | Manual via API |
+| **Self-healing** | Startup | Empty documents, missing chunk counts | Auto-delete/backfill |
+| **Integrity check** | On-demand | Zero chunks, missing progress, chunk count mismatch | Manual via API |
 | **Orphan chunks** | On-demand | Chunks without parent documents | Manual cleanup via API |
-| **Tracking inconsistency** | On-demand | Documents missing chunk counts | Manual fix via API |
 
 **Automatic (on startup)**:
 - Orphaned files: `processing_progress.status = 'completed'` but no `documents` entry → queued for reindex
 - Incomplete files: `processing_progress.status != 'completed'` → queued for reindex
 - Non-existent files: File in DB but deleted from disk → cleaned from DB
+- **Self-healing** (controlled by `AUTO_SELF_HEAL=true`):
+  - Empty documents: Document records with 0 chunks → deleted
+  - Missing chunk counts: Historical documents without tracking → backfilled
 
 **Manual (via API)**:
 ```bash
 # Check for issues (non-destructive)
-curl http://localhost:8000/documents/completeness
+curl http://localhost:8000/documents/integrity
 
 # Fix specific issue types
-curl -X POST http://localhost:8000/api/maintenance/reindex-incomplete
-curl -X POST http://localhost:8000/api/maintenance/delete-orphans
-curl -X POST http://localhost:8000/api/maintenance/fix-tracking
+curl -X POST http://localhost:8000/api/maintenance/reindex-failed-documents
+curl -X POST http://localhost:8000/api/maintenance/delete-empty-documents
+curl -X POST http://localhost:8000/api/maintenance/backfill-chunk-counts
 ```
 
 ### When to Use Manual APIs
@@ -541,14 +544,14 @@ curl -X DELETE http://localhost:8000/api/security/cache
 
 ## System Maintenance
 
-### Repair Orphaned Files
+### Reindex Orphaned Files
 
-Detect and repair files that were processed but not fully indexed.
+Reindex files that were processed but never fully indexed (marked "completed" but missing from documents table).
 
-**Endpoint**: `POST /repair-orphans`
+**Endpoint**: `POST /api/maintenance/reindex-orphaned-files`
 
 ```bash
-curl -X POST http://localhost:8000/repair-orphans
+curl -X POST http://localhost:8000/api/maintenance/reindex-orphaned-files
 ```
 
 **Response**:
@@ -556,14 +559,15 @@ curl -X POST http://localhost:8000/repair-orphans
 {
   "status": "success",
   "orphans_found": 3,
-  "message": "Orphaned files queued for reindexing"
+  "orphans_queued": 3,
+  "message": "Queued 3 orphaned files for reindexing with HIGH priority"
 }
 ```
 
-**What are orphans?**
-- Files that started processing but failed during embedding/storage
-- Files with incomplete chunks in the database
-- Typically caused by crashes or interruptions
+**What are orphaned files?**
+- Files marked "completed" in progress tracking but missing from documents table
+- Typically caused by crashes during embedding/storage
+- Auto-detected on startup, but can be triggered manually
 
 **When to use**:
 - After system crash or forced shutdown
@@ -607,69 +611,153 @@ curl -X POST http://localhost:8000/index \
 
 ---
 
-### Fix Tracking Inconsistencies
+### Backfill Chunk Counts
 
-Repair database tracking inconsistencies (files in processing_progress but not in documents table).
+Backfill missing chunk counts for historical documents indexed before chunk tracking was added.
 
-**Endpoint**: `POST /api/maintenance/fix-tracking`
+**Endpoint**: `POST /api/maintenance/backfill-chunk-counts`
 
 ```bash
-curl -X POST http://localhost:8000/api/maintenance/fix-tracking
+curl -X POST http://localhost:8000/api/maintenance/backfill-chunk-counts
+```
+
+**Response**:
+```json
+{
+  "documents_checked": 150,
+  "documents_updated": 5,
+  "dry_run": false,
+  "message": "Updated 5 documents"
+}
+```
+
+**Dry run** (preview without changes):
+```bash
+curl -X POST http://localhost:8000/api/maintenance/backfill-chunk-counts \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
+```
+
+---
+
+### Delete Empty Documents
+
+Delete document records that have no chunks (empty documents from interrupted processing).
+
+**Endpoint**: `POST /api/maintenance/delete-empty-documents`
+
+```bash
+curl -X POST http://localhost:8000/api/maintenance/delete-empty-documents
+```
+
+**Response**:
+```json
+{
+  "orphans_found": 5,
+  "orphans_deleted": 5,
+  "dry_run": false,
+  "orphans": [...],
+  "message": "Deleted 5 orphan documents"
+}
+```
+
+**Dry run** (preview without changes):
+```bash
+curl -X POST http://localhost:8000/api/maintenance/delete-empty-documents \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
+```
+
+---
+
+### Reindex Failed Documents
+
+Queue all documents with integrity issues (zero chunks, missing embeddings, incomplete processing) for re-indexing with HIGH priority. Returns immediately - check `/indexing/status` for progress.
+
+**Endpoint**: `POST /api/maintenance/reindex-failed-documents`
+
+```bash
+curl -X POST http://localhost:8000/api/maintenance/reindex-failed-documents
+```
+
+**Response**:
+```json
+{
+  "documents_found": 10,
+  "documents_queued": 10,
+  "dry_run": false,
+  "documents": [...],
+  "message": "Queued 10 documents for reindexing with HIGH priority"
+}
+```
+
+**Filter by issue type**:
+```bash
+curl -X POST http://localhost:8000/api/maintenance/reindex-failed-documents \
+  -H "Content-Type: application/json" \
+  -d '{"issue_types": ["zero_chunks", "processing_incomplete"]}'
+```
+
+**Dry run** (preview without queueing):
+```bash
+curl -X POST http://localhost:8000/api/maintenance/reindex-failed-documents \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
+```
+
+---
+
+### Find Duplicate Chunks
+
+Find duplicate chunks in the database (within and across documents).
+
+**Endpoint**: `GET /api/maintenance/find-duplicate-chunks`
+
+```bash
+curl http://localhost:8000/api/maintenance/find-duplicate-chunks
 ```
 
 **Response**:
 ```json
 {
   "status": "success",
-  "inconsistencies_found": 5,
-  "fixed": 5,
-  "message": "Fixed 5 tracking inconsistencies"
+  "total_documents": 1500,
+  "total_chunks": 35000,
+  "within_document_duplicates": {
+    "count": 5,
+    "total_duplicate_chunks": 12,
+    "impact": "These are usually problematic and should be cleaned"
+  },
+  "cross_document_duplicates": {
+    "count": 3,
+    "top_10": [...],
+    "impact": "May be intentional (shared content like headers, footers)"
+  },
+  "recommendation": "Run /api/maintenance/delete-duplicate-chunks to remove within-document duplicates"
 }
 ```
 
 ---
 
-### Delete Orphan Chunks
+### Delete Duplicate Chunks
 
-Remove chunks without parent documents (database garbage collection).
+Delete duplicate chunks within documents (keeps first occurrence, removes rest).
 
-**Endpoint**: `DELETE /api/maintenance/orphans`
+**Endpoint**: `POST /api/maintenance/delete-duplicate-chunks`
 
 ```bash
-curl -X DELETE http://localhost:8000/api/maintenance/orphans
+curl -X POST http://localhost:8000/api/maintenance/delete-duplicate-chunks
 ```
 
 **Response**:
 ```json
 {
   "status": "success",
-  "orphans_deleted": 42,
-  "message": "Deleted 42 orphan chunks"
+  "duplicates_found": 5,
+  "chunks_deleted": 12,
+  "final_chunk_count": 34988,
+  "message": "Successfully removed 12 duplicate chunks from 5 documents"
 }
-```
-
----
-
-### List Incomplete Files
-
-Get files that started processing but never completed.
-
-**Endpoint**: `GET /api/maintenance/incomplete`
-
-```bash
-curl http://localhost:8000/api/maintenance/incomplete
-```
-
----
-
-### Reindex Incomplete Files
-
-Queue all incomplete files for reprocessing.
-
-**Endpoint**: `POST /api/maintenance/reindex-incomplete`
-
-```bash
-curl -X POST http://localhost:8000/api/maintenance/reindex-incomplete
 ```
 
 ---
@@ -795,7 +883,7 @@ curl -X POST http://localhost:8000/indexing/pause
 curl -X POST http://localhost:8000/indexing/clear
 
 # 3. Repair any orphaned files
-curl -X POST http://localhost:8000/repair-orphans
+curl -X POST http://localhost:8000/api/maintenance/reindex-orphaned-files
 
 # 4. Resume normal operation
 curl -X POST http://localhost:8000/indexing/resume
@@ -927,8 +1015,14 @@ docker-compose restart rag-api
 ### Inconsistent Search Results
 
 ```bash
+# Check document integrity
+curl http://localhost:8000/documents/integrity
+
 # Repair orphaned files
-curl -X POST http://localhost:8000/repair-orphans
+curl -X POST http://localhost:8000/api/maintenance/reindex-orphaned-files
+
+# Reindex any failed documents
+curl -X POST http://localhost:8000/api/maintenance/reindex-failed-documents
 
 # Check health
 curl http://localhost:8000/health

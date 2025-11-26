@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import List
 from collections import defaultdict
-from api_services.file_walker import FileWalker
+from operations.file_walker import FileWalker
 
 
 class IndexOrchestrator:
@@ -49,7 +49,7 @@ class IndexOrchestrator:
                 print(f"WARNING: No queue available, cannot resume {file_path.name}")
                 return
 
-            from services import Priority
+            from pipeline import Priority
             self.queue.add(file_path, priority=Priority.HIGH, force=True)
             print(f"Queued incomplete file for reprocessing: {file_path.name}")
         except Exception as e:
@@ -142,7 +142,7 @@ class IndexOrchestrator:
 
     def _enqueue_files(self, all_files: List, queue) -> tuple[int, int]:
         """Add files to queue for worker processing"""
-        from services import Priority
+        from pipeline import Priority
         queue.add_many(all_files, priority=Priority.NORMAL)
         print(f"Added {len(all_files)} files to indexing queue")
         return len(all_files), 0

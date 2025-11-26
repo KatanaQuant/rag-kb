@@ -15,7 +15,7 @@ from typing import Callable, List, Optional
 from queue import Empty
 from pathlib import Path
 
-from services.pipeline_queues import ExtractedDocument, ChunkedDocument, EmbeddedDocument
+from pipeline.pipeline_queues import ExtractedDocument, ChunkedDocument, EmbeddedDocument
 
 class StageWorker:
     """Generic worker for a pipeline stage

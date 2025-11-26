@@ -11,7 +11,7 @@ tested through integration tests of the pipeline components.
 import pytest
 from pathlib import Path
 from unittest.mock import Mock, MagicMock, patch
-from api_services.file_walker import FileWalker
+from operations.file_walker import FileWalker
 from ingestion.file_filter import FileFilterPolicy
 
 

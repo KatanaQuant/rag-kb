@@ -3,13 +3,14 @@
 Endpoints for database maintenance, repair, and cleanup operations.
 All maintenance operations are exposed via REST API for automation.
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Optional
 from pathlib import Path
 import sqlite3
 
 from config import default_config
+from pipeline.indexing_queue import Priority
 
 router = APIRouter(prefix="/api/maintenance", tags=["maintenance"])
 
@@ -69,10 +70,9 @@ class ReindexResult(BaseModel):
 class ReindexResponse(BaseModel):
     """Response from reindex-incomplete operation"""
     documents_found: int
-    documents_reindexed: int
-    documents_failed: int
+    documents_queued: int
     dry_run: bool
-    results: List[ReindexResult]
+    documents: List[ReindexResult]
     message: str
 
 
@@ -80,19 +80,19 @@ class ReindexResponse(BaseModel):
 # Fix Tracking Endpoint
 # ============================================================================
 
-@router.post("/fix-tracking", response_model=FixTrackingResponse)
-async def fix_tracking(request: FixTrackingRequest = None):
-    """Backfill chunk counts for historical documents
+@router.post("/backfill-chunk-counts", response_model=FixTrackingResponse)
+async def backfill_chunk_counts(request: FixTrackingRequest = None):
+    """Backfill missing chunk counts for historical documents
 
-    Some documents may have been indexed before chunk tracking was added.
-    This endpoint updates the expected_chunk_count and actual_chunk_count
-    fields for documents that are missing this data.
+    Some documents indexed before chunk tracking was added may be missing
+    expected_chunk_count and actual_chunk_count fields. This endpoint
+    calculates and fills in the missing counts.
 
     Args:
         dry_run: If true, show what would be updated without making changes
 
     Example:
-        POST /api/maintenance/fix-tracking
+        POST /api/maintenance/backfill-chunk-counts
         {"dry_run": true}
 
     Returns:
@@ -125,24 +125,24 @@ async def fix_tracking(request: FixTrackingRequest = None):
 # Delete Orphans Endpoint
 # ============================================================================
 
-@router.post("/delete-orphans", response_model=DeleteOrphansResponse)
-async def delete_orphans(request: DeleteOrphansRequest = None):
-    """Delete orphan document records (metadata with no chunks)
+@router.post("/delete-empty-documents", response_model=DeleteOrphansResponse)
+async def delete_empty_documents(request: DeleteOrphansRequest = None):
+    """Delete document records that have no chunks (empty documents)
 
-    Orphan records can occur when:
+    Empty document records can occur when:
     - Processing was interrupted before chunks were stored
     - Chunks were manually deleted
     - Database inconsistency
 
     Args:
-        dry_run: If true, show orphans without deleting
+        dry_run: If true, show empty documents without deleting
 
     Example:
-        POST /api/maintenance/delete-orphans
+        POST /api/maintenance/delete-empty-documents
         {"dry_run": true}
 
     Returns:
-        List of orphan documents and deletion status
+        List of empty documents and deletion status
     """
     if request is None:
         request = DeleteOrphansRequest()
@@ -195,116 +195,94 @@ async def delete_orphans(request: DeleteOrphansRequest = None):
 # Reindex Incomplete Endpoint
 # ============================================================================
 
-@router.post("/reindex-incomplete", response_model=ReindexResponse)
-async def reindex_incomplete(request: ReindexRequest = None):
-    """Re-index all incomplete documents
+@router.post("/reindex-failed-documents", response_model=ReindexResponse)
+async def reindex_failed_documents(http_request: Request, request: ReindexRequest = None):
+    """Queue all documents that failed or are incomplete for re-indexing
 
-    Finds documents that are incomplete (zero chunks, missing embeddings,
-    processing incomplete) and triggers re-indexing for each.
+    Finds documents with integrity issues (zero chunks, missing embeddings,
+    processing incomplete) and queues them for re-indexing with HIGH priority.
+    Returns immediately - check /indexing/status for progress.
 
     Args:
-        dry_run: If true, show what would be reindexed without doing it
+        dry_run: If true, show what would be queued without queueing
         issue_types: Filter by specific issue types:
             - zero_chunks: Documents with no chunks
             - processing_incomplete: Processing didn't finish
             - missing_embeddings: Chunks without embeddings
 
     Example:
-        POST /api/maintenance/reindex-incomplete
+        POST /api/maintenance/reindex-failed-documents
         {"dry_run": true, "issue_types": ["zero_chunks"]}
 
     Returns:
-        List of documents and their reindex status
+        Number of documents found and queued
     """
     if request is None:
         request = ReindexRequest()
 
     try:
-        import requests
+        app_state = http_request.app.state.app_state
 
-        # Get incomplete documents from completeness endpoint
-        resp = requests.get('http://localhost:8000/documents/completeness', timeout=300)
-        data = resp.json()
+        # Get integrity report directly (no HTTP call needed)
+        from operations.completeness_reporter import CompletenessReporter
+        reporter = CompletenessReporter(
+            progress_tracker=app_state.core.progress_tracker,
+            vector_store=app_state.core.async_vector_store
+        )
+        report = reporter.generate_report()
 
         # Filter by issue types if specified
         allowed_issues = request.issue_types or ['zero_chunks', 'processing_incomplete', 'missing_embeddings']
         incomplete = [
-            i for i in data.get('issues', [])
+            i for i in report.get('issues', [])
             if i['issue'] in allowed_issues
         ]
 
         if not incomplete:
             return ReindexResponse(
                 documents_found=0,
-                documents_reindexed=0,
-                documents_failed=0,
+                documents_queued=0,
                 dry_run=request.dry_run,
-                results=[],
+                documents=[],
                 message="No incomplete documents found"
             )
 
-        results = []
-        success_count = 0
-        failed_count = 0
+        # Build result list
+        documents = [
+            ReindexResult(
+                file_path=item['file_path'],
+                filename=Path(item['file_path']).name,
+                success=True,
+                error=None
+            )
+            for item in incomplete[:100]  # Limit response size
+        ]
 
-        if request.dry_run:
-            # Just show what would be reindexed
-            results = [
-                ReindexResult(
-                    file_path=item['file_path'],
-                    filename=Path(item['file_path']).name,
-                    success=True,
-                    error=None
+        queued_count = 0
+        if not request.dry_run:
+            # Queue all documents with HIGH priority
+            queue = app_state.indexing.queue
+            if queue:
+                for item in incomplete:
+                    path = Path(item['file_path'])
+                    if path.exists():
+                        queue.add(path, priority=Priority.HIGH, force=True)
+                        queued_count += 1
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Indexing queue not available"
                 )
-                for item in incomplete[:100]  # Limit response
-            ]
-        else:
-            # Actually reindex each document
-            for item in incomplete:
-                path = item['file_path']
-                try:
-                    resp = requests.post(
-                        'http://localhost:8000/documents/reindex',
-                        params={'path': path, 'force': 'true'},
-                        timeout=300
-                    )
-                    if resp.status_code == 200:
-                        results.append(ReindexResult(
-                            file_path=path,
-                            filename=Path(path).name,
-                            success=True
-                        ))
-                        success_count += 1
-                    else:
-                        results.append(ReindexResult(
-                            file_path=path,
-                            filename=Path(path).name,
-                            success=False,
-                            error=f"HTTP {resp.status_code}"
-                        ))
-                        failed_count += 1
-                except Exception as e:
-                    results.append(ReindexResult(
-                        file_path=path,
-                        filename=Path(path).name,
-                        success=False,
-                        error=str(e)
-                    ))
-                    failed_count += 1
 
         return ReindexResponse(
             documents_found=len(incomplete),
-            documents_reindexed=success_count if not request.dry_run else 0,
-            documents_failed=failed_count,
+            documents_queued=queued_count if not request.dry_run else 0,
             dry_run=request.dry_run,
-            results=results[:100],  # Limit response size
-            message=f"{'Would reindex' if request.dry_run else 'Reindexed'} {len(incomplete)} documents"
+            documents=documents,
+            message=f"{'Would queue' if request.dry_run else 'Queued'} {len(incomplete)} documents for reindexing with HIGH priority"
         )
 
-    except requests.exceptions.ConnectionError:
-        raise HTTPException(
-            status_code=503,
-            detail="Cannot connect to completeness endpoint. Is the server fully started?"
-        )
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Reindex failed: {e}")

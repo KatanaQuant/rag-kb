@@ -1,5 +1,5 @@
 """
-Tests for Document Completeness API endpoint
+Tests for Document Integrity API endpoint
 
 Following TDD - tests written before implementation.
 """
@@ -8,8 +8,8 @@ from unittest.mock import Mock, AsyncMock, patch
 from fastapi.testclient import TestClient
 
 
-class TestCompletenessEndpoint:
-    """Test /documents/completeness endpoint"""
+class TestIntegrityEndpoint:
+    """Test /documents/integrity endpoint"""
 
     @pytest.fixture
     def mock_app_state(self):
@@ -22,7 +22,7 @@ class TestCompletenessEndpoint:
 
     def test_returns_completeness_report(self, mock_app_state):
         """Endpoint should return completeness summary"""
-        from routes.completeness import CompletenessReporter
+        from operations.completeness_reporter import CompletenessReporter
 
         # Setup mock data
         mock_app_state.core.progress_tracker.get_progress.return_value = Mock(
@@ -56,7 +56,7 @@ class TestCompletenessEndpoint:
 
     def test_identifies_incomplete_documents(self, mock_app_state):
         """Endpoint should list incomplete documents with reasons"""
-        from routes.completeness import CompletenessReporter
+        from operations.completeness_reporter import CompletenessReporter
 
         # One complete, one incomplete (chunk mismatch)
         mock_app_state.core.progress_tracker.get_progress.side_effect = [
@@ -89,7 +89,7 @@ class TestCompletenessEndpoint:
 
     def test_handles_missing_progress_tracker(self, mock_app_state):
         """Endpoint should handle missing progress tracker gracefully"""
-        from routes.completeness import CompletenessReporter
+        from operations.completeness_reporter import CompletenessReporter
 
         reporter = CompletenessReporter(
             progress_tracker=None,
@@ -113,7 +113,7 @@ class TestCompletenessEndpoint:
 
     def test_returns_empty_when_no_documents(self, mock_app_state):
         """Endpoint should handle empty document list"""
-        from routes.completeness import CompletenessReporter
+        from operations.completeness_reporter import CompletenessReporter
 
         reporter = CompletenessReporter(
             progress_tracker=mock_app_state.core.progress_tracker,
@@ -141,8 +141,8 @@ class TestCompletenessReporterIntegration:
 
     def test_uses_completeness_analyzer(self):
         """Reporter should delegate to CompletenessAnalyzer"""
-        from routes.completeness import CompletenessReporter
-        from api_services.completeness_analyzer import CompletenessAnalyzer
+        from operations.completeness_reporter import CompletenessReporter
+        from operations.completeness_analyzer import CompletenessAnalyzer
 
         mock_tracker = Mock()
         mock_store = Mock()

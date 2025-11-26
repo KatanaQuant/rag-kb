@@ -1,10 +1,16 @@
 # Copyright (c) 2024 RAG-KB Contributors
 # SPDX-License-Identifier: MIT
 
-"""Services layer for RAG system.
+"""Pipeline layer for RAG system.
+
+This package handles background document processing:
+- Embedding generation (EmbeddingService)
+- Indexing queue management (IndexingQueue)
+- Background workers (IndexingWorker)
+- Pipeline coordination (PipelineCoordinator)
+- Security scanning (QuarantineManager)
 
 Following Sandi Metz principles:
-- Extract services from god classes
 - Single Responsibility Principle
 - Dependency Injection
 """

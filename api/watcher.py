@@ -143,7 +143,7 @@ class IndexingCoordinator:
 
     def _queue_files(self, files: Set[Path]):
         """Add files to indexing queue"""
-        from services import Priority
+        from pipeline import Priority
 
         files_list = list(files)[:self.batch_size]
 

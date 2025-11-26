@@ -233,7 +233,7 @@ class TestCompletenessAnalyzer:
 
     def test_analyzes_all_documents(self, mock_document_repo, mock_chunk_repo, mock_progress_tracker):
         """CompletenessAnalyzer should analyze all documents"""
-        from api_services.completeness_analyzer import CompletenessAnalyzer
+        from operations.completeness_analyzer import CompletenessAnalyzer
 
         analyzer = CompletenessAnalyzer(
             document_repo=mock_document_repo,
@@ -247,7 +247,7 @@ class TestCompletenessAnalyzer:
 
     def test_identifies_complete_documents(self, mock_document_repo, mock_chunk_repo, mock_progress_tracker):
         """CompletenessAnalyzer should count complete documents"""
-        from api_services.completeness_analyzer import CompletenessAnalyzer
+        from operations.completeness_analyzer import CompletenessAnalyzer
 
         # Setup: all documents complete
         mock_progress_tracker.get_progress.return_value = Mock(
@@ -268,7 +268,7 @@ class TestCompletenessAnalyzer:
 
     def test_identifies_incomplete_documents(self, mock_document_repo, mock_chunk_repo, mock_progress_tracker):
         """CompletenessAnalyzer should identify and list incomplete documents"""
-        from api_services.completeness_analyzer import CompletenessAnalyzer
+        from operations.completeness_analyzer import CompletenessAnalyzer
 
         # Setup: one document incomplete
         mock_progress_tracker.get_progress.side_effect = [
@@ -290,7 +290,7 @@ class TestCompletenessAnalyzer:
 
     def test_handles_missing_progress_record(self, mock_document_repo, mock_chunk_repo, mock_progress_tracker):
         """CompletenessAnalyzer should handle documents without progress records"""
-        from api_services.completeness_analyzer import CompletenessAnalyzer
+        from operations.completeness_analyzer import CompletenessAnalyzer
 
         mock_progress_tracker.get_progress.return_value = None
 

@@ -6,7 +6,7 @@ Tests for high-priority API endpoints that were previously untested:
 - POST /indexing/pause - Pause background indexing
 - POST /indexing/resume - Resume background indexing
 - POST /indexing/priority/{path} - Add file with high priority
-- POST /repair-orphans - Detect and repair orphaned files
+- POST /api/maintenance/reindex-orphaned-files - Reindex orphaned files
 - GET /document/{filename} - Get document info
 - GET /documents - List all documents
 - DELETE /document/{path} - Delete document
@@ -269,11 +269,11 @@ class TestPriorityEndpoint:
         assert 'not initialized' in response.json()['detail'].lower()
 
 
-class TestRepairOrphansEndpoint:
-    """Test /repair-orphans endpoint"""
+class TestReindexOrphanedFilesEndpoint:
+    """Test /api/maintenance/reindex-orphaned-files endpoint"""
 
-    def test_repair_orphans_finds_and_repairs(self, client):
-        """Repair endpoint should detect and queue orphaned files"""
+    def test_reindex_orphaned_files_finds_and_repairs(self, client):
+        """Reindex orphaned files endpoint should detect and queue orphaned files"""
         from main import state
 
         # Mock orphan detector
@@ -289,7 +289,7 @@ class TestRepairOrphansEndpoint:
         state.indexing.queue = Mock()
 
         with patch('routes.database.OrphanDetector', return_value=mock_detector):
-            response = client.post("/repair-orphans")
+            response = client.post("/api/maintenance/reindex-orphaned-files")
 
         assert response.status_code == 200
         data = response.json()
@@ -298,8 +298,8 @@ class TestRepairOrphansEndpoint:
         assert data['orphans_queued'] == 2
         assert 'HIGH priority' in data['message']
 
-    def test_repair_orphans_no_orphans_found(self, client):
-        """Repair endpoint should handle case with no orphans"""
+    def test_reindex_orphaned_files_no_orphans_found(self, client):
+        """Reindex orphaned files endpoint should handle case with no orphans"""
         from main import state
 
         mock_detector = Mock()
@@ -309,7 +309,7 @@ class TestRepairOrphansEndpoint:
         state.core.vector_store = Mock()
 
         with patch('routes.database.OrphanDetector', return_value=mock_detector):
-            response = client.post("/repair-orphans")
+            response = client.post("/api/maintenance/reindex-orphaned-files")
 
         assert response.status_code == 200
         data = response.json()
@@ -317,13 +317,13 @@ class TestRepairOrphansEndpoint:
         assert data['orphans_found'] == 0
         assert 'No orphaned' in data['message']
 
-    def test_repair_orphans_without_progress_tracker_fails(self, client):
-        """Repair should fail if progress tracking not enabled"""
+    def test_reindex_orphaned_files_without_progress_tracker_fails(self, client):
+        """Reindex orphaned files should fail if progress tracking not enabled"""
         from main import state
 
         state.core.progress_tracker = None
 
-        response = client.post("/repair-orphans")
+        response = client.post("/api/maintenance/reindex-orphaned-files")
 
         assert response.status_code == 400
         assert 'not enabled' in response.json()['detail'].lower()

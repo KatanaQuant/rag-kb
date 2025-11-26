@@ -6,8 +6,8 @@ since they are skipped before the chunking stage actually happens.
 import pytest
 from unittest.mock import Mock, MagicMock, patch
 from pathlib import Path
-from services.pipeline_coordinator import PipelineCoordinator
-from services.indexing_queue import QueueItem, Priority
+from pipeline.pipeline_coordinator import PipelineCoordinator
+from pipeline.indexing_queue import QueueItem, Priority
 
 
 class TestPipelineLogging:
@@ -30,7 +30,7 @@ class TestPipelineLogging:
         mock_file.hash = "mock_hash_123"
         return mock_file
 
-    @patch('services.pipeline_coordinator.DocumentFile')
+    @patch('pipeline.pipeline_coordinator.DocumentFile')
     def test_already_indexed_file_records_skip(self, mock_doc_class, mock_services, mock_doc_file):
         """Files already indexed should be recorded as skipped via skip_batcher"""
         processor, indexer, embedding_service = mock_services
@@ -64,7 +64,7 @@ class TestPipelineLogging:
             "already_indexed.pdf", "already indexed"
         )
 
-    @patch('services.pipeline_coordinator.DocumentFile')
+    @patch('pipeline.pipeline_coordinator.DocumentFile')
     def test_new_file_logs_chunk_correctly(self, mock_doc_class, mock_services, mock_doc_file, capsys):
         """New files being chunked should log [Chunk]"""
         processor, indexer, embedding_service = mock_services
@@ -102,7 +102,7 @@ class TestPipelineLogging:
         assert "[Chunk]" in captured.out
         assert "2 chunks complete" in captured.out
 
-    @patch('services.pipeline_coordinator.DocumentFile')
+    @patch('pipeline.pipeline_coordinator.DocumentFile')
     def test_forced_file_always_chunks(self, mock_doc_class, mock_services, mock_doc_file, capsys):
         """Files with force=True should always chunk, even if indexed"""
         processor, indexer, embedding_service = mock_services

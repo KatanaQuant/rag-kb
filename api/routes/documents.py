@@ -6,123 +6,12 @@ Extracted from main.py following POODR principles:
 - Dependency injection via FastAPI Request
 """
 from fastapi import APIRouter, Request, HTTPException
-from typing import List
-import sqlite3
 
 from models import DocumentInfoResponse
-from config import default_config
+from operations.document_lister import DocumentLister
+from operations.document_searcher import DocumentSearcher
 
 router = APIRouter()
-
-
-class DocumentLister:
-    """Lists indexed documents"""
-
-    def __init__(self, vector_store):
-        self.store = vector_store
-
-    async def list_all(self) -> dict:
-        """List all documents (async for non-blocking database)"""
-        cursor = await self._query()
-        documents = await self._format(cursor)
-        return self._build_response(documents)
-
-    async def _query(self):
-        """Query documents (async)"""
-        return await self.store.query_documents_with_chunks()
-
-    @staticmethod
-    async def _format(cursor) -> List[dict]:
-        """Format results (async to iterate cursor)"""
-        documents = []
-        async for row in cursor:
-            DocumentLister._add_doc(documents, row)
-        return documents
-
-    @staticmethod
-    def _add_doc(documents: List, row):
-        """Add document to list"""
-        documents.append({
-            'file_path': row[0],
-            'indexed_at': row[1],
-            'chunk_count': row[2]
-        })
-
-    @staticmethod
-    def _build_response(documents: List) -> dict:
-        """Build response dict"""
-        return {
-            'total_documents': len(documents),
-            'documents': documents
-        }
-
-
-class DocumentSearcher:
-    """Searches for documents in database"""
-
-    def search(self, pattern: str = None) -> dict:
-        """Search documents by pattern"""
-        results = self._query_documents(pattern)
-        documents = self._format_results(results)
-        return self._build_response(pattern, documents)
-
-    def _query_documents(self, pattern: str = None):
-        """Query documents with optional pattern"""
-        conn = sqlite3.connect(default_config.database.path)
-
-        if pattern:
-            results = self._search_with_pattern(conn, pattern)
-        else:
-            results = self._list_all_documents(conn)
-
-        conn.close()
-        return results
-
-    def _search_with_pattern(self, conn, pattern: str):
-        """Search with pattern filter"""
-        cursor = conn.execute("""
-            SELECT d.id, d.file_path, d.file_hash, d.indexed_at, COUNT(c.id) as chunk_count
-            FROM documents d
-            LEFT JOIN chunks c ON d.id = c.document_id
-            WHERE d.file_path LIKE ?
-            GROUP BY d.id
-            ORDER BY d.indexed_at DESC
-        """, (f"%{pattern}%",))
-        return cursor.fetchall()
-
-    def _list_all_documents(self, conn):
-        """List all documents"""
-        cursor = conn.execute("""
-            SELECT d.id, d.file_path, d.file_hash, d.indexed_at, COUNT(c.id) as chunk_count
-            FROM documents d
-            LEFT JOIN chunks c ON d.id = c.document_id
-            GROUP BY d.id
-            ORDER BY d.indexed_at DESC
-        """)
-        return cursor.fetchall()
-
-    def _format_results(self, results):
-        """Format query results"""
-        return [self._format_row(row) for row in results]
-
-    def _format_row(self, row) -> dict:
-        """Format single row"""
-        return {
-            "id": row[0],
-            "file_path": row[1],
-            "file_name": row[1].split('/')[-1],
-            "file_hash": row[2],
-            "indexed_at": row[3],
-            "chunk_count": row[4]
-        }
-
-    def _build_response(self, pattern, documents):
-        """Build search response"""
-        return {
-            "pattern": pattern,
-            "total_matches": len(documents),
-            "documents": documents
-        }
 
 
 @router.get("/document/{filename}", response_model=DocumentInfoResponse)
@@ -130,7 +19,7 @@ async def get_document_info(filename: str, request: Request):
     """Get document information including extraction method"""
     try:
         app_state = request.app.state.app_state
-        info = await app_state.core.async_vector_store.get_document_info(filename)  # Use async store
+        info = await app_state.core.async_vector_store.get_document_info(filename)
         if not info:
             raise HTTPException(status_code=404, detail=f"Document not found: {filename}")
         return DocumentInfoResponse(**info)
@@ -145,8 +34,8 @@ async def list_documents(request: Request):
     """List all documents"""
     try:
         app_state = request.app.state.app_state
-        lister = DocumentLister(app_state.core.async_vector_store)  # Use async store
-        return await lister.list_all()  # Now async!
+        lister = DocumentLister(app_state.core.async_vector_store)
+        return await lister.list_all()
     except Exception as e:
         raise HTTPException(
             status_code=500,
@@ -193,7 +82,7 @@ async def delete_document(file_path: str, request: Request):
     try:
         app_state = request.app.state.app_state
         # Delete from vector store (documents + chunks)
-        result = await app_state.core.async_vector_store.delete_document(file_path)  # Use async store
+        result = await app_state.core.async_vector_store.delete_document(file_path)
 
         # Delete from processing progress
         if app_state.core.progress_tracker:

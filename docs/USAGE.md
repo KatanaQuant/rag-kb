@@ -163,7 +163,7 @@ curl http://localhost:8000/indexing/status
 
 ```bash
 # Repair orphaned files
-curl -X POST http://localhost:8000/repair-orphans
+curl -X POST http://localhost:8000/api/maintenance/reindex-orphaned-files
 
 # Delete specific document
 curl -X DELETE "http://localhost:8000/document/knowledge_base/old-file.pdf"

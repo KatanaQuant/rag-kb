@@ -10,8 +10,8 @@ from pathlib import Path
 
 from models import IndexRequest, IndexResponse
 from config import default_config
-from api_services.file_walker import FileWalker
-from services import Priority
+from operations.file_walker import FileWalker
+from pipeline import Priority
 
 router = APIRouter()
 

@@ -1,4 +1,9 @@
-from typing import List, Dict
+"""Document listing service
+
+Provides document listing for API routes.
+Supports both sync and async vector stores.
+"""
+from typing import List
 
 
 class DocumentLister:
@@ -7,21 +12,21 @@ class DocumentLister:
     def __init__(self, vector_store):
         self.store = vector_store
 
-    def list_all(self) -> dict:
-        """List all documents"""
-        cursor = self._query()
-        documents = self._format(cursor)
+    async def list_all(self) -> dict:
+        """List all documents (async for non-blocking database)"""
+        cursor = await self._query()
+        documents = await self._format(cursor)
         return self._build_response(documents)
 
-    def _query(self):
-        """Query documents"""
-        return self.store.query_documents_with_chunks()
+    async def _query(self):
+        """Query documents (async)"""
+        return await self.store.query_documents_with_chunks()
 
     @staticmethod
-    def _format(cursor) -> List[dict]:
-        """Format results"""
+    async def _format(cursor) -> List[dict]:
+        """Format results (async to iterate cursor)"""
         documents = []
-        for row in cursor:
+        async for row in cursor:
             DocumentLister._add_doc(documents, row)
         return documents
 
@@ -41,4 +46,3 @@ class DocumentLister:
             'total_documents': len(documents),
             'documents': documents
         }
-

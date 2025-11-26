@@ -32,14 +32,14 @@ class ComponentFactory:
 
     def create_indexer(self):
         """Create document indexer"""
-        from services import EmbeddingService
+        from pipeline import EmbeddingService
         embedding_service = self._create_embedding_service()
         from main import DocumentIndexer
         return DocumentIndexer(self.state.processor, embedding_service)
 
     def _create_embedding_service(self):
         """Create embedding service"""
-        from services import EmbeddingService
+        from pipeline import EmbeddingService
         workers = self._get_embedding_workers()
         max_pending = self._get_max_pending(workers)
         return EmbeddingService(

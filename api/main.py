@@ -24,7 +24,7 @@ from app_state import AppState
 
 # Global state
 state = AppState()
-from api_services.model_loader import ModelLoader
+from operations.model_loader import ModelLoader
 # API services now imported in route modules
 from startup.manager import StartupManager
 from routes.health import router as health_router

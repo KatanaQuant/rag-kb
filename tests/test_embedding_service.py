@@ -6,7 +6,7 @@
 import time
 import numpy as np
 from unittest.mock import Mock, MagicMock
-from services.embedding_service import EmbeddingService
+from pipeline.embedding_service import EmbeddingService
 from value_objects import DocumentIdentity
 from pathlib import Path
 

@@ -13,12 +13,13 @@ from watcher import FileWatcherService
 from query_cache import QueryCache
 from value_objects import IndexingStats
 from app_state import AppState
-from api_services.model_loader import ModelLoader
-from api_services.file_walker import FileWalker
-from api_services.document_indexer import DocumentIndexer
-from api_services.index_orchestrator import IndexOrchestrator
-from api_services.orphan_detector import OrphanDetector
+from operations.model_loader import ModelLoader
+from operations.file_walker import FileWalker
+from operations.document_indexer import DocumentIndexer
+from operations.index_orchestrator import IndexOrchestrator
+from operations.orphan_detector import OrphanDetector
 from startup.config_validator import ConfigValidator
+from startup.self_healing import SelfHealingService
 
 
 class StartupManager:
@@ -93,7 +94,7 @@ class StartupManager:
 
     def _init_queue_and_worker(self):
         """Initialize indexing queue and worker"""
-        from services import IndexingQueue, IndexingWorker
+        from pipeline import IndexingQueue, IndexingWorker
         self.state.indexing.queue = IndexingQueue()
         indexer = self._create_indexer()
 
@@ -130,7 +131,7 @@ class StartupManager:
     def _create_embedding_service(self):
         """Create embedding service with environment config"""
         import os
-        from services.embedding_service import EmbeddingService
+        from pipeline.embedding_service import EmbeddingService
 
         max_workers = int(os.getenv('EMBEDDING_WORKERS', '3'))
         max_pending = int(os.getenv('MAX_PENDING_EMBEDDINGS', '6'))
@@ -144,7 +145,7 @@ class StartupManager:
 
     def _start_pipeline(self, embedding_service, indexer):
         """Start pipeline coordinator"""
-        from services.pipeline_coordinator import PipelineCoordinator
+        from pipeline.pipeline_coordinator import PipelineCoordinator
 
         self.state.indexing.pipeline_coordinator = PipelineCoordinator(
             processor=self.state.core.processor,
@@ -160,7 +161,8 @@ class StartupManager:
         Flow:
         1. Resume incomplete files
         2. Detect and repair orphans (files in DB without embeddings)
-        3. Only after repairs complete, allow new file processing
+        3. Self-healing: clean empty documents, backfill chunk counts
+        4. Only after repairs complete, allow new file processing
         """
         if not self.state.core.progress_tracker:
             return
@@ -168,7 +170,13 @@ class StartupManager:
         print("\n=== Starting Sanitization Stage ===")
         self._resume_incomplete_files()
         self._repair_orphaned_files()
+        self._run_self_healing()
         print("=== Sanitization Complete ===\n")
+
+    def _run_self_healing(self):
+        """Run self-healing operations (delete empty docs, backfill counts)"""
+        healer = SelfHealingService()
+        healer.run()
 
     def _resume_incomplete_files(self):
         """Resume processing of incomplete files"""
@@ -238,7 +246,7 @@ class StartupManager:
 
     def _create_indexer(self):
         """Create indexer"""
-        from services import EmbeddingService
+        from pipeline import EmbeddingService
         import os
         embedding_workers = int(os.getenv('EMBEDDING_WORKERS', '3'))
         max_pending = int(os.getenv('MAX_PENDING_EMBEDDINGS', str(embedding_workers * 2)))

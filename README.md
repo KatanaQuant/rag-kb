@@ -6,7 +6,7 @@
 
 **Personal knowledge base with semantic search.** Index books, code, and notes—query with natural language. 100% local.
 
-**Current Version**: v1.6.0 ([Changelog](docs/RELEASES/))
+**Current Version**: v1.6.5 ([Changelog](docs/RELEASES/))
 
 ---
 
@@ -15,6 +15,7 @@
 - **Semantic Search** - Natural language queries across all documents
 - **Multi-Format** - PDF, EPUB, Markdown, Code (Python/Java/TS/Go/C#), Jupyter, Obsidian
 - **Security Scanning** - ClamAV, YARA, hash blacklist (auto-quarantine)
+- **Self-Healing** - Auto-repair database issues at startup
 - **Concurrent Pipeline** - 4x throughput with parallel processing
 - **MCP Integration** - Use with Claude Code in VSCode
 - **100% Local** - No external APIs, complete privacy
@@ -28,7 +29,7 @@ See [docs/USAGE.md](docs/USAGE.md) for full feature details.
 ```bash
 # Clone and start
 git clone https://github.com/KatanaQuant/rag-kb.git
-cd rag-kb && git checkout v1.6.0
+cd rag-kb && git checkout v1.6.5
 
 # Add your content
 cp ~/Documents/*.pdf knowledge_base/books/
@@ -74,7 +75,9 @@ See [docs/USAGE.md](docs/USAGE.md) for all query methods.
 | [CONFIGURATION.md](docs/CONFIGURATION.md) | Settings, models, performance |
 | [MCP_INTEGRATION.md](docs/MCP_INTEGRATION.md) | Claude Code / VSCode setup |
 | [SECURITY.md](docs/SECURITY.md) | Malware detection setup |
+| [MAINTENANCE.md](docs/MAINTENANCE.md) | Database health, self-healing |
 | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues |
+| [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Active issues and limitations |
 | [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Architecture, testing |
 | [ROADMAP.md](docs/ROADMAP.md) | Project roadmap |
 | [RELEASES/](docs/RELEASES/) | Version history |
@@ -98,7 +101,7 @@ VSCode/IDE → MCP Server (Node.js) → RAG API (FastAPI/Docker) → SQLite + ve
 
 ```bash
 docker-compose down
-git fetch --tags && git checkout v1.6.0
+git fetch --tags && git checkout v1.6.5
 docker-compose build --no-cache
 docker-compose up -d
 ```

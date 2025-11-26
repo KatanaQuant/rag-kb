@@ -1,9 +1,15 @@
+"""Document search service
+
+Provides document search by filename pattern for API routes.
+"""
+import sqlite3
 from typing import List
-from hybrid_search import HybridSearcher
+
+from config import default_config
 
 
 class DocumentSearcher:
-    """Searches for documents in database"""
+    """Searches for documents in database by filename pattern"""
 
     def search(self, pattern: str = None) -> dict:
         """Search documents by pattern"""
@@ -13,7 +19,6 @@ class DocumentSearcher:
 
     def _query_documents(self, pattern: str = None):
         """Query documents with optional pattern"""
-        import sqlite3
         conn = sqlite3.connect(default_config.database.path)
 
         if pattern:
@@ -69,4 +74,3 @@ class DocumentSearcher:
             "total_matches": len(documents),
             "documents": documents
         }
-

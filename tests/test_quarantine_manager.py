@@ -5,7 +5,7 @@ import tempfile
 import shutil
 import json
 
-from services.quarantine_manager import QuarantineManager, QUARANTINE_CHECKS, TRACK_ONLY_CHECKS
+from pipeline.quarantine_manager import QuarantineManager, QUARANTINE_CHECKS, TRACK_ONLY_CHECKS
 
 
 class TestQuarantineManager:

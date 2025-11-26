@@ -117,7 +117,7 @@ class DocumentProcessor:
         self.validation_action = default_config.file_validation.action
 
         # Quarantine manager for dangerous files
-        from services.quarantine_manager import QuarantineManager
+        from pipeline.quarantine_manager import QuarantineManager
         self.quarantine = QuarantineManager(default_config.paths.knowledge_base)
 
     def get_file_hash(self, path: Path) -> str:

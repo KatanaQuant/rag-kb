@@ -7,7 +7,7 @@ import pytest
 import threading
 import time
 from pathlib import Path
-from services.indexing_queue import IndexingQueue, Priority, QueueItem
+from pipeline.indexing_queue import IndexingQueue, Priority, QueueItem
 
 
 class TestQueueItem:

@@ -20,14 +20,37 @@ Docling's HybridChunker with `merge_peers=True` can create chunks exceeding the 
 
 ---
 
-### 2. Test Limitations
+### 2. Orphans Created During Initial Indexing Not Auto-Repaired
 
-#### 2.1 API Endpoint Mock Recursion
+**Severity**: LOW (manual workaround)
+
+Orphan files (marked "completed" in progress but missing from documents table) created *during* initial indexing aren't caught by startup self-healing.
+
+**Root Cause**: Startup sanitization runs BEFORE new file indexing begins:
+1. Resume incomplete files
+2. Repair existing orphans ← runs here
+3. Self-healing (empty docs, chunk backfill)
+4. Index new files ← orphans created here won't be caught
+
+**Impact**: Orphans from interrupted indexing persist until next restart or manual trigger.
+
+**Workaround**: Call the maintenance API manually after initial indexing completes:
+```bash
+curl -X POST http://localhost:8000/api/maintenance/reindex-orphaned-files
+```
+
+**Planned Fix**: Post-indexing orphan check or periodic background repair.
+
+---
+
+### 3. Test Limitations
+
+#### 3.1 API Endpoint Mock Recursion
 Test `test_delete_document_success` is skipped - FastAPI's JSON encoder hits recursion errors with Mock objects.
 
 **Status**: Skipped, relies on integration testing
 
-#### 2.2 Database Transaction Tests
+#### 3.2 Database Transaction Tests
 `TestDatabaseTransactions` class skipped - VectorStore uses auto-commit, tests expect manual transaction control.
 
 **Status**: Skipped, transaction behavior tested implicitly
@@ -57,13 +80,18 @@ IndexingQueue now has duplicate detection - prevents re-queuing files already in
 ### PDF Integrity Validation [RESOLVED v1.1.0]
 PDF integrity validation detects empty files, missing headers, truncation, corrupt xref tables.
 
-### Completeness API N+1 Query [RESOLVED v1.6.2]
-`/documents/completeness` was slow (~3 min for 1300 docs) due to N+1 query pattern.
+### Integrity API N+1 Query [RESOLVED v1.6.2]
+`/documents/integrity` (formerly `/documents/completeness`) was slow (~3 min for 1300 docs) due to N+1 query pattern.
 Fixed with batch preloading - now completes in <1 sec.
 
 ### ClamAV Socket Contention [RESOLVED v1.6.3]
 Parallel security scanning (8 workers) produced "Bad file descriptor" errors in logs when multiple threads hit the ClamAV socket simultaneously.
 Fixed with thread-local ClamAV connections - each worker gets its own socket connection.
+
+### Confusing Directory Structure [RESOLVED v1.6.5]
+`services/` and `api_services/` naming was unclear. Duplicate classes existed across routes and service layers.
+Fixed by renaming: `services/`→`pipeline/` (background processing), `api_services/`→`operations/` (API operations).
+Removed duplicate classes from routes (now import from operations layer).
 
 </details>
 
