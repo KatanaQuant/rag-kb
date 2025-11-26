@@ -31,8 +31,8 @@ class TestPipelineLogging:
         return mock_file
 
     @patch('services.pipeline_coordinator.DocumentFile')
-    def test_already_indexed_file_logs_skip_not_chunk(self, mock_doc_class, mock_services, mock_doc_file, capsys):
-        """Files already indexed should log [Skip] not [Chunk]"""
+    def test_already_indexed_file_records_skip(self, mock_doc_class, mock_services, mock_doc_file):
+        """Files already indexed should be recorded as skipped via skip_batcher"""
         processor, indexer, embedding_service = mock_services
 
         # Mock DocumentFile.from_path to return our mock
@@ -50,20 +50,19 @@ class TestPipelineLogging:
             force=False
         )
 
+        # Mock the skip_batcher to verify it's called
+        coordinator.skip_batcher = Mock()
+
         # Process the file
         result = coordinator._chunk_stage(item)
 
         # Verify: Should return None (skipped)
         assert result is None
 
-        # Verify: Should log [Skip] not [Chunk]
-        captured = capsys.readouterr()
-        assert "[Skip]" in captured.out
-        assert "already indexed" in captured.out
-        # Should NOT have separate [Chunk] line before the skip message
-        lines = [line for line in captured.out.split('\n') if line.strip()]
-        chunk_lines = [line for line in lines if '[Chunk]' in line and 'already indexed' not in line]
-        assert len(chunk_lines) == 0, f"Found unexpected [Chunk] log lines: {chunk_lines}"
+        # Verify: skip_batcher.record_skip was called with correct args
+        coordinator.skip_batcher.record_skip.assert_called_once_with(
+            "already_indexed.pdf", "already indexed"
+        )
 
     @patch('services.pipeline_coordinator.DocumentFile')
     def test_new_file_logs_chunk_correctly(self, mock_doc_class, mock_services, mock_doc_file, capsys):
