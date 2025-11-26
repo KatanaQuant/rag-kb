@@ -22,7 +22,10 @@ services:
       - ./api/services:/app/services  # Dev mount for services
       - ./api/main.py:/app/main.py  # Dev mount for main.py changes
       - ./api/manage.py:/app/manage.py  # Maintenance CLI
+      - ./api/config.py:/app/config.py  # Config file
+      - ./api/environment_config_loader.py:/app/environment_config_loader.py  # Environment loader
       - ./api/migrations:/app/migrations  # Migration scripts
+      - ./config:/app/yara_config  # Mount config directory for YARA rules
       - ./.cache/deepsearch_glm:/app/.cache/deepsearch_glm  # DeepSearch GLM cache
       - ./.cache/docling:/home/appuser/.cache/docling  # Docling model cache
       - ./.cache/huggingface:/home/appuser/.cache/huggingface  # Hugging Face model cache (Docling models)

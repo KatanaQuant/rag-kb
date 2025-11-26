@@ -21,6 +21,8 @@ from ingestion.security_strategies import (
     ExtensionMismatchStrategy,
     ExecutablePermissionStrategy
 )
+from ingestion.malware_detection import AdvancedMalwareDetector
+from config import default_config
 
 
 class FileTypeValidator:
@@ -41,6 +43,11 @@ class FileTypeValidator:
     - ArchiveBombStrategy: Detect compression bombs
     - ExtensionMismatchStrategy: Catch executables renamed as documents
     - ExecutablePermissionStrategy: Detect files with exec permissions
+
+    Advanced Malware Detection (Phase 3):
+    - ClamAV: Virus signature scanning (optional)
+    - Hash Blacklist: Known malware SHA256 database (optional)
+    - YARA: Custom pattern matching (optional)
     """
 
     # Text-based file types (no magic bytes needed)
@@ -64,6 +71,9 @@ class FileTypeValidator:
         self.extension_mismatch = ExtensionMismatchStrategy()
         self.exec_permission = ExecutablePermissionStrategy()
 
+        # Advanced malware detection (Phase 3)
+        self.malware_detector = AdvancedMalwareDetector(default_config.malware_detection)
+
     def validate(self, file_path: Path) -> ValidationResult:
         """Validate file type matches extension using strategy composition
 
@@ -76,7 +86,8 @@ class FileTypeValidator:
         4. ExecutablePermissionStrategy - no exec permissions (anti-malware)
         5. ExtensionMismatchStrategy - extension matches content (anti-malware)
         6. ArchiveBombStrategy - compression ratio safe (anti-malware)
-        7. TextFileStrategy OR (ExecutableCheckStrategy + MagicSignatureStrategy)
+        7. AdvancedMalwareDetector - ClamAV/hash/YARA (optional, Phase 3)
+        8. TextFileStrategy OR (ExecutableCheckStrategy + MagicSignatureStrategy)
 
         Args:
             file_path: Path to file to validate
@@ -116,7 +127,12 @@ class FileTypeValidator:
         if not result.is_valid:
             return result
 
-        # Step 7: Type-specific validation
+        # Step 7: Advanced malware detection (Phase 3)
+        result = self.malware_detector.validate(file_path, expected_type)
+        if not result.is_valid:
+            return result
+
+        # Step 8: Type-specific validation
         if expected_type in self.TEXT_TYPES:
             # Text files: validate they're actually text (not binary)
             return self.text_file.validate(file_path, expected_type)

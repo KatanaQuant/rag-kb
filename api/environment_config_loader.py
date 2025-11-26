@@ -9,7 +9,7 @@ from pathlib import Path
 from config import (
     Config, ModelConfig, PathConfig, WatcherConfig, CacheConfig,
     BatchConfig, DoclingConfig, ProcessingConfig, ChunkConfig,
-    FileValidationConfig
+    FileValidationConfig, MalwareDetectionConfig
 )
 
 class EnvironmentConfigLoader:
@@ -28,6 +28,7 @@ class EnvironmentConfigLoader:
         processing = self._load_processing_config()
         chunks = self._load_chunk_config()
         file_validation = self._load_file_validation_config()
+        malware_detection = self._load_malware_detection_config()
 
         return Config(
             chunks=chunks,
@@ -39,7 +40,8 @@ class EnvironmentConfigLoader:
             batch=batch,
             docling=docling,
             processing=processing,
-            file_validation=file_validation
+            file_validation=file_validation,
+            malware_detection=malware_detection
         )
 
     def _load_model_config(self) -> ModelConfig:
@@ -108,6 +110,17 @@ class EnvironmentConfigLoader:
         return FileValidationConfig(
             enabled=self._get_bool("FILE_TYPE_VALIDATION_ENABLED", True),
             action=self._get_optional("FILE_TYPE_VALIDATION_ACTION", "warn")
+        )
+
+    def _load_malware_detection_config(self) -> MalwareDetectionConfig:
+        """Load malware detection configuration from environment"""
+        return MalwareDetectionConfig(
+            clamav_enabled=self._get_bool("CLAMAV_ENABLED", False),
+            clamav_socket=self._get_optional("CLAMAV_SOCKET", "/var/run/clamav/clamd.ctl"),
+            hash_blacklist_enabled=self._get_bool("HASH_BLACKLIST_ENABLED", False),
+            hash_blacklist_path=self._get_optional("HASH_BLACKLIST_PATH", "/app/data/malware_hashes.txt"),
+            yara_enabled=self._get_bool("YARA_ENABLED", False),
+            yara_rules_path=self._get_optional("YARA_RULES_PATH", "/app/yara_config/yara_rules.yar")
         )
 
     def _get_optional(self, key: str, default: str) -> str:

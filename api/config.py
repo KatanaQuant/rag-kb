@@ -88,6 +88,16 @@ class FileValidationConfig:
     action: str = "reject"  # reject|warn|skip (changed from warn in v1.3.0 for security)
 
 @dataclass
+class MalwareDetectionConfig:
+    """Advanced malware detection configuration"""
+    clamav_enabled: bool = False
+    clamav_socket: str = "/var/run/clamav/clamd.ctl"
+    hash_blacklist_enabled: bool = False
+    hash_blacklist_path: str = "/app/data/malware_hashes.txt"
+    yara_enabled: bool = False
+    yara_rules_path: str = "/app/yara_config/yara_rules.yar"
+
+@dataclass
 class Config:
     """Main configuration container"""
     chunks: ChunkConfig
@@ -100,6 +110,7 @@ class Config:
     docling: DoclingConfig
     processing: ProcessingConfig
     file_validation: FileValidationConfig
+    malware_detection: MalwareDetectionConfig
 
     @classmethod
     def from_env(cls) -> 'Config':
