@@ -34,18 +34,6 @@ Test `test_delete_document_success` is skipped - FastAPI's JSON encoder hits rec
 
 ---
 
-### 3. ClamAV Socket Contention
-
-**Severity**: LOW (cosmetic)
-
-Parallel security scanning (8 workers) can produce "Bad file descriptor" errors in logs when multiple threads hit the ClamAV socket simultaneously.
-
-**Impact**: Cosmetic only - scans complete successfully, just noisy logs
-
-**Workaround**: None needed - errors are benign
-
----
-
 ## Resolved Issues
 
 <details>
@@ -72,6 +60,10 @@ PDF integrity validation detects empty files, missing headers, truncation, corru
 ### Completeness API N+1 Query [RESOLVED v1.6.2]
 `/documents/completeness` was slow (~3 min for 1300 docs) due to N+1 query pattern.
 Fixed with batch preloading - now completes in <1 sec.
+
+### ClamAV Socket Contention [RESOLVED v1.6.3]
+Parallel security scanning (8 workers) produced "Bad file descriptor" errors in logs when multiple threads hit the ClamAV socket simultaneously.
+Fixed with thread-local ClamAV connections - each worker gets its own socket connection.
 
 </details>
 

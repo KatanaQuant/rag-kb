@@ -331,7 +331,7 @@ docker-compose exec rag-api pytest tests/test_malware_detection.py -v
 sha256sum knowledge_base/test.pdf >> data/malware_hashes.txt
 
 # Try to index it (should be rejected)
-docker-compose exec rag-api python manage.py force-reindex test.pdf
+curl -X POST "http://localhost:8000/api/index?path=test.pdf&force=true"
 ```
 
 **Test ClamAV:**
@@ -340,7 +340,7 @@ docker-compose exec rag-api python manage.py force-reindex test.pdf
 curl -o knowledge_base/eicar.txt https://secure.eicar.org/eicar.com.txt
 
 # Try to index it (should be rejected)
-docker-compose exec rag-api python manage.py force-reindex eicar.txt
+curl -X POST "http://localhost:8000/api/index?path=eicar.txt&force=true"
 ```
 
 **Test YARA:**
@@ -349,7 +349,7 @@ docker-compose exec rag-api python manage.py force-reindex eicar.txt
 echo "MZ" > knowledge_base/suspicious.bin
 
 # Try to index it (should be rejected by Suspicious_Embedded_Executable rule)
-docker-compose exec rag-api python manage.py force-reindex suspicious.bin
+curl -X POST "http://localhost:8000/api/index?path=suspicious.bin&force=true"
 ```
 
 ## Troubleshooting
@@ -414,12 +414,12 @@ sha256sum knowledge_base/test.pdf
 
 3. **Monitor rejections:**
    ```bash
-   docker-compose exec rag-api python manage.py list-rejected
+   curl http://localhost:8000/api/security/rejected
    ```
 
 4. **Audit quarantined files:**
    ```bash
-   docker-compose exec rag-api python manage.py quarantine-list
+   curl http://localhost:8000/api/security/quarantine
    ```
 
 5. **Test your setup:**
@@ -442,11 +442,13 @@ MODIFIED:
   api/ingestion/file_type_validator.py        # Integrated AdvancedMalwareDetector
 ```
 
-## Next Steps
+## Completed
 
-1. **Test the malware detection** - Write unit tests
-2. **Convert manage.py to API** - Create REST endpoints
-3. **Release v1.5.0** - Merge to main and tag
+All security features are implemented and available via REST API:
+
+1. ✅ **Malware detection** - ClamAV, YARA, hash blacklist (v1.5.0)
+2. ✅ **Security REST API** - All management via `/api/security/*` endpoints (v1.6.0)
+3. ✅ **Parallel scanning** - ThreadPoolExecutor with 8 workers (v1.6.0)
 
 ## References
 

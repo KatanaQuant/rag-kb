@@ -1,7 +1,7 @@
 """Maintenance API routes
 
 Endpoints for database maintenance, repair, and cleanup operations.
-Replaces manage.py CLI commands with REST API.
+All maintenance operations are exposed via REST API for automation.
 """
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel

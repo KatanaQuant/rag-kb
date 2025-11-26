@@ -2,17 +2,102 @@
 
 Complete guide to managing and monitoring your RAG-KB instance via API endpoints.
 
-**Version**: v1.6.0+
+**Version**: v1.6.3+
 
 ---
 
 ## Table of Contents
 
+- [Automatic Processing](#automatic-processing)
 - [Queue Management](#queue-management)
 - [Priority Processing](#priority-processing)
 - [Document Management](#document-management)
+- [Security Scanning](#security-scanning)
 - [System Maintenance](#system-maintenance)
 - [Monitoring](#monitoring)
+
+---
+
+## Automatic Processing
+
+RAG-KB automatically handles most operations. You typically don't need to call APIs manually.
+
+### What Happens Automatically
+
+| Event | Automatic Action |
+|-------|------------------|
+| **API startup** | Index all new/modified files in `knowledge_base/` |
+| **File added/modified** | File watcher queues it for indexing (2s debounce) |
+| **File added during indexing** | Queued with NORMAL priority, processed in order |
+| **Crash recovery** | Incomplete files resumed on next startup |
+| **Orphan detection** | Files with missing embeddings auto-repaired on startup |
+
+### Startup Sequence
+
+On every API startup, the system automatically:
+
+1. **Validates configuration** - Checks paths, model, database
+2. **Starts file watcher** - Monitors `knowledge_base/` for changes
+3. **Sanitization stage**:
+   - Resumes incomplete files (from previous crash)
+   - Detects and repairs orphaned files (HIGH priority)
+4. **Initial indexing** - Queues all new/modified files (NORMAL priority)
+
+### File Watcher
+
+The file watcher monitors `knowledge_base/` recursively and automatically queues files for indexing.
+
+**Supported file types**: `.pdf`, `.md`, `.txt`, `.docx`, `.epub`, `.py`, `.java`, `.ts`, `.tsx`, `.js`, `.jsx`, `.cs`, `.ipynb`
+
+**Debounce**: 2 seconds (configurable via `WATCHER_DEBOUNCE_SECONDS`)
+
+**Excluded paths**: `problematic/`, `original/`, temp files
+
+### Security Scanning
+
+Security checks run automatically during file validation (before indexing):
+- ClamAV virus scanning (if enabled)
+- YARA pattern matching (if enabled)
+- Hash blacklist checking (if enabled)
+
+**NOT automatic**: Retroactive scanning of already-indexed files. Use `POST /api/security/scan` to scan existing files.
+
+### Integrity Checks
+
+The system has multiple layers of integrity checks:
+
+| Check | When | What It Detects | Action |
+|-------|------|-----------------|--------|
+| **Orphan detection** | Startup | Files marked "completed" but missing from documents table | Auto-reindex (HIGH priority) |
+| **Incomplete resume** | Startup | Files with status != "completed" | Auto-reindex (HIGH priority) |
+| **Completeness analysis** | On-demand | Zero chunks, missing progress, chunk count mismatch | Manual via API |
+| **Orphan chunks** | On-demand | Chunks without parent documents | Manual cleanup via API |
+| **Tracking inconsistency** | On-demand | Documents missing chunk counts | Manual fix via API |
+
+**Automatic (on startup)**:
+- Orphaned files: `processing_progress.status = 'completed'` but no `documents` entry → queued for reindex
+- Incomplete files: `processing_progress.status != 'completed'` → queued for reindex
+- Non-existent files: File in DB but deleted from disk → cleaned from DB
+
+**Manual (via API)**:
+```bash
+# Check for issues (non-destructive)
+curl http://localhost:8000/documents/completeness
+
+# Fix specific issue types
+curl -X POST http://localhost:8000/api/maintenance/reindex-incomplete
+curl -X POST http://localhost:8000/api/maintenance/delete-orphans
+curl -X POST http://localhost:8000/api/maintenance/fix-tracking
+```
+
+### When to Use Manual APIs
+
+Most users never need manual API calls. Use them for:
+
+- **Priority processing**: Jump queue with `/indexing/priority/{file}`
+- **Force reindex**: Reindex unchanged file with `?force=true`
+- **Retroactive security scans**: Scan already-indexed files with `/api/security/scan`
+- **Troubleshooting**: Pause queue, repair orphans, check status
 
 ---
 
@@ -122,8 +207,10 @@ curl http://localhost:8000/queue/jobs
   "workers_running": {
     "chunk": true,
     "embed": true,
-    "store": true
-  }
+    "store": true,
+    "security_scan": false
+  },
+  "security_scan": null
 }
 ```
 
@@ -135,7 +222,8 @@ curl http://localhost:8000/queue/jobs
   - `embed`: Waiting for embedding generation
   - `store`: Waiting to be stored in database
 - `active_jobs`: Files currently being processed
-- `workers_running`: Status of each pipeline worker
+- `workers_running`: Status of each pipeline worker (including security_scan)
+- `security_scan`: Active security scan status (null if no scan running)
 
 ---
 
@@ -302,6 +390,155 @@ curl -X DELETE "http://localhost:8000/document/books/old-notes.pdf"
 
 ---
 
+## Security Scanning
+
+Scan files for malware using ClamAV, YARA rules, and hash blacklists.
+
+### Start Security Scan
+
+Scan all files in knowledge_base for security threats. Runs in background with parallel workers (8x faster than sequential).
+
+**Endpoint**: `POST /api/security/scan`
+
+```bash
+curl -X POST http://localhost:8000/api/security/scan
+```
+
+**Response**:
+```json
+{
+  "job_id": "8dc87920",
+  "status": "pending",
+  "message": "Security scan started"
+}
+```
+
+---
+
+### Get Scan Status
+
+Check progress and results of a security scan.
+
+**Endpoint**: `GET /api/security/scan/{job_id}`
+
+```bash
+curl http://localhost:8000/api/security/scan/8dc87920
+```
+
+**Response (in progress)**:
+```json
+{
+  "job_id": "8dc87920",
+  "status": "running",
+  "progress": 1500,
+  "total_files": 2871,
+  "result": null,
+  "message": "Scanning: 1500/2871 files (52%)"
+}
+```
+
+**Response (completed)**:
+```json
+{
+  "job_id": "8dc87920",
+  "status": "completed",
+  "progress": 2871,
+  "total_files": 2871,
+  "result": {
+    "total_files": 2871,
+    "clean_files": 2865,
+    "critical_count": 0,
+    "warning_count": 6,
+    "critical_findings": [],
+    "warning_findings": [
+      {
+        "file_path": "/app/knowledge_base/notes/empty.md",
+        "filename": "empty.md",
+        "severity": "WARNING",
+        "reason": "File is empty"
+      }
+    ]
+  },
+  "message": "Scan complete"
+}
+```
+
+---
+
+### List All Scan Jobs
+
+**Endpoint**: `GET /api/security/scan`
+
+```bash
+curl http://localhost:8000/api/security/scan
+```
+
+---
+
+### Get Rejected Files
+
+List all files that failed security validation.
+
+**Endpoint**: `GET /api/security/rejected`
+
+```bash
+curl http://localhost:8000/api/security/rejected
+```
+
+**Response**:
+```json
+{
+  "total": 2,
+  "rejected_files": [
+    {
+      "file_path": "malicious.exe",
+      "reason": "Executable file rejected",
+      "rejected_at": "2025-11-26T10:00:00",
+      "severity": "CRITICAL"
+    }
+  ]
+}
+```
+
+---
+
+### Quarantine Management
+
+Dangerous files are automatically quarantined.
+
+**List Quarantined Files**:
+```bash
+curl http://localhost:8000/api/security/quarantine
+```
+
+**Restore File from Quarantine**:
+```bash
+curl -X POST "http://localhost:8000/api/security/quarantine/restore?file_path=suspicious.pdf"
+```
+
+**Purge Old Quarantined Files** (default: 30 days):
+```bash
+curl -X POST "http://localhost:8000/api/security/quarantine/purge?days=30"
+```
+
+---
+
+### Cache Management
+
+Security scan results are cached by file hash. Clear cache to force re-scanning.
+
+**Get Cache Stats**:
+```bash
+curl http://localhost:8000/api/security/cache/stats
+```
+
+**Clear Cache**:
+```bash
+curl -X DELETE http://localhost:8000/api/security/cache
+```
+
+---
+
 ## System Maintenance
 
 ### Repair Orphaned Files
@@ -367,6 +604,73 @@ curl -X POST http://localhost:8000/index \
 ```
 
 **Warning**: Force reindex is slow and resource-intensive. Only use when necessary.
+
+---
+
+### Fix Tracking Inconsistencies
+
+Repair database tracking inconsistencies (files in processing_progress but not in documents table).
+
+**Endpoint**: `POST /api/maintenance/fix-tracking`
+
+```bash
+curl -X POST http://localhost:8000/api/maintenance/fix-tracking
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "inconsistencies_found": 5,
+  "fixed": 5,
+  "message": "Fixed 5 tracking inconsistencies"
+}
+```
+
+---
+
+### Delete Orphan Chunks
+
+Remove chunks without parent documents (database garbage collection).
+
+**Endpoint**: `DELETE /api/maintenance/orphans`
+
+```bash
+curl -X DELETE http://localhost:8000/api/maintenance/orphans
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "orphans_deleted": 42,
+  "message": "Deleted 42 orphan chunks"
+}
+```
+
+---
+
+### List Incomplete Files
+
+Get files that started processing but never completed.
+
+**Endpoint**: `GET /api/maintenance/incomplete`
+
+```bash
+curl http://localhost:8000/api/maintenance/incomplete
+```
+
+---
+
+### Reindex Incomplete Files
+
+Queue all incomplete files for reprocessing.
+
+**Endpoint**: `POST /api/maintenance/reindex-incomplete`
+
+```bash
+curl -X POST http://localhost:8000/api/maintenance/reindex-incomplete
+```
 
 ---
 
