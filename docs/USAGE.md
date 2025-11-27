@@ -55,7 +55,7 @@ See [CONFIGURATION.md](CONFIGURATION.md#auto-sync-configuration) for auto-sync s
 
 Ask Claude questions naturally in VSCode. Claude automatically decides when to query your knowledge base.
 
-See [MCP_INTEGRATION.md](MCP_INTEGRATION.md) for setup instructions.
+See [MCP_CLAUDE.md](MCP_CLAUDE.md) for setup instructions (also [MCP_CODEX.md](MCP_CODEX.md) for Codex, [MCP_GEMINI.md](MCP_GEMINI.md) for Gemini).
 
 ### Via Command Line
 

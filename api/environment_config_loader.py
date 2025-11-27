@@ -109,7 +109,7 @@ class EnvironmentConfigLoader:
         """Load file validation configuration from environment"""
         return FileValidationConfig(
             enabled=self._get_bool("FILE_TYPE_VALIDATION_ENABLED", True),
-            action=self._get_optional("FILE_TYPE_VALIDATION_ACTION", "warn")
+            action=self._get_optional("FILE_TYPE_VALIDATION_ACTION", "reject")
         )
 
     def _load_malware_detection_config(self) -> MalwareDetectionConfig:

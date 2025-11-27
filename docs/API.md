@@ -468,6 +468,60 @@ curl http://localhost:8000/api/security/scan/8dc87920
 
 ---
 
+### Scan Single File
+
+Immediately scan a specific file for security threats. Returns results synchronously (no job ID).
+
+**Endpoint**: `POST /api/security/scan/file`
+
+```bash
+# Scan a specific file
+curl -X POST "http://localhost:8000/api/security/scan/file?file_path=test.pdf"
+
+# URL encode paths with spaces
+curl -X POST "http://localhost:8000/api/security/scan/file?file_path=My%20Book.pdf"
+```
+
+**Parameters**:
+- `file_path` (required): Path relative to knowledge base root
+
+**Response (clean file)**:
+```json
+{
+  "file_path": "golang/The Little Go Book - Karl Seguin.pdf",
+  "file_type": "pdf",
+  "status": "clean",
+  "threats_found": 0,
+  "scan_time_ms": 29
+}
+```
+
+**Response (threat detected)**:
+```json
+{
+  "file_path": "eicar.md",
+  "file_type": "malware",
+  "status": "threat_detected",
+  "threats_found": 1,
+  "threats": [
+    {
+      "severity": "critical",
+      "rule_name": "Win.Test.EICAR_HDB-1",
+      "description": "ClamAV signature match: Win.Test.EICAR_HDB-1",
+      "context": ""
+    }
+  ],
+  "scan_time_ms": 9
+}
+```
+
+**Use cases**:
+- Test individual files for malware
+- Validate files before manual indexing
+- Quick security check on suspicious files
+
+---
+
 ### List All Scan Jobs
 
 **Endpoint**: `GET /api/security/scan`

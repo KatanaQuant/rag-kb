@@ -57,5 +57,5 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '${MAX_CPUS:-11.0}'
-          memory: ${MAX_MEMORY:-21G}
+          cpus: '${MAX_CPUS:-12.8}'
+          memory: ${MAX_MEMORY:-24G}

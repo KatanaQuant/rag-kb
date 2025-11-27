@@ -43,14 +43,45 @@ curl -X POST http://localhost:8000/api/maintenance/reindex-orphaned-files
 
 ---
 
-### 3. Test Limitations
+### 4. Embedding Stage Appears Single-Core Bound
 
-#### 3.1 API Endpoint Mock Recursion
+**Severity**: LOW (performance investigation needed)
+
+**Observation**: During indexing, the embedding stage uses significantly fewer resources than the chunking stage. Despite `EMBEDDING_WORKERS=2` (default), CPU utilization during embedding is much lower than expected.
+
+**Possible Causes**:
+- sentence-transformers model inference may be GIL-bound
+- Thread pool not fully utilized due to batching
+- I/O bottleneck between chunking queue and embedding workers
+- Model loading overhead per worker
+
+**Current Config** (docker-compose.yml):
+```
+EMBEDDING_WORKERS=2      # Concurrent embedding threads
+OMP_NUM_THREADS=2        # OpenMP threads per worker
+MKL_NUM_THREADS=2        # MKL threads per worker
+```
+
+**Investigation Needed**:
+- Profile embedding worker CPU usage during indexing
+- Test with higher `EMBEDDING_WORKERS` values (4, 8)
+- Measure if batching or queue depth is the bottleneck
+- Consider GPU acceleration (v2.0.0 roadmap)
+
+**Workaround**: None currently. Embedding throughput is acceptable but not optimal.
+
+**Planned**: v1.7.x performance profiling or v2.0.0 GPU support.
+
+---
+
+### 5. Test Limitations
+
+#### 5.1 API Endpoint Mock Recursion
 Test `test_delete_document_success` is skipped - FastAPI's JSON encoder hits recursion errors with Mock objects.
 
 **Status**: Skipped, relies on integration testing
 
-#### 3.2 Database Transaction Tests
+#### 5.2 Database Transaction Tests
 `TestDatabaseTransactions` class skipped - VectorStore uses auto-commit, tests expect manual transaction control.
 
 **Status**: Skipped, transaction behavior tested implicitly
@@ -92,6 +123,11 @@ Fixed with thread-local ClamAV connections - each worker gets its own socket con
 `services/` and `api_services/` naming was unclear. Duplicate classes existed across routes and service layers.
 Fixed by renaming: `services/`→`pipeline/` (background processing), `api_services/`→`operations/` (API operations).
 Removed duplicate classes from routes (now import from operations layer).
+
+### Security Validation Config Mismatch [RESOLVED v1.6.7]
+`validation_action` config in environment_config_loader.py used "warn" instead of "reject" as default.
+This caused malware files to be logged but not quarantined/rejected during indexing.
+Fixed by correcting the default to match the intended behavior from v1.5.0.
 
 </details>
 

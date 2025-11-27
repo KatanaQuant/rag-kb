@@ -658,3 +658,111 @@ async def clear_cache():
         "entries_cleared": cleared,
         "message": "Cache cleared. Next scan will re-validate all files."
     }
+
+
+@router.post("/scan/file")
+async def scan_single_file(file_path: str = Query(..., description="Relative path from knowledge base root")):
+    """Scan a specific file for security threats
+
+    Performs immediate security validation on a single file using:
+    - ClamAV virus scanning
+    - Hash blacklist checking
+    - YARA pattern matching
+    - File type validation
+
+    This endpoint is synchronous and returns immediate results (no job ID).
+    Use this to test individual files or validate uploads before indexing.
+
+    Args:
+        file_path: Path relative to knowledge base root (e.g., "books/myfile.pdf")
+
+    Returns:
+        Scan result with threat details if found
+
+    Example:
+        POST /api/security/scan/file?file_path=books/suspicious.pdf
+
+        Response (clean):
+        {
+            "file_path": "books/suspicious.pdf",
+            "status": "clean",
+            "threats_found": 0,
+            "scan_time_ms": 45
+        }
+
+        Response (threat found):
+        {
+            "file_path": "books/malware.exe",
+            "status": "threat_detected",
+            "threats_found": 1,
+            "threats": [
+                {
+                    "severity": "CRITICAL",
+                    "validation_check": "ClamAVStrategy",
+                    "reason": "Virus detected: Win.Test.EICAR_HDB-1"
+                }
+            ],
+            "scan_time_ms": 52
+        }
+
+    Usage:
+        # Scan a specific file
+        curl -X POST "http://localhost:8000/api/security/scan/file?file_path=test.pdf"
+
+        # URL encode paths with spaces
+        curl -X POST "http://localhost:8000/api/security/scan/file?file_path=My%20Book.pdf"
+    """
+    from time import time
+    from ingestion.file_type_validator import FileTypeValidator
+
+    # Resolve full path
+    kb_path = default_config.paths.knowledge_base
+    full_path = kb_path / file_path
+
+    # Validate file exists
+    if not full_path.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
+
+    if not full_path.is_file():
+        raise HTTPException(status_code=400, detail=f"Path is not a file: {file_path}")
+
+    # Run security validation
+    start_time = time()
+    validator = FileTypeValidator()
+    result = validator.validate(full_path)
+    scan_time_ms = int((time() - start_time) * 1000)
+
+    # Build response
+    if result.is_valid:
+        return {
+            "file_path": file_path,
+            "file_type": result.file_type,
+            "status": "clean",
+            "threats_found": 0,
+            "scan_time_ms": scan_time_ms
+        }
+    else:
+        threats = []
+        if result.matches:
+            for match in result.matches:
+                threats.append({
+                    "severity": match.severity.value if match.severity else "UNKNOWN",
+                    "rule_name": match.rule_name,
+                    "description": match.description,
+                    "context": match.context
+                })
+        else:
+            threats.append({
+                "severity": result.severity.value if result.severity else "UNKNOWN",
+                "validation_check": result.validation_check,
+                "reason": result.reason
+            })
+
+        return {
+            "file_path": file_path,
+            "file_type": result.file_type,
+            "status": "threat_detected",
+            "threats_found": len(threats),
+            "threats": threats,
+            "scan_time_ms": scan_time_ms
+        }

@@ -20,7 +20,7 @@ This document outlines the journey from v1.x to v2.0.0 and beyond.
 
 ## Current State
 
-**Latest Release**: v1.6.5 (Codebase Refactoring)
+**Latest Release**: v1.6.7 (Security Bug Fix)
 
 **What's Working**:
 - Production-ready document indexing (PDF, EPUB, Markdown, Code)
@@ -30,6 +30,8 @@ This document outlines the journey from v1.x to v2.0.0 and beyond.
 - Self-healing startup (auto-repair database issues)
 - REST API for security/maintenance operations
 - Clean architecture: `pipeline/` (background) + `operations/` (API)
+- Single-file security scan endpoint
+- MCP integration for Claude, Codex, and Gemini
 - 638 tests passing
 
 ---
@@ -38,6 +40,8 @@ This document outlines the journey from v1.x to v2.0.0 and beyond.
 
 | Version | Highlights |
 |---------|-----------|
+| **v1.6.7** | Security bug fix (validation_action config), single-file scan endpoint |
+| **v1.6.6** | Sandi Metz OOP audit - complexity reduction |
 | **v1.6.5** | Codebase refactoring: `services/`→`pipeline/`, `api_services/`→`operations/`, CPU-optimized defaults |
 | **v1.6.4** | Self-healing startup (auto-repair empty docs, backfill counts) |
 | **v1.6.3** | Fix ClamAV socket contention with thread-local connections |
@@ -62,7 +66,7 @@ This document outlines the journey from v1.x to v2.0.0 and beyond.
 ## Journey to v2.0.0
 
 ```
-v1.6.5 (CURRENT)
+v1.6.7 (CURRENT)
     │
     ├── v1.7.x - Performance & Polish
     │   └── Chunking strategy improvements
@@ -82,6 +86,13 @@ v1.6.5 (CURRENT)
 ### v1.7.x - Performance & Polish
 
 **Focus**: Performance optimizations and developer experience
+
+#### Embedding Pipeline Profiling
+- Investigate why embedding stage appears single-core bound
+- Profile CPU utilization during embedding vs chunking
+- Test higher `EMBEDDING_WORKERS` values
+- Identify GIL, batching, or queue bottlenecks
+- See [KNOWN_ISSUES.md#4](KNOWN_ISSUES.md) for details
 
 #### Chunking Strategy Evaluation
 - Semantic boundary detection via embedding similarity
@@ -150,84 +161,29 @@ v1.6.5 (CURRENT)
 
 ## IDE Integration
 
-### Claude Code (Current)
+RAG-KB integrates with AI coding assistants via MCP (Model Context Protocol).
 
-RAG-KB integrates with Claude Code via MCP (Model Context Protocol):
+| Assistant | Config File | Setup Guide |
+|-----------|-------------|-------------|
+| **Claude Code** | `~/.claude.json` | [MCP_CLAUDE.md](MCP_CLAUDE.md) |
+| **OpenAI Codex** | `~/.codex/config.toml` | [MCP_CODEX.md](MCP_CODEX.md) |
+| **Google Gemini** | `~/.gemini/settings.json` | [MCP_GEMINI.md](MCP_GEMINI.md) |
+| **Cursor** | `~/.cursor/mcp.json` | Same as Claude Code |
 
-```json
-// ~/.claude.json
-{
-  "mcpServers": {
-    "rag-kb": {
-      "command": "docker",
-      "args": ["exec", "-i", "rag-api", "python3", "/app/mcp_server.py"]
-    }
-  }
-}
-```
-
-**Features**:
+**MCP Tools Available**:
 - `query_knowledge_base` - Semantic search across indexed documents
 - `list_indexed_documents` - Browse indexed files
 - `get_kb_stats` - Knowledge base statistics
-- Same hooks system as standard Claude Code
-
-### Codex (OpenAI) Integration Options
-
-OpenAI Codex in VSCode does **not** support MCP. Alternative integration approaches:
-
-| Approach | Complexity | Description |
-|----------|------------|-------------|
-| **REST API Direct** | Low | Call RAG-KB REST endpoints directly via HTTP |
-| **Custom Extension** | Medium | VSCode extension wrapping RAG-KB API |
-| **OpenAI Functions** | Medium | Wrap RAG-KB as OpenAI function calling |
-| **LangChain Tool** | Medium | Create LangChain tool for Codex agents |
-
-**REST API Integration** (Simplest):
-```python
-# In your Codex workflow
-import requests
-
-def query_rag(query: str) -> str:
-    response = requests.post(
-        "http://localhost:8000/query",
-        json={"query": query, "top_k": 5}
-    )
-    return response.json()["results"]
-```
-
-**OpenAI Function Calling**:
-```python
-tools = [{
-    "type": "function",
-    "function": {
-        "name": "query_knowledge_base",
-        "description": "Search personal knowledge base for relevant information",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search query"}
-            },
-            "required": ["query"]
-        }
-    }
-}]
-```
 
 ### Other IDE/LLM Integrations
 
 | Tool | Protocol | Integration Path |
 |------|----------|------------------|
-| **Cursor** | MCP | Same as Claude Code config |
-| **Continue.dev** | Custom | REST API or LangChain |
+| **Continue.dev** | MCP | Similar to Claude config |
 | **Cody (Sourcegraph)** | Custom | REST API wrapper |
 | **GitHub Copilot** | None | Not directly integrable |
 | **Ollama** | REST | Direct API calls |
 | **LM Studio** | OpenAI-compat | Function calling wrapper |
-
-### Future: Universal MCP Support
-
-MCP is becoming a standard for LLM-tool integration. Once Codex/other tools adopt MCP, the existing RAG-KB MCP server will work unchanged.
 
 ---
 

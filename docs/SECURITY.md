@@ -446,9 +446,9 @@ MODIFIED:
 
 All security features are implemented and available via REST API:
 
-1. ✅ **Malware detection** - ClamAV, YARA, hash blacklist (v1.5.0)
-2. ✅ **Security REST API** - All management via `/api/security/*` endpoints (v1.6.0)
-3. ✅ **Parallel scanning** - ThreadPoolExecutor with 8 workers (v1.6.0)
+1. **Malware detection** - ClamAV, YARA, hash blacklist (v1.5.0)
+2. **Security REST API** - All management via `/api/security/*` endpoints (v1.6.0)
+3. **Parallel scanning** - ThreadPoolExecutor with 8 workers (v1.6.0)
 
 ## References
 

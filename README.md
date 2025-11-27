@@ -6,7 +6,7 @@
 
 **Personal knowledge base with semantic search.** Index books, code, and notes—query with natural language. 100% local.
 
-**Current Version**: v1.6.5 ([Changelog](docs/RELEASES/))
+**Current Version**: v1.6.7 ([Changelog](docs/RELEASES/))
 
 ---
 
@@ -17,7 +17,7 @@
 - **Security Scanning** - ClamAV, YARA, hash blacklist (auto-quarantine)
 - **Self-Healing** - Auto-repair database issues at startup
 - **Concurrent Pipeline** - 4x throughput with parallel processing
-- **MCP Integration** - Use with Claude Code in VSCode
+- **MCP Integration** - Use with Claude, Codex, or Gemini in VSCode
 - **100% Local** - No external APIs, complete privacy
 
 See [docs/USAGE.md](docs/USAGE.md) for full feature details.
@@ -29,7 +29,7 @@ See [docs/USAGE.md](docs/USAGE.md) for full feature details.
 ```bash
 # Clone and start
 git clone https://github.com/KatanaQuant/rag-kb.git
-cd rag-kb && git checkout v1.6.5
+cd rag-kb && git checkout v1.6.7
 
 # Add your content
 cp ~/Documents/*.pdf knowledge_base/books/
@@ -73,7 +73,9 @@ See [docs/USAGE.md](docs/USAGE.md) for all query methods.
 | [USAGE.md](docs/USAGE.md) | Query methods, content ingestion |
 | [API.md](docs/API.md) | Complete API reference |
 | [CONFIGURATION.md](docs/CONFIGURATION.md) | Settings, models, performance |
-| [MCP_INTEGRATION.md](docs/MCP_INTEGRATION.md) | Claude Code / VSCode setup |
+| [MCP_CLAUDE.md](docs/MCP_CLAUDE.md) | Claude Code setup |
+| [MCP_CODEX.md](docs/MCP_CODEX.md) | OpenAI Codex setup |
+| [MCP_GEMINI.md](docs/MCP_GEMINI.md) | Google Gemini setup |
 | [SECURITY.md](docs/SECURITY.md) | Malware detection setup |
 | [MAINTENANCE.md](docs/MAINTENANCE.md) | Database health, self-healing |
 | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues |
@@ -101,7 +103,7 @@ VSCode/IDE → MCP Server (Node.js) → RAG API (FastAPI/Docker) → SQLite + ve
 
 ```bash
 docker-compose down
-git fetch --tags && git checkout v1.6.5
+git fetch --tags && git checkout v1.6.7
 docker-compose build --no-cache
 docker-compose up -d
 ```
