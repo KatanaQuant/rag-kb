@@ -19,14 +19,16 @@ Active issues and limitations in RAG-KB. Resolved issues are archived at the bot
 **Mitigation Applied (v1.7.0)**: Implemented `BatchEncoder` class for batch encoding - processes multiple chunks per model.encode() call instead of one-at-a-time. This reduces forward pass overhead by 10-50x for large documents. Also fixed EMBEDDING_WORKERS default from 3→2 in all locations.
 
 **Remaining Limitation**: GIL contention still limits multi-worker parallelism. True parallel embedding requires:
-- GPU acceleration (v2.0.0 roadmap)
-- Process-based workers with model server
+- GPU acceleration (v2.0.0 roadmap) - See [internal_planning/GPU_INFRASTRUCTURE.md](../internal_planning/GPU_INFRASTRUCTURE.md)
+- Go worker coordinator with Python ML subprocesses - See [internal_planning/PERFORMANCE_OPTIMIZATION.md](../internal_planning/PERFORMANCE_OPTIMIZATION.md)
 
 **Current Config** (docker-compose.yml):
 ```
 EMBEDDING_WORKERS=2      # Concurrent embedding threads
 EMBEDDING_BATCH_SIZE=32  # Chunks per batch (new in v1.7.0)
 ```
+
+**Related**: [ROADMAP.md - v2.0.0 GPU Support](ROADMAP.md#v200---gpu--advanced-features)
 
 ---
 
@@ -89,20 +91,57 @@ Fixed by:
 - [x] **Reindex .ipynb files** - Completed in v1.7.10. 6 notebooks reindexed with new approach.
 
 **Future Improvement (v2.0.0 GPU)**:
+- **Embedding-based semantic chunking**: Split into units, compute embeddings, measure cosine similarity between consecutive units, start new chunk when similarity drops (semantic boundary detected). This produces truly semantic chunks where content is coherent within each chunk.
 - Agentic chunking (LLM-based semantic splitting) could further improve coherence but requires GPU for acceptable performance.
+- See [internal_planning/CHUNKING_STRATEGY_EVALUATION.md](../internal_planning/CHUNKING_STRATEGY_EVALUATION.md) for detailed analysis
 
 **Measurement**: Run `python -m evaluation.baseline_report --db-path data/rag.db` to regenerate baseline.
 
+**Related**: [ROADMAP.md - v2.0.0 Semantic Chunking](ROADMAP.md#embedding-based-semantic-chunking)
+
 ---
 
-### 4. Test Limitations
+### 4. EPUB Orphan Detection False Positive
 
-#### 4.1 API Endpoint Mock Recursion
+**Severity**: LOW (cosmetic logging issue)
+
+**Observation**: During startup orphan checks, converted EPUBs are detected as orphans and logged, even though they're handled correctly.
+
+**Example Log**:
+```
+Found 1 orphaned files (processed but not embedded)
+Sample orphaned files:
+  - Tidy First - Kent Beck.epub (2025-11-28T17:21:24.008853+00:00)
+Repairing orphaned files...
+Converted EPUBs cleaned: 1
+Orphan repair complete: 0 files queued for reindexing
+```
+
+**Root Cause**: EPUB conversion workflow creates expected orphans:
+1. EPUB is processed (creates progress entry)
+2. EPUB is converted to PDF (0 chunks extracted from EPUB)
+3. EPUB moved to `original/` subdirectory
+4. PDF is indexed separately (has chunks)
+5. EPUB progress entry remains (0 chunks) → flagged as orphan
+
+**Current Behavior**: OrphanDetector correctly identifies and cleans these (`_is_converted_epub()` check) but logs them as "orphaned" first, which is confusing.
+
+**Mitigation**: The orphan is **correctly handled** - progress entry is deleted, file is not re-queued. The EPUB workflow is working as designed (convert → move → index PDF).
+
+**Impact**: None (cosmetic only). The log message is misleading but the behavior is correct.
+
+**Future Improvement**: Pre-filter converted EPUBs before orphan detection to avoid confusing logs.
+
+---
+
+### 5. Test Limitations
+
+#### 5.1 API Endpoint Mock Recursion
 Test `test_delete_document_success` is skipped - FastAPI's JSON encoder hits recursion errors with Mock objects.
 
 **Status**: Skipped, relies on integration testing
 
-#### 4.2 Database Transaction Tests
+#### 5.2 Database Transaction Tests
 `TestDatabaseTransactions` class skipped - VectorStore uses auto-commit, tests expect manual transaction control.
 
 **Status**: Skipped, transaction behavior tested implicitly

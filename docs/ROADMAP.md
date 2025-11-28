@@ -56,26 +56,57 @@ This document outlines the journey from v1.x to v2.0.0 and beyond.
 ## Journey to v2.0.0
 
 ```
-v1.7.11 (CURRENT)
+v1.7.11 (CURRENT) - Production-ready, CPU-optimized
     │
-    ├── v1.8.x  - Docker build optimization (BuildKit, multi-stage)
+    ├── v1.8.x - Infrastructure & Tooling
+    │   ├─ Docker build optimization (BuildKit, pre-built base images)
+    │   ├─ MCP network deployment (remote access)
+    │   └─ Performance profiling and metrics
     │
-    └── v2.0.0 - GPU & Advanced Features
-        └── GPU support, embedding upgrade, video/audio, vision models
+    ├── v1.9.x - Pre-v2 Stabilization (optional)
+    │   ├─ Production hardening
+    │   ├─ Bug fixes and polish
+    │   └─ Documentation updates
+    │
+    └── v2.0.0 - GPU Era
+        ├─ GPU infrastructure (CUDA/ROCm, vLLM/Triton)
+        ├─ Embedding model upgrade (Qwen3-8B + BGE-Reranker)
+        ├─ Video/audio processing (Whisper transcription)
+        └─ True semantic chunking (embedding-based boundaries)
 ```
 
 ---
 
-### v1.8.x - Docker Build Optimization
+### v1.8.x - Infrastructure & Tooling
 
-**Focus**: Faster builds and smaller images
+**Focus**: Developer experience and deployment optimization
 
+#### Docker Build Optimization
 - BuildKit cache mounts (60% faster rebuilds)
-- Pre-built base image on ghcr.io
-- Multi-stage Dockerfile (40-60% smaller image)
-- See [internal_planning/DOCKER_BUILD_OPTIMIZATION.md](../internal_planning/DOCKER_BUILD_OPTIMIZATION.md)
+- Pre-built base image on ghcr.io (80-95% faster first builds)
+- Multi-stage Dockerfile (40-60% smaller images)
+- See [internal_planning/PERFORMANCE_OPTIMIZATION.md](../internal_planning/PERFORMANCE_OPTIMIZATION.md)
 
-**Note**: GIL contention limits multi-worker parallelism. True parallel embedding requires GPU (v2.0.0). See [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
+#### MCP Network Deployment
+- Network-accessible MCP server (not just stdio)
+- OAuth 2.1 authentication
+- Streamable HTTP transport (replacing deprecated SSE)
+- mcp-remote bridge for stdio→HTTP conversion
+- See [internal_planning/MCP_NETWORK_DEPLOYMENT.md](../internal_planning/MCP_NETWORK_DEPLOYMENT.md)
+
+**Known Limitations**: GIL contention limits multi-worker parallelism on CPU. True parallel embedding requires GPU (v2.0.0) or Go workers. See [KNOWN_ISSUES.md#1-gil-contention-with-multiple-embedding-workers](KNOWN_ISSUES.md#1-gil-contention-with-multiple-embedding-workers).
+
+---
+
+### v1.9.x - Pre-v2 Stabilization (Optional)
+
+**Focus**: Polish and production readiness
+
+- Production bug fixes
+- Performance profiling and optimization
+- Documentation improvements
+- Test coverage expansion
+- May be skipped if v1.8.x is stable enough
 
 ---
 
@@ -86,13 +117,24 @@ v1.7.11 (CURRENT)
 #### GPU Support Infrastructure
 - CUDA/ROCm support for embedding generation
 - 10-50x performance improvement for model inference
-- See [internal_planning/HARDWARE_SETUP_GUIDE.md](../internal_planning/HARDWARE_SETUP_GUIDE.md)
+- Hardware selection, OS setup, vLLM/Triton deployment
+- See [internal_planning/GPU_INFRASTRUCTURE.md](../internal_planning/GPU_INFRASTRUCTURE.md)
 
 #### Embedding Model Upgrade
 - Upgrade to Qwen3-Embedding-8B (MTEB 70.58)
 - BGE-Reranker-v2-m3 cross-encoder (+20-30% retrieval accuracy)
 - Practical re-indexing (hours instead of weeks)
-- See [internal_planning/EMBEDDING_MODEL_ANALYSIS.md](../internal_planning/EMBEDDING_MODEL_ANALYSIS.md)
+- See [internal_planning/GPU_INFRASTRUCTURE.md](../internal_planning/GPU_INFRASTRUCTURE.md)
+
+#### Embedding-Based Semantic Chunking
+Current "semantic" chunking is paragraph/structure-aware but not truly semantic. True semantic chunking would:
+- Split documents into atomic units (sentences/paragraphs)
+- Compute embeddings for each unit
+- Measure cosine similarity between consecutive units
+- Start new chunk when similarity drops below threshold (semantic boundary)
+
+This produces chunks where content within each chunk is semantically coherent, improving retrieval accuracy.
+Requires GPU for acceptable performance (embedding each unit is expensive on CPU).
 
 #### Video/Audio Processing
 - Automatic transcription (Whisper)
