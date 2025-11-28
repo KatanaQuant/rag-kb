@@ -6,6 +6,8 @@ This guide covers all configuration options for RAG-KB.
 
 - [Hardware Requirements](#hardware-requirements)
 - [Configuration via .env](#configuration-via-env)
+  - [Troubleshooting Configuration Issues](#troubleshooting-configuration-issues)
+  - [Common Configuration Mistakes](#common-configuration-mistakes)
 - [Knowledge Base Directory](#knowledge-base-directory)
 - [Resource Limits](#resource-limits)
 - [Embedding Models](#embedding-models)
@@ -15,6 +17,7 @@ This guide covers all configuration options for RAG-KB.
 - [Query Caching Configuration](#query-caching-configuration)
 - [Chunking Configuration](#chunking-configuration)
 - [Performance Stats](#performance-stats)
+- [Resource Profiles](#resource-profiles)
 
 ## Hardware Requirements
 
@@ -35,16 +38,23 @@ This guide covers all configuration options for RAG-KB.
 
 ## Configuration via .env
 
-RAG-KB uses a two-tier configuration approach:
+RAG-KB uses a **single source of truth** configuration pattern:
 
-1. **docker-compose.yml**: Provides sensible defaults for all settings
-2. **.env file**: Optional overrides for customization (you only specify what you want to change)
+| Location | Purpose | Edit? |
+|----------|---------|-------|
+| `.env` | **User customization** | ✅ Yes - edit this file |
+| `docker-compose.yml` | Factory defaults | ❌ No - don't edit unless adding new features |
+| Python code | Reads from environment | ❌ No - no hardcoded defaults |
 
 ### How it works
 
-- Docker Compose automatically loads `.env` from the project root
-- Any variable in `.env` overrides the corresponding default in `docker-compose.yml`
-- If `.env` doesn't exist or a variable is missing, the default is used
+1. `docker-compose.yml` defines **sane defaults** using `${VAR:-default}` syntax
+2. Docker Compose auto-loads `.env` from project root (if it exists)
+3. Values in `.env` override the defaults in `docker-compose.yml`
+4. Container receives final merged environment variables
+5. Python code reads from `os.environ` - no fallback defaults
+
+**Key principle:** Only edit `.env` for customization. The defaults in `docker-compose.yml` work for most users.
 
 ### Example .env file
 
@@ -53,12 +63,65 @@ RAG-KB uses a two-tier configuration approach:
 MODEL_NAME=Snowflake/snowflake-arctic-embed-l-v2.0
 RAG_PORT=8001
 MAX_MEMORY=8G
-EMBED_WORKERS=6
+EMBEDDING_WORKERS=2
 ```
 
 All other settings (batch size, cache config, chunking, etc.) will use the defaults from `docker-compose.yml`.
 
 **See `.env.example` for all available options with documentation.**
+
+### Troubleshooting Configuration Issues
+
+If settings aren't taking effect:
+
+**1. Check your `.env` file exists and has correct syntax:**
+```bash
+# View current .env
+cat .env
+
+# Check for syntax errors (no spaces around =)
+# GOOD: MAX_CPUS=4.0
+# BAD:  MAX_CPUS = 4.0
+```
+
+**2. Verify the container sees your settings:**
+```bash
+# Check what the container actually received
+docker exec rag-api env | grep -E "MAX_CPUS|MAX_MEMORY|EMBEDDING"
+```
+
+**3. Restart after changes:**
+```bash
+# .env changes require restart (not rebuild)
+docker-compose restart rag-api
+
+# docker-compose.yml changes require recreate
+docker-compose up -d
+```
+
+**4. Check for shell environment overrides:**
+```bash
+# Shell exports override .env! Check for conflicts:
+env | grep -E "MAX_CPUS|MODEL_NAME|EMBEDDING"
+
+# If found, unset them:
+unset MAX_CPUS MAX_MEMORY MODEL_NAME
+```
+
+**5. Validate docker-compose sees your .env:**
+```bash
+# Shows merged config with your .env values applied
+docker-compose config | grep -A5 "environment:"
+```
+
+### Common Configuration Mistakes
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Settings ignored | Spaces around `=` in .env | Remove spaces: `MAX_CPUS=4.0` |
+| Old values persist | Forgot to restart | `docker-compose restart rag-api` |
+| Different than expected | Shell export overriding | `unset VAR_NAME` before docker-compose |
+| Works locally, not in Docker | Path not mounted | Check volumes in docker-compose.yml |
 
 ## Knowledge Base Directory
 
@@ -139,11 +202,13 @@ To prevent system overload during large indexing operations, RAG-KB includes res
 Edit `.env`:
 
 ```bash
-MAX_CPUS=2.0          # Max CPU cores (default: 2.0)
-MAX_MEMORY=4G         # Max memory usage (default: 4G)
+MAX_CPUS=4.0          # Max CPU cores (default: 4.0)
+MAX_MEMORY=8G         # Max memory usage (default: 8G)
 BATCH_SIZE=5          # Files per batch (default: 5)
 BATCH_DELAY=0.5       # Delay between batches in seconds (default: 0.5)
 ```
+
+**Note:** The defaults in `docker-compose.yml` are tuned for the **Balanced profile on an 8-core, 16GB system**. See [Resource Profiles](#resource-profiles) to find values for your hardware.
 
 ### How it works
 
@@ -253,29 +318,29 @@ IndexingQueue (Priority) → IndexingWorker → PipelineCoordinator
 Edit `.env`:
 
 ```bash
-CHUNK_WORKERS=1          # Number of parallel chunking threads (default: 1)
+CHUNK_WORKERS=2          # Number of parallel chunking threads (default: 2)
 EMBEDDING_WORKERS=2      # Number of parallel embedding threads (default: 2)
+EMBEDDING_BATCH_SIZE=32  # Chunks per batch (default: 32)
 ```
 
-**CPU vs GPU builds**: The default of 2 embedding workers is optimized for CPU-only builds. CPU embedding is resource-intensive, and running 3+ concurrent embedding operations can cause slowdowns when using the device for other tasks. For GPU-accelerated builds, increase to 3-6 workers.
+**Why 2 workers?** Python's GIL (Global Interpreter Lock) serializes CPU-bound model inference. More workers don't help - they compete for the GIL. Instead, we use batch encoding (EMBEDDING_BATCH_SIZE=32) for 10-50x throughput gains.
 
 ### Performance Benefits
 
-- **Before**: ~2 files/hour for large PDFs (sequential processing)
-- **After**: ~6-8 files/hour (3-4x improvement with 2 embedding workers)
+- **Before v1.7.0**: ~2 files/hour for large PDFs (one-at-a-time encoding)
+- **After v1.7.0**: ~20-100 files/hour (batch encoding with BatchEncoder class)
 
-### Tuning for Your System
+### Important: Don't Increase Worker Counts
 
-**For 8-core machine**:
+Adding more workers **does not improve performance** due to GIL contention:
+
 ```bash
-echo "EMBED_WORKERS=6" >> .env
-docker-compose restart rag-api
-```
+# BAD - workers fight for GIL, no speedup
+EMBEDDING_WORKERS=6   # Don't do this
 
-**For 4-core machine**:
-```bash
-echo "EMBED_WORKERS=3" >> .env
-docker-compose restart rag-api
+# GOOD - batch encoding gives real speedup
+EMBEDDING_WORKERS=2
+EMBEDDING_BATCH_SIZE=32
 ```
 
 **Performance Notes**:
@@ -522,15 +587,15 @@ docker-compose logs rag-api | grep "Indexed"
 
 ```bash
 # Model configuration
-MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1
+MODEL_NAME=Snowflake/snowflake-arctic-embed-l-v2.0  # Default: multilingual, best quality
 EMBEDDING_DIMENSION=1024
 
 # Port configuration
 RAG_PORT=8000
 
-# Resource limits
-MAX_CPUS=2.0
-MAX_MEMORY=4G
+# Resource limits (defaults tuned for 8-core, 16GB Balanced profile)
+MAX_CPUS=4.0
+MAX_MEMORY=8G
 ```
 
 ### Concurrent Processing
@@ -621,7 +686,7 @@ Optimized for speed with English content:
 ```bash
 # .env
 MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1
-EMBED_WORKERS=6
+EMBEDDING_WORKERS=2
 MAX_CPUS=4.0
 MAX_MEMORY=8G
 CACHE_MAX_SIZE=200
@@ -634,7 +699,7 @@ Best quality for diverse content:
 ```bash
 # .env
 MODEL_NAME=Snowflake/snowflake-arctic-embed-l-v2.0
-EMBED_WORKERS=3
+EMBEDDING_WORKERS=2
 MAX_CPUS=4.0
 MAX_MEMORY=8G
 BATCH_SIZE=3
@@ -650,11 +715,190 @@ For low-end devices:
 MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
 MAX_CPUS=1.0
 MAX_MEMORY=2G
-EMBED_WORKERS=1
+EMBEDDING_WORKERS=1
 BATCH_SIZE=2
 BATCH_DELAY=2.0
 CACHE_ENABLED=false
 ```
+
+## Resource Profiles
+
+RAG-KB can be tuned for different usage scenarios. Use these profiles based on whether you need your machine responsive for other tasks.
+
+### Step 1: Detect Your Hardware
+
+Run these commands to get your system specs:
+
+**Linux/WSL:**
+```bash
+# CPU cores (logical) - uses /proc/cpuinfo for accurate count
+# Note: `nproc` can report incorrect values in containers/cgroups
+grep -c processor /proc/cpuinfo
+
+# Total RAM in GB
+free -g | awk '/^Mem:/{print $2}'
+
+# Or combined:
+echo "CPU cores: $(grep -c processor /proc/cpuinfo), RAM: $(free -g | awk '/^Mem:/{print $2}')GB"
+
+# Detailed CPU info (physical cores, threads per core)
+lscpu | grep -E "^CPU\(s\):|^Thread|^Core"
+```
+
+**macOS:**
+```bash
+# CPU cores
+sysctl -n hw.ncpu
+
+# Total RAM in GB
+echo $(($(sysctl -n hw.memsize) / 1024 / 1024 / 1024))
+
+# Or combined:
+echo "CPU cores: $(sysctl -n hw.ncpu), RAM: $(($(sysctl -n hw.memsize) / 1024 / 1024 / 1024))GB"
+```
+
+### Step 2: Choose Your Profile
+
+#### Profile A: Balanced (50-60% resources)
+
+**Use when:** Running backtesting, development work, or other CPU-intensive tasks alongside RAG-KB. Device stays responsive.
+
+| Your Hardware | MAX_CPUS | MAX_MEMORY | EMBEDDING_WORKERS | CHUNK_WORKERS | OMP_NUM_THREADS |
+|--------------|----------|------------|-------------------|---------------|-----------------|
+| 4 cores, 8GB | 2.0 | 4G | 1 | 1 | 1 |
+| 8 cores, 16GB | 4.0 | 8G | 2 | 1 | 2 |
+| 12 cores, 32GB | 6.0 | 16G | 2 | 1 | 2 |
+| 16 cores, 32GB | 8.0 | 16G | 2 | 1 | 3 |
+| 16 cores, 64GB | 8.0 | 32G | 2 | 1 | 3 |
+
+**Example .env for 8 cores, 16GB (Balanced):**
+```bash
+MAX_CPUS=4.0
+MAX_MEMORY=8G
+EMBEDDING_WORKERS=2
+EMBEDDING_BATCH_SIZE=32
+CHUNK_WORKERS=1
+OMP_NUM_THREADS=2
+MKL_NUM_THREADS=2
+```
+
+#### Profile B: Performance (70-80% resources)
+
+**Use when:** Dedicated indexing sessions where you don't mind some system lag. Faster processing, especially for initial large imports.
+
+| Your Hardware | MAX_CPUS | MAX_MEMORY | EMBEDDING_WORKERS | CHUNK_WORKERS | OMP_NUM_THREADS |
+|--------------|----------|------------|-------------------|---------------|-----------------|
+| 4 cores, 8GB | 3.0 | 6G | 2 | 1 | 2 |
+| 8 cores, 16GB | 6.0 | 12G | 2 | 1 | 2 |
+| 12 cores, 32GB | 9.0 | 24G | 2 | 2 | 3 |
+| 16 cores, 32GB | 12.0 | 24G | 2 | 2 | 4 |
+| 16 cores, 64GB | 12.0 | 48G | 2 | 2 | 4 |
+
+**Note:** Workers stay at 2 due to GIL limitations (see below). More CPU budget goes to `OMP_NUM_THREADS` for NumPy/BLAS parallelism which releases the GIL.
+
+**Example .env for 8 cores, 16GB (Performance):**
+```bash
+MAX_CPUS=6.0
+MAX_MEMORY=12G
+EMBEDDING_WORKERS=2
+EMBEDDING_BATCH_SIZE=32
+CHUNK_WORKERS=1
+OMP_NUM_THREADS=2
+MKL_NUM_THREADS=2
+```
+
+### Step 3: Apply Configuration
+
+```bash
+# Create or edit .env with your chosen profile
+cat > .env << 'EOF'
+# Your chosen settings here
+MAX_CPUS=4.0
+MAX_MEMORY=8G
+EMBEDDING_WORKERS=2
+EMBEDDING_BATCH_SIZE=32
+CHUNK_WORKERS=1
+EOF
+
+# Restart to apply
+docker-compose down && docker-compose up -d
+```
+
+### Understanding the Settings
+
+| Setting | What it controls | Impact |
+|---------|-----------------|--------|
+| `MAX_CPUS` | Docker CPU limit | Higher = faster but less responsive |
+| `MAX_MEMORY` | Docker RAM limit | Higher = more concurrent processing |
+| `EMBEDDING_WORKERS` | Parallel embedding threads | More workers ≠ faster (see below) |
+| `EMBEDDING_BATCH_SIZE` | Chunks per model call | 32 optimal for CPU, higher uses more RAM |
+| `CHUNK_WORKERS` | Parallel chunking threads | Keep at 1-2 (see below) |
+| `OMP_NUM_THREADS` | NumPy/BLAS parallelism | 2 is usually optimal, higher causes contention |
+
+### Why More Workers Don't Always Help (GIL Contention)
+
+Python's Global Interpreter Lock (GIL) means only ONE thread can execute Python code at a time, regardless of CPU cores. This fundamentally affects our pipeline:
+
+| Stage | Nature | Recommended | Why |
+|-------|--------|-------------|-----|
+| **Chunking** | I/O + CPU (Docling) | 1-2 | File I/O overlaps, but parsing is CPU-bound |
+| **Embedding** | Pure CPU-bound | 1-2 | GIL serializes model inference |
+| **Storing** | I/O-bound (SQLite) | 1 | SQLite is single-writer |
+
+**Key insight from High Performance Python**: Adding more workers to CPU-bound stages doesn't help - workers compete for the GIL and hinder each other. Instead:
+
+1. **Batch encoding** (`EMBEDDING_BATCH_SIZE=32`) gives 10-50x speedup by reducing `model.encode()` calls
+2. **Fewer workers with larger batches** beats many workers fighting for GIL
+3. **OMP_NUM_THREADS=2** lets NumPy use 2 cores per worker for matrix ops (releases GIL)
+
+**Recommended allocation for 80% CPU budget:**
+
+```
+Stage        Workers   Nature              CPU Usage
+─────────────────────────────────────────────────────
+Chunking     1         I/O + CPU           ~1 core (overlaps with embedding I/O)
+Embedding    2         CPU-bound (GIL)     ~1 active + 2 OMP threads = ~3 cores
+Storing      1         I/O-bound           minimal (SQLite writes)
+─────────────────────────────────────────────────────
+Total effective usage: ~4 cores (good for 8-core @ 50%)
+```
+
+**Why not more embedding workers?**
+- 2 workers: One waits for GIL while other runs → some overlap during I/O
+- 4 workers: Three waiting, one running → wasted memory, no speed gain
+- The GIL means `EMBEDDING_WORKERS=2` is usually optimal for CPU builds
+
+### Quick Reference: Formulas
+
+For a quick estimate based on your hardware:
+
+**Balanced (50-60%):**
+- `MAX_CPUS` = cores × 0.5
+- `MAX_MEMORY` = RAM × 0.5
+- `EMBEDDING_WORKERS` = max(1, cores ÷ 4)
+
+**Performance (70-80%):**
+- `MAX_CPUS` = cores × 0.75
+- `MAX_MEMORY` = RAM × 0.75
+- `EMBEDDING_WORKERS` = max(2, cores ÷ 3)
+
+### Monitoring Resource Usage
+
+Check if your profile is working:
+
+```bash
+# Real-time Docker stats
+docker stats rag-api
+
+# One-time snapshot
+docker stats rag-api --no-stream
+```
+
+Expected output during indexing:
+- **Balanced**: CPU ~50-60%, Memory within limit
+- **Performance**: CPU ~70-80%, Memory within limit
+
+If CPU is consistently at 100% of your limit, the profile is working as intended.
 
 ## Next Steps
 

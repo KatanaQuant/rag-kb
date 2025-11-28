@@ -16,9 +16,6 @@ package-lock.json
 
 # Data
 data/
-data_test/
-data_new/
-data_old/
 *.db
 *.db-journal
 *.db-wal
@@ -29,23 +26,7 @@ data_old/
 
 # Knowledge base (contains personal/copyrighted content)
 internal_planning/
-knowledge_base/*
-!knowledge_base/.gitkeep
-!knowledge_base/README.md
-knowledge_base_test/*
-knowledge_base_docling/*
-!knowledge_base_docling/README.md
-knowledge_base_backup/
-knowledge_base.backup.*/
-knowledge_base_new/*
-!knowledge_base_new/README.md
-knowledge_base_old/
-data.backup.*/
-data_backup/
-data_test/
-knowledge_base_test/
-up next/
-up_next/
+knowledge_base/
 
 # Agent session files
 .agent/
@@ -68,7 +49,5 @@ api/core.*
 core.*
 
 # E2E testing
-e2e-test-files/
-e2e-test.sh
 *.log
 up-next/

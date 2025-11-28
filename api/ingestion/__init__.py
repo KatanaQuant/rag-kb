@@ -1,14 +1,11 @@
 """
-Ingestion package - Document processing and storage
+Ingestion package - Document processing and storage.
 
 This package handles the complete document ingestion pipeline:
 - Text extraction from various formats (PDF, DOCX, MD, EPUB)
 - Semantic chunking via specialized extractors (Docling, AST, Jupyter, Obsidian)
 - Progress tracking with resume capability
 - Vector database storage
-
-Note: Legacy TextChunker has been removed. All chunking is now handled by
-specialized extractors that produce pre-chunked content.
 """
 
 # Helpers
@@ -18,7 +15,6 @@ from .helpers import FileHasher, GhostscriptHelper
 from .extractors import (
     DoclingExtractor,
     DOCXExtractor,
-    TextFileExtractor,
     MarkdownExtractor,
     EpubExtractor,
     ExtractionRouter
@@ -59,7 +55,6 @@ __all__ = [
     # Extractors
     'DoclingExtractor',
     'DOCXExtractor',
-    'TextFileExtractor',
     'MarkdownExtractor',
     'EpubExtractor',
     'ExtractionRouter',

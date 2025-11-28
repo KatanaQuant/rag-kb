@@ -52,7 +52,7 @@ class ComponentFactory:
 
     def _get_embedding_workers(self) -> int:
         """Get number of embedding workers"""
-        return int(os.getenv('EMBEDDING_WORKERS', '3'))
+        return int(os.getenv('EMBEDDING_WORKERS', '2'))
 
     def _get_max_pending(self, workers: int) -> int:
         """Get max pending embeddings"""

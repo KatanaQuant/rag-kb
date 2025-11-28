@@ -18,7 +18,7 @@ To disable automatic self-healing:
 AUTO_SELF_HEAL=false docker-compose up -d
 ```
 
-**Note**: Orphans created *during* initial indexing won't be caught until next restart. See [KNOWN_ISSUES.md](KNOWN_ISSUES.md#2-orphans-created-during-initial-indexing-not-auto-repaired).
+**Note**: Orphans created during initial indexing are automatically detected and repaired after indexing completes (added in v1.7.1).
 
 ---
 

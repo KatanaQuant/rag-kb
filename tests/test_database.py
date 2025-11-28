@@ -245,11 +245,11 @@ class TestSchemaManager:
         # Check FTS virtual table exists
         cursor = conn.execute("""
             SELECT name FROM sqlite_master
-            WHERE type='table' AND name LIKE 'chunks_fts%'
+            WHERE type='table' AND name = 'fts_chunks'
         """)
         result = cursor.fetchone()
         # FTS table should exist
-        assert result is not None or True  # May not exist in all test environments
+        assert result is not None, "FTS table fts_chunks not found"
 
 
     def test_schema_is_idempotent(self, tmp_path):

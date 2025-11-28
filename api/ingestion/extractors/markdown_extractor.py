@@ -1,8 +1,7 @@
 """
-Markdown file extractor
+Markdown file extractor.
 
 Extracts text from Markdown files using Docling HybridChunker.
-Extracted from extractors.py during modularization refactoring.
 """
 from pathlib import Path
 from domain_models import ExtractionResult

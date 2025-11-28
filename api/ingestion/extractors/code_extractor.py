@@ -1,8 +1,7 @@
 """
-Code file extractor with AST-based chunking
+Code file extractor with AST-based chunking.
 
 Extracts and chunks source code files using AST parsing.
-Extracted from extractors.py during modularization refactoring.
 """
 from pathlib import Path
 from domain_models import ExtractionResult
@@ -26,12 +25,15 @@ class CodeExtractor:
             '.ts': 'typescript',
             '.tsx': 'tsx',
             '.js': 'javascript',
-            '.jsx': 'jsx',
+            '.jsx': 'javascript',  # JSX parses fine with JavaScript parser
             '.cs': 'c_sharp',
             '.go': 'go',  # Go language support via tree-sitter-go
         }
         ext = path.suffix.lower()
         return ext_to_lang.get(ext, 'unknown')
+
+    # Languages that need TreeSitterChunker (astchunk doesn't support them)
+    TREE_SITTER_LANGUAGES = {'go', 'javascript', 'tsx'}
 
     @staticmethod
     def _get_chunker(language: str):
@@ -47,12 +49,22 @@ class CodeExtractor:
         if language in CodeExtractor._chunker_cache:
             return CodeExtractor._chunker_cache[language]
 
-        # Go uses tree-sitter-go directly (astchunk doesn't support Go yet)
-        if language == 'go':
-            from ingestion.go_chunker import GoChunker
-            chunker = GoChunker(max_chunk_size=2048, metadata_template='default')
+        # Languages not supported by astchunk use TreeSitterChunker
+        if language in CodeExtractor.TREE_SITTER_LANGUAGES:
+            if language == 'go':
+                # Go has specialized chunker with language-specific optimizations
+                from ingestion.go_chunker import GoChunker
+                chunker = GoChunker(max_chunk_size=2048, metadata_template='default')
+            else:
+                # JavaScript, TSX use generic TreeSitterChunker
+                from ingestion.tree_sitter_chunker import TreeSitterChunker
+                chunker = TreeSitterChunker(
+                    language=language,
+                    max_chunk_size=2048,
+                    metadata_template='default'
+                )
         else:
-            # Other languages use astchunk
+            # Python, Java, TypeScript use astchunk
             # NO try-except: Let import errors propagate
             from astchunk import ASTChunkBuilder
 

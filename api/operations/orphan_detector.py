@@ -84,6 +84,11 @@ class OrphanDetector:
                 self._handle_non_existent(orphan, stats)
                 return
 
+            # Check if this is a converted EPUB (moved to original/)
+            if self._is_converted_epub(path):
+                self._handle_converted_epub(orphan, stats)
+                return
+
             # Delete from tracker so it can be reprocessed
             self.tracker.delete_document(str(path))
 
@@ -94,14 +99,52 @@ class OrphanDetector:
         except Exception as e:
             print(f"ERROR queuing {orphan['path'].split('/')[-1]}: {e}")
 
+    def _is_converted_epub(self, path: Path) -> bool:
+        """Check if this is an EPUB that was converted to PDF
+
+        EPUBs are converted to PDF and moved to original/ subdirectory.
+        The PDF is indexed instead, so the EPUB progress entry is stale.
+
+        Works for both cases:
+        - EPUB still at original location (not yet moved)
+        - EPUB already moved to original/ (path doesn't exist)
+        """
+        if path.suffix.lower() != '.epub':
+            return False
+
+        # Check if EPUB was moved to original/ and PDF exists
+        original_path = path.parent / 'original' / path.name
+        pdf_path = path.with_suffix('.pdf')
+
+        return original_path.exists() and pdf_path.exists()
+
+    def _handle_converted_epub(self, orphan, stats):
+        """Handle converted EPUB - clean up progress entry"""
+        self.tracker.delete_document(orphan['path'])
+        if 'epub_converted' not in stats:
+            stats['epub_converted'] = 0
+        stats['epub_converted'] += 1
+
     def _handle_non_existent(self, orphan, stats):
-        """Handle non-existent orphan files"""
+        """Handle non-existent orphan files
+
+        Checks if file was a converted EPUB before marking as non-existent.
+        """
+        path = Path(orphan['path'])
+
+        # Check if this was a converted EPUB (moved to original/)
+        if self._is_converted_epub(path):
+            self._handle_converted_epub(orphan, stats)
+            return
+
         self.tracker.delete_document(orphan['path'])
         stats['non_existent'] += 1
 
     def _print_summary(self, stats):
         """Print repair summary"""
-        print(f"\nNon-existent files cleaned: {stats['non_existent']}")
+        if stats.get('epub_converted', 0) > 0:
+            print(f"\nConverted EPUBs cleaned: {stats['epub_converted']}")
+        print(f"Non-existent files cleaned: {stats['non_existent']}")
         print(f"\n{'='*80}")
         print(f"Orphan repair complete: {stats['queued']} files queued for reindexing")
         print(f"{'='*80}\n")

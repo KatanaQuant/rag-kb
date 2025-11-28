@@ -55,7 +55,39 @@ class TreeSitterChunker:
             'if_statement',
             'with_statement',
             'try_statement',
-        }
+        },
+        'javascript': {
+            'function_declaration',
+            'arrow_function',
+            'class_declaration',
+            'method_definition',
+            'variable_declaration',
+            'lexical_declaration',  # const/let declarations
+            'for_statement',
+            'while_statement',
+            'if_statement',
+            'switch_statement',
+            'try_statement',
+            'export_statement',
+            'import_statement',
+        },
+        'tsx': {
+            'function_declaration',
+            'arrow_function',
+            'class_declaration',
+            'method_definition',
+            'variable_declaration',
+            'lexical_declaration',
+            'for_statement',
+            'while_statement',
+            'if_statement',
+            'switch_statement',
+            'try_statement',
+            'export_statement',
+            'import_statement',
+            'interface_declaration',
+            'type_alias_declaration',
+        },
     }
 
     def __init__(

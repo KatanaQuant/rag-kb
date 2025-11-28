@@ -1,12 +1,7 @@
-"""Characterization tests for ObsidianExtractor
+"""Tests for ObsidianExtractor
 
-These tests document current behavior before refactoring.
-
-From POODR audit:
-- ObsidianExtractor: 237 lines, 4 responsibilities
-- High complexity: _chunk_semantically (CC=16), _enrich_chunks_with_graph (CC=8)
-- Concrete dependency: Creates own ObsidianGraphBuilder
-- No existing tests (CRITICAL!)
+Tests Obsidian note extraction with graph metadata enrichment.
+Uses Docling HybridChunker for token-aware chunking (v1.7.2+).
 """
 
 import pytest
@@ -86,161 +81,6 @@ class TestObsidianExtractorBasics:
         assert result.success
 
 
-class TestFrontmatterParsing:
-    """Test frontmatter extraction and parsing"""
-
-    @pytest.fixture
-    def extractor(self):
-        graph_builder = ObsidianGraphBuilder()
-        return ObsidianExtractor(graph_builder=graph_builder)
-
-    @pytest.mark.skip(reason="Frontmatter parsing moved to FrontmatterParser class")
-    def test_extract_frontmatter_valid_yaml(self, extractor):
-        """Test: Parse valid YAML frontmatter"""
-        content = """---
-tags: [test, example]
-created: 2025-01-01
----
-
-# Content"""
-
-        frontmatter = extractor._extract_frontmatter(content)
-
-        assert isinstance(frontmatter, dict)
-        assert 'tags' in frontmatter
-        assert frontmatter['tags'] == ['test', 'example']
-
-    @pytest.mark.skip(reason="Frontmatter parsing moved to FrontmatterParser class")
-    def test_extract_frontmatter_missing(self, extractor):
-        """Test: Handle notes without frontmatter"""
-        content = "# Just a title\n\nNo frontmatter here."
-
-        frontmatter = extractor._extract_frontmatter(content)
-
-        assert frontmatter == {}
-
-    @pytest.mark.skip(reason="Frontmatter parsing moved to FrontmatterParser class")
-    def test_extract_frontmatter_invalid_yaml(self, extractor):
-        """Test: Handle malformed YAML gracefully"""
-        content = """---
-invalid: yaml: structure: {{{
----
-
-# Content"""
-
-        # Should not crash
-        frontmatter = extractor._extract_frontmatter(content)
-        # Either empty dict or partial parse
-        assert isinstance(frontmatter, dict)
-
-    @pytest.mark.skip(reason="Frontmatter parsing moved to FrontmatterParser class")
-    def test_remove_frontmatter_from_content(self, extractor):
-        """Test: Frontmatter removed from chunk content"""
-        content = """---
-tags: [test]
----
-
-# Content here"""
-
-        clean_content = extractor._remove_frontmatter(content)
-
-        assert '---' not in clean_content or clean_content.count('---') == 0
-        assert '# Content here' in clean_content
-
-
-class TestSemanticChunking:
-    """Test semantic chunking by headers (CC=16 - High Complexity!)"""
-
-    @pytest.fixture
-    def extractor(self):
-        graph_builder = ObsidianGraphBuilder()
-        return ObsidianExtractor(graph_builder=graph_builder)
-
-    @pytest.mark.skip(reason="Semantic chunking moved to SemanticChunker class")
-    def test_chunk_semantically_by_headers(self, extractor):
-        """Test: Split on H1, H2, H3 headers"""
-        content = """# Main Title
-
-Intro paragraph.
-
-## Section 1
-
-Content for section 1.
-
-## Section 2
-
-Content for section 2.
-
-### Subsection 2.1
-
-Nested content."""
-
-        chunks = extractor._chunk_semantically(content, "test.md")
-
-        assert len(chunks) > 1
-        # Should split on headers
-        assert all(isinstance(chunk, dict) for chunk in chunks)
-        assert all('content' in chunk for chunk in chunks)
-
-    @pytest.mark.skip(reason="Semantic chunking moved to SemanticChunker class")
-    def test_chunk_semantically_respects_max_size(self, extractor):
-        """Test: Chunks don't exceed 2048 chars"""
-        large_section = "# Title\n\n" + ("x" * 3000)
-
-        chunks = extractor._chunk_semantically(large_section, "test.md", max_chunk_size=2048)
-
-        # Should split large section
-        for chunk in chunks:
-            assert len(chunk['content']) <= 2048 + 200  # Allow overlap
-
-    @pytest.mark.skip(reason="Semantic chunking moved to SemanticChunker class")
-    def test_chunk_semantically_overlap(self, extractor):
-        """Test: 200-char overlap between chunks"""
-        content = """# Section 1
-
-""" + ("a" * 1500) + """
-
-## Section 2
-
-""" + ("b" * 1500)
-
-        chunks = extractor._chunk_semantically(content, "test.md", max_chunk_size=2048, overlap_size=200)
-
-        # Verify chunking happened
-        assert isinstance(chunks, list)
-        assert len(chunks) > 0
-
-    @pytest.mark.skip(reason="Semantic chunking moved to SemanticChunker class")
-    def test_chunk_semantically_no_headers(self, extractor):
-        """Test: Single chunk if no headers and content fits"""
-        content = "Just some text without any headers. Not very long."
-
-        chunks = extractor._chunk_semantically(content, "test.md")
-
-        assert len(chunks) == 1
-        assert chunks[0]['content'] == content
-
-    @pytest.mark.skip(reason="Semantic chunking moved to SemanticChunker class")
-    def test_chunk_semantically_nested_headers(self, extractor):
-        """Test: Handle nested header hierarchy (H1 → H2 → H3)"""
-        content = """# H1 Title
-
-Content.
-
-## H2 Subtitle
-
-More content.
-
-### H3 Subsubtitle
-
-Nested content."""
-
-        chunks = extractor._chunk_semantically(content, "test.md")
-
-        # Should handle hierarchical headers
-        assert len(chunks) >= 1
-
-
 class TestGraphMetadataBuilding:
     """Test graph metadata extraction"""
 
@@ -287,93 +127,6 @@ This references [[OtherNote]] and has #tag1 and #tag2.
         wikilinks = extractor._extract_wikilinks(content)
 
         assert wikilinks == []
-
-
-class TestChunkEnrichment:
-    """Test chunk enrichment with graph metadata (CC=8)"""
-
-    @pytest.fixture
-    def extractor(self):
-        graph_builder = ObsidianGraphBuilder()
-        return ObsidianExtractor(graph_builder=graph_builder)
-
-    @pytest.mark.skip(reason="Chunk enrichment moved to separate classes")
-    def test_enrich_chunks_with_graph_footer(self, extractor):
-        """Test: Add graph metadata footer to chunks"""
-        chunks = [
-            {'content': 'Chunk content', 'start_line': 0, 'end_line': 1}
-        ]
-
-        graph_metadata = {
-            'tags': ['#tag1', '#tag2'],
-            'wikilinks': ['[[Note1]]', '[[Note2]]'],
-            'backlinks': ['[[BackNote]]']
-        }
-
-        enriched = extractor._enrich_chunks_with_graph(
-            chunks, "note_id", graph_metadata, ['related1'], 2
-        )
-
-        assert len(enriched) == 1
-        # Should have added metadata footer
-        assert 'metadata' in enriched[0]
-
-    @pytest.mark.skip(reason="Chunk enrichment moved to separate classes")
-    def test_enrich_chunks_includes_tags(self, extractor):
-        """Test: Tags included in enrichment"""
-        chunks = [{'content': 'Content', 'start_line': 0, 'end_line': 1}]
-        graph_metadata = {'tags': ['#test'], 'wikilinks': [], 'backlinks': []}
-
-        enriched = extractor._enrich_chunks_with_graph(
-            chunks, "note_id", graph_metadata, [], 0
-        )
-
-        # Tags should be in metadata
-        metadata = enriched[0].get('metadata', {})
-        assert 'tags' in metadata
-
-    @pytest.mark.skip(reason="Chunk enrichment moved to separate classes")
-    def test_enrich_chunks_includes_wikilinks(self, extractor):
-        """Test: Wikilinks included"""
-        chunks = [{'content': 'Content', 'start_line': 0, 'end_line': 1}]
-        graph_metadata = {'tags': [], 'wikilinks': ['[[Link1]]'], 'backlinks': []}
-
-        enriched = extractor._enrich_chunks_with_graph(
-            chunks, "note_id", graph_metadata, [], 0
-        )
-
-        metadata = enriched[0].get('metadata', {})
-        assert 'wikilinks' in metadata
-
-    @pytest.mark.skip(reason="Chunk enrichment moved to separate classes")
-    def test_enrich_chunks_includes_backlinks(self, extractor):
-        """Test: Backlinks included"""
-        chunks = [{'content': 'Content', 'start_line': 0, 'end_line': 1}]
-        graph_metadata = {'tags': [], 'wikilinks': [], 'backlinks': ['[[Back1]]']}
-
-        enriched = extractor._enrich_chunks_with_graph(
-            chunks, "note_id", graph_metadata, [], 0
-        )
-
-        metadata = enriched[0].get('metadata', {})
-        assert 'backlinks' in metadata
-
-    @pytest.mark.skip(reason="Chunk enrichment moved to separate classes")
-    def test_enrich_chunks_related_notes_limit(self, extractor):
-        """Test: Related notes truncated to N"""
-        chunks = [{'content': 'Content', 'start_line': 0, 'end_line': 1}]
-        graph_metadata = {'tags': [], 'wikilinks': [], 'backlinks': []}
-
-        many_related = [f"note{i}" for i in range(50)]
-
-        enriched = extractor._enrich_chunks_with_graph(
-            chunks, "note_id", graph_metadata, many_related, 10
-        )
-
-        # Should limit related notes
-        metadata = enriched[0].get('metadata', {})
-        if 'related_notes' in metadata:
-            assert len(metadata['related_notes']) <= 10
 
 
 class TestVaultLevelExtraction:
@@ -536,16 +289,63 @@ class TestEdgeCases:
         finally:
             Path(temp_path).unlink()
 
-    @pytest.mark.skip(reason="Semantic chunking moved to SemanticChunker class")
-    def test_chunk_semantically_preserves_content(self, extractor):
-        """Test: Chunking doesn't lose content"""
-        content = "# Section 1\n\nContent A\n\n## Section 2\n\nContent B"
 
-        chunks = extractor._chunk_semantically(content, "test.md")
+class TestOversizedChunkPrevention:
+    """Test that chunks respect token limits
 
-        # Reconstruct content from chunks
-        reconstructed = '\n'.join(chunk['content'] for chunk in chunks)
+    Issue: SemanticChunker didn't split long single lines, causing
+    chunks >8192 tokens (model max) and >512 tokens (target).
 
-        # Should contain key parts (allowing for formatting changes)
-        assert 'Content A' in reconstructed
-        assert 'Content B' in reconstructed
+    Fix: Use Docling HybridChunker for Obsidian files too.
+    """
+
+    @pytest.fixture
+    def extractor(self):
+        graph_builder = ObsidianGraphBuilder()
+        return ObsidianExtractor(graph_builder=graph_builder)
+
+    def test_long_single_line_gets_chunked(self, extractor):
+        """Test: Files with very long lines (no newlines) are properly chunked
+
+        This tests the bug where a 252K char single line wasn't split.
+        """
+        # Simulate a file with a very long single line (like minified HTML)
+        long_line = "x" * 10000  # 10K chars - should be split
+        content = f"# Title\n\n{long_line}"
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+            f.write(content)
+            temp_path = f.name
+
+        try:
+            result = ObsidianExtractor.extract(Path(temp_path), graph_builder=extractor.graph_builder)
+
+            # Should produce multiple chunks
+            assert result.page_count > 1, "Long content should be split into multiple chunks"
+
+            # Each chunk should be reasonable size
+            for chunk_text, _ in result.pages:
+                # Allow for graph metadata footer (~200 chars)
+                assert len(chunk_text) < 3000, f"Chunk too long: {len(chunk_text)} chars"
+        finally:
+            Path(temp_path).unlink()
+
+    def test_chunks_under_token_limit(self, extractor):
+        """Test: All chunks should be under the embedding model's token limit"""
+        # Create content that would previously create oversized chunks
+        content = "# Title\n\n" + ("word " * 5000)  # ~5000 words
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
+            f.write(content)
+            temp_path = f.name
+
+        try:
+            result = ObsidianExtractor.extract(Path(temp_path), graph_builder=extractor.graph_builder)
+
+            # Each chunk should be reasonable token count
+            # Using 4 chars per token as rough estimate
+            for chunk_text, _ in result.pages:
+                estimated_tokens = len(chunk_text) // 4
+                assert estimated_tokens < 8192, f"Chunk exceeds model limit: ~{estimated_tokens} tokens"
+        finally:
+            Path(temp_path).unlink()

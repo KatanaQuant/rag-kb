@@ -22,13 +22,8 @@ from .progress import ProcessingProgressTracker, ProcessingProgress
 from .extractors import ExtractionRouter
 from .helpers import FileHasher
 
-# Suppress verbose Docling/PDF warnings and errors
-logging.getLogger('pdfminer').setLevel(logging.CRITICAL)
-logging.getLogger('PIL').setLevel(logging.CRITICAL)
-logging.getLogger('docling').setLevel(logging.CRITICAL)
-logging.getLogger('docling_parse').setLevel(logging.CRITICAL)
-logging.getLogger('docling_core').setLevel(logging.CRITICAL)
-logging.getLogger('pdfium').setLevel(logging.CRITICAL)
+# Centralized logging configuration - import triggers suppression
+from . import logging_config  # noqa: F401
 
 try:
     from docling.document_converter import DocumentConverter
@@ -69,15 +64,13 @@ class MetadataEnricher:
 
 
 class DocumentProcessor:
-    """Coordinates document processing
+    """Coordinates document processing.
 
-    All chunking is now handled by specialized extractors:
+    Chunking is handled by specialized extractors:
     - Docling HybridChunker for PDF/DOCX/EPUB/Markdown
     - AST-based chunking for code files
     - Cell-aware chunking for Jupyter notebooks
     - Graph-RAG for Obsidian vaults
-
-    The legacy TextChunker has been removed.
     """
 
     SUPPORTED_EXTENSIONS = {
@@ -188,46 +181,31 @@ class DocumentProcessor:
         """Handle validation failure based on configured action"""
         if self.validation_action == 'reject':
             print(f"REJECTED (security): {doc_file.name} - {validation_result.reason}")
-
-            # Quarantine dangerous files (executables, zip bombs, scripts)
-            if validation_result.validation_check:
-                self.quarantine.quarantine_file(
-                    doc_file.path,
-                    validation_result.reason,
-                    validation_result.validation_check,
-                    doc_file.hash
-                )
-
-            # Track rejected file in database
-            if self.tracker:
-                self.tracker.mark_rejected(
-                    str(doc_file.path),
-                    validation_result.reason,
-                    validation_result.validation_check
-                )
+            self._quarantine_and_track(doc_file, validation_result)
             return False
-        elif self.validation_action == 'warn':
+        if self.validation_action == 'warn':
             print(f"WARNING (security): {doc_file.name} - {validation_result.reason}")
             return True
-        elif self.validation_action == 'skip':
-            # Quarantine dangerous files even when skipping
-            if validation_result.validation_check:
-                self.quarantine.quarantine_file(
-                    doc_file.path,
-                    validation_result.reason,
-                    validation_result.validation_check,
-                    doc_file.hash
-                )
-
-            # Track skipped files too
-            if self.tracker:
-                self.tracker.mark_rejected(
-                    str(doc_file.path),
-                    validation_result.reason,
-                    validation_result.validation_check
-                )
+        if self.validation_action == 'skip':
+            self._quarantine_and_track(doc_file, validation_result)
             return False
         return True
+
+    def _quarantine_and_track(self, doc_file: DocumentFile, validation_result) -> None:
+        """Quarantine dangerous files and track rejection in database"""
+        if validation_result.validation_check:
+            self.quarantine.quarantine_file(
+                doc_file.path,
+                validation_result.reason,
+                validation_result.validation_check,
+                doc_file.hash
+            )
+        if self.tracker:
+            self.tracker.mark_rejected(
+                str(doc_file.path),
+                validation_result.reason,
+                validation_result.validation_check
+            )
 
     def _is_already_completed(self, doc_file: DocumentFile) -> bool:
         """Check if file has already been processed"""

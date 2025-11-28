@@ -1,10 +1,4 @@
-"""
-Health and info routes
-
-Extracted from main.py following POODR principles:
-- Single responsibility: health/info endpoints only
-- Dependency injection: app state injected via FastAPI dependency
-"""
+"""Health and info routes."""
 from fastapi import APIRouter, Request
 from models import HealthResponse
 from config import default_config

@@ -8,10 +8,13 @@ from concurrent.futures import ThreadPoolExecutor, Future
 from typing import List, Dict, Any
 from pathlib import Path
 
+from pipeline.batch_encoder import BatchEncoder
+
+
 class EmbeddingService:
     """Manages concurrent embedding operations with throttling."""
 
-    def __init__(self, model, vector_store, max_workers: int, max_pending: int, processor=None):
+    def __init__(self, model, vector_store, max_workers: int, max_pending: int, processor=None, batch_size: int = 32):
         self.model = model
         self.store = vector_store
         self.processor = processor
@@ -19,6 +22,7 @@ class EmbeddingService:
         self.max_pending = max_pending
         self.pending: List[Future] = []
         self.failed: List[Dict[str, Any]] = []
+        self.batch_encoder = BatchEncoder(model, batch_size=batch_size)
 
     def queue_embedding(self, identity, chunks: List) -> Future:
         """Queue embedding task for concurrent execution."""
@@ -97,9 +101,10 @@ class EmbeddingService:
         )
 
     def embed_batch(self, texts: List[str], document_name: str = None, progress_logger=None) -> List:
-        """Embed a batch of text chunks.
+        """Embed a batch of text chunks using batch encoding.
 
         Public method for pipeline to generate embeddings.
+        Uses BatchEncoder for efficient batch processing (10-50x faster).
 
         Args:
             texts: List of text strings to embed
@@ -109,25 +114,25 @@ class EmbeddingService:
         Returns:
             List of embeddings (each is a list of floats)
         """
-        result = []
-        for i, text in enumerate(texts):
-            if progress_logger and document_name and i % 5 == 0:
-                progress_logger.log_progress("Embed", document_name, i + 1, len(texts))
-            emb = self.model.encode([text], show_progress_bar=False, convert_to_numpy=True)
-            result.append(emb[0].tolist())
-        return result
+        def on_progress(batch_num, total_batches, items_done, total_items):
+            if progress_logger and document_name:
+                progress_logger.log_progress("Embed", document_name, items_done, total_items)
+
+        return self.batch_encoder.encode(texts, on_progress=on_progress)
 
     def _generate_embeddings(self, chunks: List, name: str) -> List:
-        """Generate embeddings one at a time."""
+        """Generate embeddings using batch encoding.
+
+        Uses BatchEncoder for efficient batch processing instead of
+        one-at-a-time encoding (10-50x faster for large documents).
+        """
         texts = [c['content'] for c in chunks]
-        result = []
-        for i, text in enumerate(texts):
-            if i % 5 == 0:
-                file_indicator = f" ({name})" if name else ""
-                print(f"  Encoding chunk {i+1}/{len(texts)}{file_indicator}")
-            emb = self.model.encode([text], show_progress_bar=False, convert_to_numpy=True)
-            result.append(emb[0].tolist())
-        return result
+
+        def on_progress(batch_num, total_batches, items_done, total_items):
+            file_indicator = f" ({name})" if name else ""
+            print(f"  Encoding batch {batch_num}/{total_batches} ({items_done}/{total_items} chunks){file_indicator}")
+
+        return self.batch_encoder.encode(texts, on_progress=on_progress)
 
     def _store_document(self, identity, chunks, embeddings):
         """Store document in vector store."""

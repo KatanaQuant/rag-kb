@@ -20,11 +20,13 @@ This document outlines the journey from v1.x to v2.0.0 and beyond.
 
 ## Current State
 
-**Latest Release**: v1.6.7 (Security Bug Fix)
+**Latest Release**: v1.7.11
 
 **What's Working**:
 - Production-ready document indexing (PDF, EPUB, Markdown, Code)
-- Concurrent 3-stage pipeline (Chunk → Embed → Store)
+- Concurrent 3-stage pipeline (Chunk -> Embed -> Store)
+- Batch encoding for 10-50x embedding throughput
+- Pre-stage skip check (efficient queue management)
 - Async API (responsive during heavy indexing)
 - Comprehensive security scanning (ClamAV, YARA, hash blacklist)
 - Self-healing startup (auto-repair database issues)
@@ -32,7 +34,8 @@ This document outlines the journey from v1.x to v2.0.0 and beyond.
 - Clean architecture: `pipeline/` (background) + `operations/` (API)
 - Single-file security scan endpoint
 - MCP integration for Claude, Codex, and Gemini
-- 638 tests passing
+- Chunking quality metrics (boundary coherence, retrieval accuracy)
+- 735 tests passing
 
 ---
 
@@ -40,42 +43,22 @@ This document outlines the journey from v1.x to v2.0.0 and beyond.
 
 | Version | Highlights |
 |---------|-----------|
+| **v1.7.11** | Batch encoding, pipeline fixes, Jupyter/Obsidian chunking, JS/TSX support, quality metrics |
 | **v1.6.7** | Security bug fix (validation_action config), single-file scan endpoint |
-| **v1.6.6** | Sandi Metz OOP audit - complexity reduction |
-| **v1.6.5** | Codebase refactoring: `services/`→`pipeline/`, `api_services/`→`operations/`, CPU-optimized defaults |
-| **v1.6.4** | Self-healing startup (auto-repair empty docs, backfill counts) |
-| **v1.6.3** | Fix ClamAV socket contention with thread-local connections |
-| **v1.6.2** | Fix N+1 query in integrity API (1300x faster) |
-| **v1.6.1** | Fix YARA is_valid logic bug |
-| **v1.6.0** | Security REST API, non-blocking scan jobs, parallel scanning |
-| **v1.5.0** | Advanced malware detection (ClamAV, YARA, hash blacklist) |
-| **v1.4.0** | Quarantine system for dangerous files |
-| **v1.3.0** | Rejection tracking, archive bomb detection |
-| **v1.2.0** | File type validation, executable detection |
-| **v1.0.0** | Production release, async database, 445 tests |
+| **v1.0.0** | Production release, async database, security scanning |
 | **v0.16.0** | Async database migration (API <100ms during indexing) |
 | **v0.15.0** | POODR refactoring (main.py 684→89 LOC) |
-| **v0.14.0** | Python 3.13 upgrade |
 | **v0.13.0** | Docker optimization, progress logging |
 | **v0.11.0** | Concurrent pipeline, Go support |
-| **v0.9.1** | Jupyter notebooks, Obsidian Graph-RAG |
-| **v0.8.0** | Code RAG with AST chunking |
 
 ---
 
 ## Journey to v2.0.0
 
 ```
-v1.6.7 (CURRENT)
+v1.7.11 (CURRENT)
     │
-    ├── v1.7.x - Performance & Polish
-    │   └── Chunking strategy improvements
-    │
-    ├── v1.8.x - Content Expansion
-    │   └── Notion export, additional file formats
-    │
-    ├── v1.9.x - Pre-v2 Stabilization
-    │   └── Docker Phase 2, API review, final polish
+    ├── v1.8.x  - Docker build optimization (BuildKit, multi-stage)
     │
     └── v2.0.0 - GPU & Advanced Features
         └── GPU support, embedding upgrade, video/audio, vision models
@@ -83,53 +66,16 @@ v1.6.7 (CURRENT)
 
 ---
 
-### v1.7.x - Performance & Polish
+### v1.8.x - Docker Build Optimization
 
-**Focus**: Performance optimizations and developer experience
+**Focus**: Faster builds and smaller images
 
-#### Embedding Pipeline Profiling
-- Investigate why embedding stage appears single-core bound
-- Profile CPU utilization during embedding vs chunking
-- Test higher `EMBEDDING_WORKERS` values
-- Identify GIL, batching, or queue bottlenecks
-- See [KNOWN_ISSUES.md#4](KNOWN_ISSUES.md) for details
-
-#### Chunking Strategy Evaluation
-- Semantic boundary detection via embedding similarity
-- Variable-size chunks aligned to topic boundaries
-- Requires profiling before GPU features
-- See [internal_planning/CHUNKING_STRATEGY_EVALUATION.md](../internal_planning/CHUNKING_STRATEGY_EVALUATION.md)
-
----
-
-### v1.8.x - Content Expansion
-
-**Focus**: Additional content sources
-
-#### Notion Export Support
-- Notion workspace exports (ZIP with markdown/HTML/CSV)
-- Preserve page links and hierarchy
-- Database property extraction
-
-#### Additional Format Support
-- Evaluate user-requested formats
-- Audio transcription prep (metadata, no GPU yet)
-
----
-
-### v1.9.x - Pre-v2 Stabilization
-
-**Focus**: Final polish before major version
-
-#### Docker Build Optimization Phase 2
-- Pre-built base image on ghcr.io (7-10 min → 3-5 min first build)
-- Python wheels for heavy packages
+- BuildKit cache mounts (60% faster rebuilds)
+- Pre-built base image on ghcr.io
+- Multi-stage Dockerfile (40-60% smaller image)
 - See [internal_planning/DOCKER_BUILD_OPTIMIZATION.md](../internal_planning/DOCKER_BUILD_OPTIMIZATION.md)
 
-#### API Stability Review
-- Review all endpoints before semantic versioning
-- Document breaking changes for v2.0.0
-- Deprecation warnings for removed features
+**Note**: GIL contention limits multi-worker parallelism. True parallel embedding requires GPU (v2.0.0). See [KNOWN_ISSUES.md](KNOWN_ISSUES.md).
 
 ---
 
@@ -214,7 +160,7 @@ Lower priority items for future releases:
 **Rationale**:
 - Free-threading has 40% performance penalty in Python 3.13
 - JIT is experimental with minimal gains for I/O-bound workloads
-- Already using `EMBEDDING_WORKERS=8` for parallelism
+- Already using `EMBEDDING_WORKERS=2` for parallelism
 - Wait for Python 3.14 (penalty drops to 5-10%)
 
 **Gains**: 5-10% general performance from Python 3.13 optimizations

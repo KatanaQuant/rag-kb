@@ -16,7 +16,7 @@ git clone https://github.com/KatanaQuant/rag-kb.git
 cd rag-kb
 
 # Checkout latest stable release
-git checkout v1.6.7
+git checkout v1.7.11
 
 # Optional: Change port if 8000 is in use
 echo "RAG_PORT=8001" > .env
@@ -182,6 +182,71 @@ docker images | grep rag-api
 - **Usage Patterns**: See [USAGE.md](USAGE.md) for different query methods
 - **Configuration**: See [CONFIGURATION.md](CONFIGURATION.md) for advanced settings
 - **Troubleshooting**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if you encounter issues
+
+## Troubleshooting
+
+### Build Fails
+
+**Symptom**: `docker-compose build` fails
+
+```bash
+# Clean build (removes cached layers)
+docker-compose build --no-cache
+
+# If disk space issues
+docker system prune -a
+docker builder prune
+```
+
+### Service Won't Start
+
+**Symptom**: Container exits immediately after starting
+
+```bash
+# Check logs for errors
+docker-compose logs rag-api
+
+# Common fixes:
+# - Port conflict: echo "RAG_PORT=8001" > .env
+# - Out of memory: echo "MAX_MEMORY=4G" > .env
+# - Then restart: docker-compose up -d
+```
+
+### Model Download Fails
+
+**Symptom**: "Failed to download model" or timeout errors
+
+```bash
+# Check disk space
+df -h
+
+# Check network connectivity
+curl https://huggingface.co
+
+# Try smaller model first
+echo "MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2" > .env
+docker-compose restart rag-api
+```
+
+### Health Check Fails
+
+**Symptom**: `curl http://localhost:8000/health` returns error or timeout
+
+```bash
+# Wait for startup (model loading takes time)
+sleep 30
+curl http://localhost:8000/health
+
+# Check if container is running
+docker-compose ps
+
+# Check logs for startup errors
+docker-compose logs rag-api --tail 50
+```
+
+For more issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
+---
 
 ## Performance Notes
 

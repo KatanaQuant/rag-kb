@@ -31,10 +31,11 @@ class PipelineCoordinator:
     - StoreWorker: Stores embedded chunks in database
     """
 
-    def __init__(self, processor, indexer, embedding_service):
+    def __init__(self, processor, indexer, embedding_service, indexing_queue=None):
         self.processor = processor
         self.indexer = indexer
         self.embedding_service = embedding_service
+        self.indexing_queue = indexing_queue  # For mark_complete() callback
         self.progress_logger = ProgressLogger()
         self.skip_batcher = SkipBatcher(interval=10.0)  # Print skip summaries every 10 seconds
 
@@ -43,7 +44,7 @@ class PipelineCoordinator:
 
         # Get number of workers from environment
         num_chunk_workers = int(os.getenv('CHUNK_WORKERS', '1'))
-        num_embed_workers = int(os.getenv('EMBED_WORKERS', '3'))
+        num_embed_workers = int(os.getenv('EMBEDDING_WORKERS', '2'))
 
         # Create stage workers
         self.chunk_pool = EmbedWorkerPool(
@@ -83,8 +84,34 @@ class PipelineCoordinator:
         self.skip_batcher.stop()  # Print final skip summary
 
     def add_file(self, item: QueueItem):
-        """Add file to processing queue"""
+        """Add file to processing queue (with pre-stage skip check)
+
+        Checks if file is already indexed BEFORE adding to chunk_queue.
+        This prevents the queue from filling up with already-indexed files.
+        """
+        if self._should_skip_before_queue(item):
+            return
         self.queues.chunk_queue.put(item)
+
+    def _should_skip_before_queue(self, item: QueueItem) -> bool:
+        """Pre-stage skip check - filter out already-indexed files
+
+        This runs BEFORE adding to chunk_queue, keeping queue size minimal.
+        Only files that actually need processing enter the queue.
+        """
+        if item.force:
+            return False  # Force reprocessing requested
+
+        try:
+            doc_file = DocumentFile.from_path(item.path)
+            if self.embedding_service.store.is_document_indexed(str(item.path), doc_file.hash):
+                self.skip_batcher.record_skip(item.path.name, "already indexed")
+                return True
+        except Exception:
+            # If we can't check, let it through to chunk_stage for proper error handling
+            pass
+
+        return False
 
     def get_stats(self) -> dict:
         """Get pipeline statistics"""
@@ -111,6 +138,7 @@ class PipelineCoordinator:
             doc_file = DocumentFile.from_path(item.path)
 
             if self._should_skip_indexed_file(item, doc_file):
+                self._mark_file_complete(item.path)  # Mark complete even if skipped
                 return None
 
             stage = self._get_stage_name(item.path)
@@ -119,6 +147,7 @@ class PipelineCoordinator:
             chunks = self.processor.process_file(doc_file, force=item.force)
 
             if not chunks:
+                self._mark_file_complete(item.path)  # Mark complete even if no chunks
                 return self._handle_no_chunks(stage, item.path.name)
 
             self.progress_logger.log_complete(stage, item.path.name, len(chunks))
@@ -126,7 +155,13 @@ class PipelineCoordinator:
 
         except Exception as e:
             print(f"[Chunk] Error processing {item.path}: {e}")
+            self._mark_file_complete(item.path)  # Mark complete on error
             return None
+
+    def _mark_file_complete(self, path: Path):
+        """Mark file as complete in indexing queue"""
+        if self.indexing_queue:
+            self.indexing_queue.mark_complete(path)
 
     def _should_skip_indexed_file(self, item: QueueItem, doc_file) -> bool:
         """Check if file should be skipped (already indexed)"""
@@ -147,8 +182,17 @@ class PipelineCoordinator:
         self.progress_logger.start_heartbeat(stage, filename, interval=60)
 
     def _handle_no_chunks(self, stage: str, filename: str) -> None:
-        """Handle case when no chunks were extracted"""
-        print(f"[{stage}] {filename} - no chunks extracted")
+        """Handle case when no chunks were extracted
+
+        For EPUB files, this is expected - conversion succeeded and the
+        resulting PDF will be processed separately. Log success, not failure.
+        """
+        if stage == "Convert":
+            # EPUB conversion succeeded - PDF will be processed separately
+            print(f"[{stage}] {filename} - conversion complete, PDF queued for indexing")
+        else:
+            # Actual extraction failure
+            print(f"[{stage}] {filename} - no chunks extracted")
         self.progress_logger.log_complete(stage, filename, 0)
         return None
 
@@ -186,6 +230,7 @@ class PipelineCoordinator:
 
         except Exception as e:
             print(f"[Embed] Error embedding {doc.path}: {e}")
+            self._mark_file_complete(doc.path)  # Mark complete on error
             return None
 
     def _store_stage(self, doc: EmbeddedDocument) -> None:
@@ -201,6 +246,8 @@ class PipelineCoordinator:
             )
 
             self.progress_logger.log_complete("Store", doc.path.name, len(doc.chunks))
+            self._mark_file_complete(doc.path)
 
         except Exception as e:
             print(f"[Store] Error storing {doc.path}: {e}")
+            self._mark_file_complete(doc.path)  # Mark complete on error too

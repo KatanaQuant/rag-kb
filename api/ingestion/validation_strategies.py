@@ -1,18 +1,22 @@
 """
 Validation strategies for FileTypeValidator refactoring
 
-Following Strategy pattern to reduce cyclomatic complexity from CC: 12 to < 5.
+Following Strategy pattern to reduce cyclomatic complexity.
 Each strategy handles one specific validation concern.
-
-Benefits:
-- Single Responsibility Principle - each strategy has one reason to change
-- Open/Closed Principle - can add new strategies without modifying existing code
-- Reduced complexity - simple, testable components
-- Composable - strategies can be chained together
 """
 from pathlib import Path
 from typing import Dict, List, Tuple
 from ingestion.validation_result import ValidationResult
+
+
+def matches_signature(data: bytes, signature: bytes, offset: int) -> bool:
+    """Check if data matches signature at given offset.
+
+    Shared utility for magic byte validation across strategies.
+    """
+    if len(data) < offset + len(signature):
+        return False
+    return data[offset:offset + len(signature)] == signature
 
 
 class FileExistenceStrategy:
@@ -99,7 +103,6 @@ class ExtensionStrategy:
         '.go': 'go',
         '.rs': 'rust',
         '.ipynb': 'ipynb',
-        '.txt': 'text',
     }
 
     def validate(self, file_path: Path) -> ValidationResult:
@@ -238,7 +241,7 @@ class ExecutableCheckStrategy:
 
         # Check for executable signatures
         for magic_bytes, offset, description in self.EXECUTABLE_SIGNATURES:
-            if self._matches_signature(header, magic_bytes, offset):
+            if matches_signature(header, magic_bytes, offset):
                 return ValidationResult(
                     is_valid=False,
                     file_type='executable',
@@ -250,12 +253,6 @@ class ExecutableCheckStrategy:
             file_type=expected_type,
             reason=''
         )
-
-    def _matches_signature(self, data: bytes, signature: bytes, offset: int) -> bool:
-        """Check if data matches signature at given offset"""
-        if len(data) < offset + len(signature):
-            return False
-        return data[offset:offset + len(signature)] == signature
 
 
 class MagicSignatureStrategy:
@@ -333,7 +330,7 @@ class MagicSignatureStrategy:
     def _has_matching_signature(self, header: bytes, signatures: List[Tuple[bytes, int, str]]) -> bool:
         """Check if header matches any signature"""
         for magic_bytes, offset, description in signatures:
-            if self._matches_signature(header, magic_bytes, offset):
+            if matches_signature(header, magic_bytes, offset):
                 return True
         return False
 
@@ -352,9 +349,3 @@ class MagicSignatureStrategy:
             file_type='unknown',
             reason=f'File signature does not match {expected_type} format'
         )
-
-    def _matches_signature(self, data: bytes, signature: bytes, offset: int) -> bool:
-        """Check if data matches signature at given offset"""
-        if len(data) < offset + len(signature):
-            return False
-        return data[offset:offset + len(signature)] == signature

@@ -1,10 +1,4 @@
-"""
-Async database schema management.
-
-Extracted from async_database.py following Sandi Metz POODR principles:
-- Single Responsibility: Schema creation only
-- One class per file for clarity
-"""
+"""Async database schema management."""
 
 import aiosqlite
 from config import default_config

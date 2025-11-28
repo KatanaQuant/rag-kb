@@ -6,7 +6,7 @@
 
 **Personal knowledge base with semantic search.** Index books, code, and notes—query with natural language. 100% local.
 
-**Current Version**: v1.6.7 ([Changelog](docs/RELEASES/))
+**Current Version**: v1.7.11 ([Changelog](docs/RELEASES/))
 
 ---
 
@@ -29,7 +29,7 @@ See [docs/USAGE.md](docs/USAGE.md) for full feature details.
 ```bash
 # Clone and start
 git clone https://github.com/KatanaQuant/rag-kb.git
-cd rag-kb && git checkout v1.6.7
+cd rag-kb && git checkout v1.7.11
 
 # Add your content
 cp ~/Documents/*.pdf knowledge_base/books/
@@ -103,7 +103,7 @@ VSCode/IDE → MCP Server (Node.js) → RAG API (FastAPI/Docker) → SQLite + ve
 
 ```bash
 docker-compose down
-git fetch --tags && git checkout v1.6.7
+git fetch --tags && git checkout v1.7.11
 docker-compose build --no-cache
 docker-compose up -d
 ```

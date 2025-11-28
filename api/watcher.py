@@ -65,9 +65,9 @@ class DocumentEventHandler(FileSystemEventHandler):
 
     SUPPORTED_EXTENSIONS = {
         # Documents
-        '.pdf', '.md', '.txt', '.docx', '.epub', '.markdown',
+        '.pdf', '.md', '.docx', '.epub', '.markdown',
         # Code files
-        '.py', '.java', '.ts', '.tsx', '.js', '.jsx', '.cs',
+        '.py', '.java', '.ts', '.tsx', '.js', '.jsx', '.cs', '.go',
         # Jupyter notebooks
         '.ipynb'
     }

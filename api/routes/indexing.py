@@ -1,10 +1,4 @@
-"""
-Indexing routes module
-
-Extracted from main.py following POODR principles:
-- Single responsibility: indexing operations only
-- Dependency injection via FastAPI Request
-"""
+"""Indexing routes module."""
 from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
 from pathlib import Path
 

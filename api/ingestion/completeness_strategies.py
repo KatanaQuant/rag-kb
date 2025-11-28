@@ -179,34 +179,46 @@ class CharDistributionStrategy(CompletenessStrategy):
             pages: List of (text, page_num) tuples
         """
         if len(pages) < 3:
-            # Not enough data for statistical analysis
             return CompletenessResult.complete()
 
         char_counts = [len(text) for text, _ in pages]
+        stats = self._compute_stats(char_counts)
+        if stats is None:
+            return CompletenessResult.complete()
+
+        outliers = self._find_outliers(pages, char_counts, stats)
+        return self._build_result(len(pages), outliers)
+
+    def _compute_stats(self, char_counts: list) -> tuple | None:
+        """Compute mean and std_dev, returns None if std_dev is zero"""
         mean = sum(char_counts) / len(char_counts)
         variance = sum((c - mean) ** 2 for c in char_counts) / len(char_counts)
         std_dev = variance ** 0.5
+        return (mean, std_dev) if std_dev > 0 else None
 
-        if std_dev == 0:
-            return CompletenessResult.complete()
-
+    def _find_outliers(
+        self, pages: list, char_counts: list, stats: tuple
+    ) -> list:
+        """Find pages significantly below average"""
+        mean, std_dev = stats
         outliers = []
-        for (text, page_num), count in zip(pages, char_counts):
+        for (_, page_num), count in zip(pages, char_counts):
             z_score = abs(count - mean) / std_dev
             if z_score > self.threshold and count < mean:
-                # Only flag pages significantly BELOW average
                 outliers.append((page_num, count))
+        return outliers
 
-        if outliers:
-            return CompletenessResult.incomplete(
-                issue=CompletenessIssue.PAGE_COUNT_MISMATCH,
-                expected=len(pages),
-                actual=len(pages) - len(outliers),
-                severity=Severity.WARNING,
-                message=f"Found {len(outliers)} outlier pages with low content"
-            )
-
-        return CompletenessResult.complete()
+    def _build_result(self, page_count: int, outliers: list) -> CompletenessResult:
+        """Build result based on outliers found"""
+        if not outliers:
+            return CompletenessResult.complete()
+        return CompletenessResult.incomplete(
+            issue=CompletenessIssue.PAGE_COUNT_MISMATCH,
+            expected=page_count,
+            actual=page_count - len(outliers),
+            severity=Severity.WARNING,
+            message=f"Found {len(outliers)} outlier pages with low content"
+        )
 
 
 class DatabaseChunkStrategy(CompletenessStrategy):

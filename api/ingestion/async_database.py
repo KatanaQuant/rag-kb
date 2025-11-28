@@ -1,16 +1,11 @@
 """
 Async database layer for non-blocking API operations.
 
-Refactored: AsyncDatabaseConnection and AsyncSchemaManager extracted
-to separate modules following Sandi Metz single responsibility principle.
-
 Architecture:
-- AsyncDatabaseConnection: Extracted to async_connection.py
-- AsyncSchemaManager: Extracted to async_schema.py
+- AsyncDatabaseConnection: Connection management (async_connection.py)
+- AsyncSchemaManager: Schema management (async_schema.py)
 - AsyncVectorRepository: Async facade delegating to async repositories
 - AsyncVectorStore: Main async facade for vector storage operations
-
-All classes follow POODR principles with one class per file for clarity.
 """
 
 import aiosqlite
@@ -24,10 +19,8 @@ from domain_models import ChunkData, DocumentFile, ExtractionResult
 from .async_connection import AsyncDatabaseConnection
 from .async_schema import AsyncSchemaManager
 
-# Suppress verbose warnings
-logging.getLogger('pdfminer').setLevel(logging.CRITICAL)
-logging.getLogger('PIL').setLevel(logging.CRITICAL)
-logging.getLogger('docling').setLevel(logging.CRITICAL)
+# Centralized logging configuration - import triggers suppression
+from . import logging_config  # noqa: F401
 
 
 class AsyncVectorRepository:
@@ -71,8 +64,28 @@ class AsyncVectorRepository:
         return True
 
     async def _update_path_after_move(self, hash_val: str, old_path: str, new_path: str):
-        """Update file path after move (preserves chunks/embeddings)"""
+        """Update file path after move (preserves chunks/embeddings)
+
+        Handles case where new_path already exists in DB (duplicate/conflict):
+        - If new_path exists, delete the old record (old_path) instead of updating
+        - This keeps the existing record at new_path intact
+        """
         try:
+            # Check if new_path already exists in the database
+            existing_at_new_path = await self.documents.find_by_path(new_path)
+            if existing_at_new_path:
+                # new_path already has a document - delete the OLD record instead
+                # The document at new_path is already correct (same content, new location)
+                await self.documents.delete(old_path)
+                await self.conn.execute(
+                    "DELETE FROM processing_progress WHERE file_path = ?",
+                    (old_path,)
+                )
+                await self.conn.commit()
+                print(f"  Removed stale record: {old_path} (superseded by {new_path})")
+                return
+
+            # Normal case: new_path doesn't exist, update the path
             import uuid
             temp_path = f"__temp_move_{uuid.uuid4().hex}__"
 
@@ -87,11 +100,6 @@ class AsyncVectorRepository:
                 "UPDATE processing_progress SET file_path = ? WHERE file_hash = ?",
                 (new_path, hash_val)
             )
-
-            # Note: GraphRepository is still sync, skip for now
-            # from ingestion.graph_repository import GraphRepository
-            # graph_repo = GraphRepository(self.conn)
-            # graph_repo.update_note_path(old_path, new_path)
 
             await self.conn.commit()
         except Exception as e:

@@ -134,62 +134,59 @@ async def delete_empty_documents(request: DeleteOrphansRequest = None):
     - Processing was interrupted before chunks were stored
     - Chunks were manually deleted
     - Database inconsistency
-
-    Args:
-        dry_run: If true, show empty documents without deleting
-
-    Example:
-        POST /api/maintenance/delete-empty-documents
-        {"dry_run": true}
-
-    Returns:
-        List of empty documents and deletion status
     """
     if request is None:
         request = DeleteOrphansRequest()
 
     try:
-        db_path = default_config.database.path
-        conn = sqlite3.connect(db_path)
-
-        # Find orphans (documents with no chunks)
-        cursor = conn.execute('''
-            SELECT d.id, d.file_path
-            FROM documents d
-            WHERE NOT EXISTS (SELECT 1 FROM chunks c WHERE c.document_id = d.id)
-        ''')
-        orphans = cursor.fetchall()
-
-        orphan_list = [
-            OrphanDocument(
-                id=doc_id,
-                file_path=fp,
-                filename=Path(fp).name
-            )
-            for doc_id, fp in orphans
-        ]
-
-        deleted_count = 0
-        if not request.dry_run and orphans:
-            # Delete orphan documents and their progress records
-            for doc_id, file_path in orphans:
-                conn.execute('DELETE FROM documents WHERE id = ?', (doc_id,))
-                conn.execute('DELETE FROM processing_progress WHERE file_path = ?', (file_path,))
-                deleted_count += 1
-            conn.commit()
-
-        conn.close()
-
-        return DeleteOrphansResponse(
-            orphans_found=len(orphans),
-            orphans_deleted=deleted_count,
-            dry_run=request.dry_run,
-            orphans=orphan_list[:50],  # Limit response size
-            message=f"{'Would delete' if request.dry_run else 'Deleted'} {len(orphans)} orphan documents"
-        )
-
+        orphans, deleted_count = _process_empty_documents(request.dry_run)
+        return _build_orphan_response(orphans, deleted_count, request.dry_run)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Delete orphans failed: {e}")
+
+
+def _process_empty_documents(dry_run: bool) -> tuple:
+    """Find and optionally delete empty documents"""
+    conn = sqlite3.connect(default_config.database.path)
+    orphans = _find_orphan_documents(conn)
+    deleted_count = 0 if dry_run else _delete_orphans(conn, orphans)
+    conn.close()
+    return orphans, deleted_count
+
+
+def _find_orphan_documents(conn) -> list:
+    """Find documents with no chunks"""
+    cursor = conn.execute('''
+        SELECT d.id, d.file_path
+        FROM documents d
+        WHERE NOT EXISTS (SELECT 1 FROM chunks c WHERE c.document_id = d.id)
+    ''')
+    return cursor.fetchall()
+
+
+def _delete_orphans(conn, orphans: list) -> int:
+    """Delete orphan documents and their progress records"""
+    for doc_id, file_path in orphans:
+        conn.execute('DELETE FROM documents WHERE id = ?', (doc_id,))
+        conn.execute('DELETE FROM processing_progress WHERE file_path = ?', (file_path,))
+    conn.commit()
+    return len(orphans)
+
+
+def _build_orphan_response(orphans: list, deleted_count: int, dry_run: bool) -> DeleteOrphansResponse:
+    """Build response with orphan list"""
+    orphan_list = [
+        OrphanDocument(id=doc_id, file_path=fp, filename=Path(fp).name)
+        for doc_id, fp in orphans
+    ]
+    action = 'Would delete' if dry_run else 'Deleted'
+    return DeleteOrphansResponse(
+        orphans_found=len(orphans),
+        orphans_deleted=deleted_count,
+        dry_run=dry_run,
+        orphans=orphan_list[:50],
+        message=f"{action} {len(orphans)} orphan documents"
+    )
 
 
 # ============================================================================

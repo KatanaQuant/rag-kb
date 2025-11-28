@@ -1,10 +1,4 @@
-"""
-Query route module
-
-Extracted from main.py following POODR principles:
-- Single responsibility: query operations only
-- Dependency injection via FastAPI Request
-"""
+"""Query route module."""
 from fastapi import APIRouter, Request, HTTPException
 from models import QueryRequest, QueryResponse
 from operations.query_executor import QueryExecutor

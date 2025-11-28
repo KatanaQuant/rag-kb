@@ -50,10 +50,20 @@ class IndexingQueue:
         self.queued_files: set[Path] = set()  # Track files currently in queue
 
     def add(self, path: Path, priority: Priority = Priority.NORMAL, force: bool = False):
-        """Add file to queue with priority (skip if already queued)"""
+        """Add file to queue with priority (skip if already queued)
+
+        Args:
+            path: File path to queue
+            priority: Queue priority (HIGH, NORMAL, LOW)
+            force: If True, force reprocessing even if already indexed.
+                   Does NOT bypass duplicate queue check - files already
+                   in queue are always skipped to prevent duplicate processing.
+        """
         with self.lock:
-            # Check if already queued (unless force=True)
-            if not force and path in self.queued_files:
+            # Always check if already queued - prevent duplicate processing
+            # This check is independent of force flag (force is for reindexing,
+            # not for bypassing queue deduplication)
+            if path in self.queued_files:
                 return  # Silent skip - already queued
 
             self.queued_files.add(path)
@@ -71,7 +81,7 @@ class IndexingQueue:
 
         Returns None if paused or queue empty.
         Blocks for up to timeout seconds if queue not empty.
-        Removes item from tracking set.
+        Note: File stays in queued_files until mark_complete() is called.
         """
         with self.lock:
             if self.paused:
@@ -79,12 +89,21 @@ class IndexingQueue:
 
         try:
             item = self.queue.get(timeout=timeout)
-            # Remove from tracking set when dequeued
-            with self.lock:
-                self.queued_files.discard(item.path)
+            # Don't remove from queued_files here - wait for mark_complete()
+            # This prevents race conditions where a file is re-queued during processing
             return item
         except Empty:
             return None
+
+    def mark_complete(self, path: Path):
+        """Mark file as complete - removes from tracking set
+
+        Call this after a file has been fully processed (stored in DB).
+        This prevents race conditions where duplicate watcher events
+        could re-queue a file that's still being processed.
+        """
+        with self.lock:
+            self.queued_files.discard(path)
 
     def pause(self):
         """Pause queue processing"""

@@ -167,105 +167,89 @@ class ArchiveBombStrategy:
         """Check ZIP file for bomb characteristics"""
         try:
             with zipfile.ZipFile(file_path, 'r') as zf:
-                # Get compressed and uncompressed sizes
                 compressed_size = file_path.stat().st_size
                 uncompressed_size = sum(info.file_size for info in zf.infolist())
 
-                # Check uncompressed size limit
-                max_size_bytes = self.MAX_UNCOMPRESSED_SIZE_MB * 1024 * 1024
-                if uncompressed_size > max_size_bytes:
-                    return ValidationResult(
-                        is_valid=False,
-                        file_type=expected_type,
-                        reason=f'Archive bomb: Uncompressed size {uncompressed_size // (1024*1024)} MB exceeds limit',
-                        validation_check='ArchiveBombStrategy'
-                    )
+                result = self._check_archive_sizes(
+                    compressed_size, uncompressed_size, expected_type
+                )
+                if not result.is_valid:
+                    return result
 
-                # Check compression ratio
-                if compressed_size > 0:
-                    ratio = uncompressed_size / compressed_size
-                    if ratio > self.MAX_COMPRESSION_RATIO:
-                        return ValidationResult(
-                            is_valid=False,
-                            file_type=expected_type,
-                            reason=f'Archive bomb: Compression ratio {ratio:.0f}:1 is suspicious',
-                            validation_check='ArchiveBombStrategy'
-                        )
-
-                # Check for nested archives (basic check)
-                nested_count = sum(1 for name in zf.namelist()
-                                 if name.lower().endswith(('.zip', '.tar', '.gz')))
-                if nested_count > self.MAX_NESTING_DEPTH:
-                    return ValidationResult(
-                        is_valid=False,
-                        file_type=expected_type,
-                        reason=f'Archive bomb: Contains {nested_count} nested archives',
-                        validation_check='ArchiveBombStrategy'
-                    )
+                return self._check_nested_archives(zf.namelist(), expected_type)
 
         except zipfile.BadZipFile:
-            return ValidationResult(
-                is_valid=False,
-                file_type='unknown',
-                reason='Corrupted ZIP archive',
-                validation_check='ArchiveBombStrategy'
-            )
-        except Exception as e:
-            # If we can't read the archive, let it through
-            # (will be caught by other validators)
+            return self._corrupted_archive_result('ZIP')
+        except Exception:
             pass
 
+        return ValidationResult(is_valid=True, file_type=expected_type, reason='')
+
+    def _check_archive_sizes(
+        self, compressed_size: int, uncompressed_size: int, expected_type: str
+    ) -> ValidationResult:
+        """Check uncompressed size limit and compression ratio"""
+        max_size_bytes = self.MAX_UNCOMPRESSED_SIZE_MB * 1024 * 1024
+        if uncompressed_size > max_size_bytes:
+            return ValidationResult(
+                is_valid=False,
+                file_type=expected_type,
+                reason=f'Archive bomb: Uncompressed size {uncompressed_size // (1024*1024)} MB exceeds limit',
+                validation_check='ArchiveBombStrategy'
+            )
+
+        if compressed_size > 0:
+            ratio = uncompressed_size / compressed_size
+            if ratio > self.MAX_COMPRESSION_RATIO:
+                return ValidationResult(
+                    is_valid=False,
+                    file_type=expected_type,
+                    reason=f'Archive bomb: Compression ratio {ratio:.0f}:1 is suspicious',
+                    validation_check='ArchiveBombStrategy'
+                )
+
+        return ValidationResult(is_valid=True, file_type=expected_type, reason='')
+
+    def _check_nested_archives(self, namelist: list, expected_type: str) -> ValidationResult:
+        """Check for excessive nested archives"""
+        nested_count = sum(
+            1 for name in namelist if name.lower().endswith(('.zip', '.tar', '.gz'))
+        )
+        if nested_count > self.MAX_NESTING_DEPTH:
+            return ValidationResult(
+                is_valid=False,
+                file_type=expected_type,
+                reason=f'Archive bomb: Contains {nested_count} nested archives',
+                validation_check='ArchiveBombStrategy'
+            )
+        return ValidationResult(is_valid=True, file_type=expected_type, reason='')
+
+    def _corrupted_archive_result(self, archive_type: str) -> ValidationResult:
+        """Return validation result for corrupted archive"""
         return ValidationResult(
-            is_valid=True,
-            file_type=expected_type,
-            reason=''
+            is_valid=False,
+            file_type='unknown',
+            reason=f'Corrupted {archive_type} archive',
+            validation_check='ArchiveBombStrategy'
         )
 
     def _check_tar_bomb(self, file_path: Path, expected_type: str) -> ValidationResult:
         """Check TAR file for bomb characteristics"""
         try:
             with tarfile.open(file_path, 'r:*') as tf:
-                # Get uncompressed size estimate
                 uncompressed_size = sum(member.size for member in tf.getmembers())
                 compressed_size = file_path.stat().st_size
 
-                # Check uncompressed size limit
-                max_size_bytes = self.MAX_UNCOMPRESSED_SIZE_MB * 1024 * 1024
-                if uncompressed_size > max_size_bytes:
-                    return ValidationResult(
-                        is_valid=False,
-                        file_type=expected_type,
-                        reason=f'Archive bomb: Uncompressed size {uncompressed_size // (1024*1024)} MB exceeds limit',
-                        validation_check='ArchiveBombStrategy'
-                    )
-
-                # Check compression ratio
-                if compressed_size > 0:
-                    ratio = uncompressed_size / compressed_size
-                    if ratio > self.MAX_COMPRESSION_RATIO:
-                        return ValidationResult(
-                            is_valid=False,
-                            file_type=expected_type,
-                            reason=f'Archive bomb: Compression ratio {ratio:.0f}:1 is suspicious',
-                            validation_check='ArchiveBombStrategy'
-                        )
+                return self._check_archive_sizes(
+                    compressed_size, uncompressed_size, expected_type
+                )
 
         except (tarfile.TarError, EOFError):
-            return ValidationResult(
-                is_valid=False,
-                file_type='unknown',
-                reason='Corrupted TAR archive',
-                validation_check='ArchiveBombStrategy'
-            )
+            return self._corrupted_archive_result('TAR')
         except Exception:
-            # If we can't read the archive, let it through
             pass
 
-        return ValidationResult(
-            is_valid=True,
-            file_type=expected_type,
-            reason=''
-        )
+        return ValidationResult(is_valid=True, file_type=expected_type, reason='')
 
 
 class ExtensionMismatchStrategy:

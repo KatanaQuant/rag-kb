@@ -2,7 +2,7 @@
 
 Complete guide to managing and monitoring your RAG-KB instance via API endpoints.
 
-**Version**: v1.6.3+
+**Version**: v1.7.11
 
 ---
 
@@ -47,7 +47,7 @@ On every API startup, the system automatically:
 
 The file watcher monitors `knowledge_base/` recursively and automatically queues files for indexing.
 
-**Supported file types**: `.pdf`, `.md`, `.txt`, `.docx`, `.epub`, `.py`, `.java`, `.ts`, `.tsx`, `.js`, `.jsx`, `.cs`, `.ipynb`
+**Supported file types**: `.pdf`, `.md`, `.docx`, `.epub`, `.py`, `.java`, `.ts`, `.tsx`, `.js`, `.jsx`, `.cs`, `.go`, `.ipynb`
 
 **Debounce**: 2 seconds (configurable via `WATCHER_DEBOUNCE_SECONDS`)
 
@@ -1020,18 +1020,20 @@ curl http://localhost:8000/queue/jobs | jq '.workers_running'
 
 ### Optimizing Throughput
 
-1. **Adjust worker count** (`.env`):
+1. **Use default worker settings** (`.env`):
    ```bash
-   CHUNK_WORKERS=1       # Keep at 1 (bottleneck is extraction)
-   EMBED_WORKERS=6       # Increase for more parallel embedding
+   CHUNK_WORKERS=2          # Default (more workers don't help - GIL)
+   EMBEDDING_WORKERS=2      # Default (more workers don't help - GIL)
+   EMBEDDING_BATCH_SIZE=32  # Batch encoding provides 10-50x speedup
    ```
+   Note: Increasing worker counts does not improve performance due to Python GIL contention.
 
 2. **Monitor pipeline bottlenecks**:
    ```bash
    curl http://localhost:8000/queue/jobs | jq '.queue_sizes'
    ```
-   - Large `chunk` queue: Slow extraction (CPU-bound)
-   - Large `embed` queue: Need more EMBED_WORKERS
+   - Large `chunk` queue: Slow extraction (CPU-bound, OCR)
+   - Large `embed` queue: Normal - batch encoding processes in batches
    - Large `store` queue: Database I/O issue
 
 3. **Batch operations**:

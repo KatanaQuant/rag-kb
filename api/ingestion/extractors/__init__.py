@@ -17,7 +17,6 @@ from ingestion.extractors._docling_availability import (
 )
 from ingestion.extractors.docling_extractor import DoclingExtractor
 from ingestion.extractors.docx_extractor import DOCXExtractor
-from ingestion.extractors.text_file_extractor import TextFileExtractor
 from ingestion.extractors.markdown_extractor import MarkdownExtractor
 from ingestion.extractors.epub_extractor import EpubExtractor
 from ingestion.extractors.code_extractor import CodeExtractor
@@ -28,7 +27,6 @@ __all__ = [
     'DOCLING_CHUNKING_AVAILABLE',
     'DoclingExtractor',
     'DOCXExtractor',
-    'TextFileExtractor',
     'MarkdownExtractor',
     'EpubExtractor',
     'CodeExtractor',

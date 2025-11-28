@@ -2,12 +2,15 @@
 
 Extracts and chunks Obsidian notes while building knowledge graph.
 Combines:
-- Semantic markdown chunking (Docling HybridChunker)
+- Docling HybridChunker for token-aware chunking (replaces SemanticChunker)
 - Wikilink/tag extraction (obsidiantools)
 - Knowledge graph construction (NetworkX)
 - Graph-aware metadata enrichment
 
 Follows Sandi Metz principles: small methods, single responsibility, <10 lines each.
+
+v1.7.2: Switched from SemanticChunker to Docling HybridChunker to fix
+oversized chunks (252K+ chars) from files with very long single lines.
 """
 
 from pathlib import Path
@@ -18,8 +21,8 @@ import yaml
 from domain_models import ExtractionResult
 from ingestion.obsidian_graph import ObsidianGraphBuilder
 from ingestion.obsidian.frontmatter_parser import FrontmatterParser
-from ingestion.obsidian.semantic_chunker import SemanticChunker
 from ingestion.obsidian.graph_enricher import GraphEnricher
+from ingestion.extractors.docling_extractor import DoclingExtractor
 
 try:
     import obsidiantools.api as obsidian_api
@@ -28,13 +31,12 @@ except ImportError:
     OBSIDIANTOOLS_AVAILABLE = False
 
 class ObsidianExtractor:
-    
+    """Extracts Obsidian notes with graph enrichment using Docling HybridChunker"""
 
     def __init__(self, graph_builder: Optional[ObsidianGraphBuilder] = None):
-        
+        """Initialize extractor with optional shared graph builder"""
         self.graph_builder = graph_builder or ObsidianGraphBuilder()
         self.frontmatter_parser = FrontmatterParser()
-        self.semantic_chunker = SemanticChunker()
         self.wikilink_pattern = re.compile(r'\[\[([^\]|]+)(?:\|([^\]]+))?\]\]')
         self.tag_pattern = re.compile(r'#([\w/\-]+)')
 
@@ -53,7 +55,11 @@ class ObsidianExtractor:
         return extractor._extract_note(path)
 
     def _extract_note(self, path: Path) -> ExtractionResult:
-        """Main extraction pipeline"""
+        """Main extraction pipeline
+
+        Uses Docling HybridChunker for token-aware chunking, then enriches
+        with graph metadata.
+        """
         content = self._read_file(path)
         title = path.stem
         frontmatter = self.frontmatter_parser.extract_frontmatter(content)
@@ -65,13 +71,25 @@ class ObsidianExtractor:
         # Extract graph metadata BEFORE chunking
         graph_meta = self._build_graph_metadata(node_id, content_without_frontmatter)
 
-        # Semantic chunking with header awareness
-        chunks = self.semantic_chunker.chunk(content_without_frontmatter, path)
+        # Use Docling HybridChunker for proper token-aware chunking
+        chunks = self._chunk_with_docling(path)
 
         # Enrich each chunk with graph metadata
         enriched_chunks = GraphEnricher.enrich_chunks(chunks, graph_meta, title, path)
 
         return ExtractionResult(pages=enriched_chunks, method='obsidian_graph_rag')
+
+    def _chunk_with_docling(self, path: Path) -> List[Tuple[str, Optional[int]]]:
+        """Chunk markdown using Docling HybridChunker
+
+        This replaces SemanticChunker to properly handle:
+        - Very long single lines (minified content, base64, etc.)
+        - Token limits (512 target, 8192 max)
+        """
+        converter = DoclingExtractor.get_converter()
+        result = converter.convert(str(path))
+        document = result.document
+        return DoclingExtractor._extract_hybrid_chunks(document)
 
     def _read_file(self, path: Path) -> str:
         """Read file content"""

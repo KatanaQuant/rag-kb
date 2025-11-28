@@ -1,10 +1,4 @@
-"""
-Queue routes module
-
-Extracted from main.py following POODR principles:
-- Single responsibility: queue operations only
-- Dependency injection via FastAPI Request
-"""
+"""Queue routes module."""
 from fastapi import APIRouter, Request, HTTPException
 from typing import Optional
 

@@ -9,7 +9,6 @@ import sqlite3
 from ingestion import (
     FileHasher,
     DOCXExtractor,
-    TextFileExtractor,
     MarkdownExtractor,
     ExtractionRouter,
     DocumentProcessor,
@@ -158,23 +157,6 @@ class TestExtractionResult:
 
         assert result.page_count == 1
         assert result.pages[0][1] is None
-
-
-class TestTextFileExtractor:
-    """Tests for TextFileExtractor"""
-
-    def test_extract_text(self, tmp_path):
-        """Test text file extraction"""
-        file_path = tmp_path / "test.txt"
-        content = "Hello World\nTest Content"
-        file_path.write_text(content)
-
-        result = TextFileExtractor.extract(file_path)
-
-        assert result.page_count == 1
-        assert result.pages[0][0] == content
-        assert result.pages[0][1] is None  # No page number for text
-        assert result.method == 'text'
 
 
 class TestMarkdownExtractor:

@@ -20,13 +20,8 @@ from ingestion.document_repository import DocumentRepository
 from ingestion.chunk_repository import ChunkRepository, VectorChunkRepository, FTSChunkRepository
 from ingestion.search_repository import SearchRepository
 
-# Suppress verbose Docling/PDF warnings and errors
-logging.getLogger('pdfminer').setLevel(logging.CRITICAL)
-logging.getLogger('PIL').setLevel(logging.CRITICAL)
-logging.getLogger('docling').setLevel(logging.CRITICAL)
-logging.getLogger('docling_parse').setLevel(logging.CRITICAL)
-logging.getLogger('docling_core').setLevel(logging.CRITICAL)
-logging.getLogger('pdfium').setLevel(logging.CRITICAL)
+# Centralized logging configuration - import triggers suppression
+import ingestion.logging_config  # noqa: F401
 
 try:
     from docling.document_converter import DocumentConverter
@@ -305,11 +300,7 @@ class SchemaManager:
 
 
 class VectorRepository:
-    """Facade that delegates to focused repositories.
-
-    LEGACY COMPATIBILITY: Maintains old interface while delegating to new repositories.
-    This allows incremental migration of call sites.
-    """
+    """Facade that delegates to focused repositories."""
 
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
@@ -337,8 +328,31 @@ class VectorRepository:
         return True
 
     def _update_path_after_move(self, hash_val: str, old_path: str, new_path: str):
-        """Update file path after move (preserves chunks/embeddings)"""
+        """Update file path after move (preserves chunks/embeddings)
+
+        Handles case where new_path already exists in DB (duplicate/conflict):
+        - If new_path exists, delete the old record (old_path) instead of updating
+        - This keeps the existing record at new_path intact
+        """
         try:
+            # Check if new_path already exists in the database
+            existing_at_new_path = self.documents.find_by_path(new_path)
+            if existing_at_new_path:
+                # new_path already has a document - delete the OLD record instead
+                # The document at new_path is already correct (same content, new location)
+                from ingestion.graph_repository import GraphRepository
+                graph_repo = GraphRepository(self.conn)
+                graph_repo.delete_note_nodes(old_path)
+                self.documents.delete(old_path)
+                self.conn.execute(
+                    "DELETE FROM processing_progress WHERE file_path = ?",
+                    (old_path,)
+                )
+                self.conn.commit()
+                print(f"  Removed stale record: {old_path} (superseded by {new_path})")
+                return
+
+            # Normal case: new_path doesn't exist, update the path
             import uuid
             temp_path = f"__temp_move_{uuid.uuid4().hex}__"
 

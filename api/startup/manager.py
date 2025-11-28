@@ -70,7 +70,7 @@ class StartupManager:
 
         # Initialize async store for API routes
         self.state.core.async_vector_store = AsyncVectorStore()
-        await self.state.core.async_vector_store.initialize()
+        await self.state.initialize_async_vector_store()
         print("Async vector store initialized (for API routes)")
 
     def _init_progress_tracker(self):
@@ -107,7 +107,7 @@ class StartupManager:
             indexer,
             pipeline_coordinator=self.state.indexing.pipeline_coordinator
         )
-        self.state.indexing.worker.start()
+        self.state.start_worker()
         print("Indexing queue and worker started")
 
     def _init_concurrent_pipeline(self):
@@ -133,14 +133,16 @@ class StartupManager:
         import os
         from pipeline.embedding_service import EmbeddingService
 
-        max_workers = int(os.getenv('EMBEDDING_WORKERS', '3'))
+        max_workers = int(os.getenv('EMBEDDING_WORKERS', '2'))
         max_pending = int(os.getenv('MAX_PENDING_EMBEDDINGS', '6'))
+        batch_size = int(os.getenv('EMBEDDING_BATCH_SIZE', '32'))
 
         return EmbeddingService(
             self.state.core.model,
             self.state.core.vector_store,
             max_workers=max_workers,
-            max_pending=max_pending
+            max_pending=max_pending,
+            batch_size=batch_size
         )
 
     def _start_pipeline(self, embedding_service, indexer):
@@ -150,9 +152,10 @@ class StartupManager:
         self.state.indexing.pipeline_coordinator = PipelineCoordinator(
             processor=self.state.core.processor,
             indexer=indexer,
-            embedding_service=embedding_service
+            embedding_service=embedding_service,
+            indexing_queue=self.state.indexing.queue  # For mark_complete() callback
         )
-        self.state.indexing.pipeline_coordinator.start()
+        self.state.start_pipeline_coordinator()
         print("Concurrent pipeline started")
 
     def _sanitize_before_indexing(self):
@@ -248,7 +251,7 @@ class StartupManager:
         """Create indexer"""
         from pipeline import EmbeddingService
         import os
-        embedding_workers = int(os.getenv('EMBEDDING_WORKERS', '3'))
+        embedding_workers = int(os.getenv('EMBEDDING_WORKERS', '2'))
         max_pending = int(os.getenv('MAX_PENDING_EMBEDDINGS', str(embedding_workers * 2)))
         embedding_service = EmbeddingService(
             model=self.state.core.model,
@@ -269,7 +272,14 @@ class StartupManager:
         thread.start()
 
     def _background_indexing_task(self):
-        """Background task with sanitization stage before indexing"""
+        """Background task with sanitization stage before indexing
+
+        Flow:
+        1. Start watcher (system responsive immediately)
+        2. Sanitization: repair orphans from previous runs
+        3. Index new files
+        4. Post-indexing orphan check: catch orphans created during indexing
+        """
         # Start watcher first so system is responsive immediately
         self._start_watcher()
 
@@ -283,6 +293,32 @@ class StartupManager:
         finally:
             self.state.runtime.indexing_in_progress = False
 
+        # Post-indexing orphan check (catches orphans created during indexing)
+        self._check_post_indexing_orphans()
+
+    def _check_post_indexing_orphans(self):
+        """Check for orphans created during initial indexing
+
+        This catches orphans that were created during _index_docs() which
+        the pre-indexing sanitization stage couldn't detect.
+
+        Issue #2 in KNOWN_ISSUES.md - orphans during initial indexing.
+        """
+        if not self._is_auto_repair_enabled():
+            return
+
+        if not self.state.core.progress_tracker:
+            return
+
+        print("\n=== Post-Indexing Orphan Check ===")
+        orphans = self._detect_orphans()
+        if orphans:
+            print(f"Found {len(orphans)} orphans created during indexing")
+            self._queue_orphans_for_repair(orphans)
+        else:
+            print("No post-indexing orphans found")
+        print("=== Post-Indexing Check Complete ===\n")
+
     def _start_watcher(self):
         """Start file watcher if enabled"""
         if not default_config.watcher.enabled:
@@ -295,5 +331,5 @@ class StartupManager:
             debounce_seconds=default_config.watcher.debounce_seconds,
             batch_size=default_config.watcher.batch_size
         )
-        self.state.runtime.watcher.start()
+        self.state.start_watcher()
 

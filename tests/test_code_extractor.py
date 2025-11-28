@@ -98,3 +98,64 @@ func (c *Calculator) Add(n int) {
         assert all(len(text.strip()) > 0 for text, _ in result.pages)
         # Should respect function boundaries (multiple chunks for multiple functions)
         assert len(result.pages) >= 3  # main, add, subtract at minimum
+
+    def test_extracts_javascript_code_with_ast_chunking(self, tmp_path):
+        """Should extract and chunk JavaScript code using AST
+
+        Issue #4: JavaScript extraction fails because astchunk doesn't support JS.
+        Solution: Use TreeSitterChunker (like Go) for JavaScript.
+        """
+        # Create a JavaScript file with typical code
+        js_file = tmp_path / "test.js"
+        js_file.write_text("""
+var navLinks = document.querySelectorAll("nav a");
+for (var i = 0; i < navLinks.length; i++) {
+    var link = navLinks[i]
+    if (link.getAttribute('href') == window.location.pathname) {
+        link.classList.add("live");
+        break;
+    }
+}
+
+function greet(name) {
+    return "Hello, " + name + "!";
+}
+
+const add = (a, b) => a + b;
+""")
+
+        # Extract with AST chunking
+        result = CodeExtractor.extract(js_file)
+
+        assert result.success is True
+        assert result.method == 'ast_javascript'
+        assert len(result.pages) > 0
+        # Should have actual code chunks, not empty
+        assert all(len(text.strip()) > 0 for text, _ in result.pages)
+
+    def test_extracts_tsx_code_with_ast_chunking(self, tmp_path):
+        """Should extract and chunk TSX code using AST
+
+        TSX also not supported by astchunk, needs TreeSitterChunker.
+        """
+        tsx_file = tmp_path / "Component.tsx"
+        tsx_file.write_text("""
+import React from 'react';
+
+interface Props {
+    name: string;
+}
+
+const Greeting: React.FC<Props> = ({ name }) => {
+    return <div>Hello, {name}!</div>;
+};
+
+export default Greeting;
+""")
+
+        result = CodeExtractor.extract(tsx_file)
+
+        assert result.success is True
+        assert result.method == 'ast_tsx'
+        assert len(result.pages) > 0
+        assert all(len(text.strip()) > 0 for text, _ in result.pages)

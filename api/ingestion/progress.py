@@ -17,13 +17,8 @@ from config import default_config
 from hybrid_search import HybridSearcher
 from domain_models import ChunkData, DocumentFile, ExtractionResult
 
-# Suppress verbose Docling/PDF warnings and errors
-logging.getLogger('pdfminer').setLevel(logging.CRITICAL)
-logging.getLogger('PIL').setLevel(logging.CRITICAL)
-logging.getLogger('docling').setLevel(logging.CRITICAL)
-logging.getLogger('docling_parse').setLevel(logging.CRITICAL)
-logging.getLogger('docling_core').setLevel(logging.CRITICAL)
-logging.getLogger('pdfium').setLevel(logging.CRITICAL)
+# Centralized logging configuration - import triggers suppression
+import ingestion.logging_config  # noqa: F401
 
 try:
     from docling.document_converter import DocumentConverter

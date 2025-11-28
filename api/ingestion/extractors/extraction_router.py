@@ -1,8 +1,7 @@
 """
-Extraction router
+Extraction router.
 
 Routes extraction requests to specialized extractors based on file type.
-Extracted from extractors.py during modularization refactoring.
 """
 from pathlib import Path
 from typing import Dict

@@ -1,10 +1,4 @@
-"""
-Document routes module
-
-Extracted from main.py following POODR principles:
-- Single responsibility: document operations only
-- Dependency injection via FastAPI Request
-"""
+"""Document routes module."""
 from fastapi import APIRouter, Request, HTTPException
 
 from models import DocumentInfoResponse

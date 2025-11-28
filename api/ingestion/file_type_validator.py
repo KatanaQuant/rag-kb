@@ -3,8 +3,6 @@ File type validation for document security.
 
 Validates files before indexing to prevent malicious content from being processed.
 Uses magic byte verification to ensure file type matches extension.
-
-REFACTORED: Reduced cyclomatic complexity from CC: 12 to < 5 using Strategy pattern.
 """
 from pathlib import Path
 from ingestion.validation_result import ValidationResult, ValidationAction
@@ -26,10 +24,9 @@ from config import default_config
 
 
 class FileTypeValidator:
-    """Validates file types using magic byte signatures
+    """Validates file types using magic byte signatures.
 
-    REFACTORED: Uses Strategy pattern to compose validation logic.
-    Reduced cyclomatic complexity from CC: 12 to CC: 3.
+    Uses Strategy pattern to compose validation logic.
 
     Validation Strategies:
     - FileExistenceStrategy: Check file exists and not empty
@@ -38,13 +35,13 @@ class FileTypeValidator:
     - ExecutableCheckStrategy: Detect executables (security)
     - MagicSignatureStrategy: Validate binary file signatures
 
-    Security Strategies (Anti-Malware):
+    Security Strategies:
     - FileSizeStrategy: Prevent file size bombs
     - ArchiveBombStrategy: Detect compression bombs
     - ExtensionMismatchStrategy: Catch executables renamed as documents
     - ExecutablePermissionStrategy: Detect files with exec permissions
 
-    Advanced Malware Detection (Phase 3):
+    Advanced Malware Detection:
     - ClamAV: Virus signature scanning (optional)
     - Hash Blacklist: Known malware SHA256 database (optional)
     - YARA: Custom pattern matching (optional)
@@ -65,28 +62,26 @@ class FileTypeValidator:
         self.executable_check = ExecutableCheckStrategy()
         self.magic_signature = MagicSignatureStrategy()
 
-        # Security strategies (anti-malware)
+        # Security strategies
         self.file_size = FileSizeStrategy(max_size_mb=500, warn_size_mb=100)
         self.archive_bomb = ArchiveBombStrategy()
         self.extension_mismatch = ExtensionMismatchStrategy()
         self.exec_permission = ExecutablePermissionStrategy()
 
-        # Advanced malware detection (Phase 3)
+        # Advanced malware detection
         self.malware_detector = AdvancedMalwareDetector(default_config.malware_detection)
 
     def validate(self, file_path: Path) -> ValidationResult:
-        """Validate file type matches extension using strategy composition
-
-        REFACTORED: Reduced from CC: 12 to CC: 3 using Strategy pattern.
+        """Validate file type matches extension using strategy composition.
 
         Validation chain:
         1. FileExistenceStrategy - file exists and not empty
-        2. FileSizeStrategy - file size within limits (anti-malware)
+        2. FileSizeStrategy - file size within limits
         3. ExtensionStrategy - extension is supported
-        4. ExecutablePermissionStrategy - no exec permissions (anti-malware)
-        5. ExtensionMismatchStrategy - extension matches content (anti-malware)
-        6. ArchiveBombStrategy - compression ratio safe (anti-malware)
-        7. AdvancedMalwareDetector - ClamAV/hash/YARA (optional, Phase 3)
+        4. ExecutablePermissionStrategy - no exec permissions
+        5. ExtensionMismatchStrategy - extension matches content
+        6. ArchiveBombStrategy - compression ratio safe
+        7. AdvancedMalwareDetector - ClamAV/hash/YARA (optional)
         8. TextFileStrategy OR (ExecutableCheckStrategy + MagicSignatureStrategy)
 
         Args:
@@ -127,7 +122,7 @@ class FileTypeValidator:
         if not result.is_valid:
             return result
 
-        # Step 7: Advanced malware detection (Phase 3)
+        # Step 7: Advanced malware detection
         result = self.malware_detector.validate(file_path, expected_type)
         if not result.is_valid:
             return result

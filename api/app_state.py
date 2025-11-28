@@ -175,3 +175,25 @@ class AppState:
         if self.indexing.worker:
             return self.indexing.worker.is_running()
         return False
+
+    # === Startup Lifecycle Delegation ===
+
+    async def initialize_async_vector_store(self):
+        """Initialize async vector store connection"""
+        if self.core.async_vector_store:
+            await self.core.async_vector_store.initialize()
+
+    def start_worker(self):
+        """Start indexing worker"""
+        if self.indexing.worker:
+            self.indexing.worker.start()
+
+    def start_pipeline_coordinator(self):
+        """Start pipeline coordinator"""
+        if self.indexing.pipeline_coordinator:
+            self.indexing.pipeline_coordinator.start()
+
+    def start_watcher(self):
+        """Start file watcher service"""
+        if self.runtime.watcher:
+            self.runtime.watcher.start()

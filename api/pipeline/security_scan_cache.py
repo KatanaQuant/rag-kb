@@ -64,51 +64,48 @@ class SecurityScanCache:
         return conn
 
     def get(self, file_hash: str) -> Optional[CachedScanResult]:
-        """Get cached scan result for file hash
-
-        Args:
-            file_hash: SHA256 hash of file content
-
-        Returns:
-            CachedScanResult if found and valid, None otherwise
-        """
+        """Get cached scan result for file hash"""
         conn = self._get_connection()
         try:
-            cursor = conn.execute(
-                """
-                SELECT * FROM security_scan_cache
-                WHERE file_hash = ? AND scanner_version = ?
-                """,
-                (file_hash, SCANNER_VERSION)
-            )
-            row = cursor.fetchone()
-
-            if not row:
-                return None
-
-            # Parse matches JSON
-            matches = []
-            if row['matches_json']:
-                try:
-                    matches = json.loads(row['matches_json'])
-                except json.JSONDecodeError:
-                    pass
-
-            return CachedScanResult(
-                file_hash=row['file_hash'],
-                is_valid=bool(row['is_valid']),
-                severity=row['severity'],
-                reason=row['reason'] or '',
-                validation_check=row['validation_check'] or '',
-                matches=matches,
-                scanned_at=row['scanned_at'],
-                scanner_version=row['scanner_version']
-            )
+            row = self._fetch_cache_row(conn, file_hash)
+            return self._row_to_result(row) if row else None
         except sqlite3.OperationalError:
-            # Table doesn't exist yet
             return None
         finally:
             conn.close()
+
+    def _fetch_cache_row(self, conn, file_hash: str):
+        """Fetch cache row by hash and version"""
+        cursor = conn.execute(
+            """
+            SELECT * FROM security_scan_cache
+            WHERE file_hash = ? AND scanner_version = ?
+            """,
+            (file_hash, SCANNER_VERSION)
+        )
+        return cursor.fetchone()
+
+    def _row_to_result(self, row) -> CachedScanResult:
+        """Convert database row to CachedScanResult"""
+        return CachedScanResult(
+            file_hash=row['file_hash'],
+            is_valid=bool(row['is_valid']),
+            severity=row['severity'],
+            reason=row['reason'] or '',
+            validation_check=row['validation_check'] or '',
+            matches=self._parse_matches(row['matches_json']),
+            scanned_at=row['scanned_at'],
+            scanner_version=row['scanner_version']
+        )
+
+    def _parse_matches(self, matches_json: str) -> list:
+        """Parse matches JSON, returning empty list on failure"""
+        if not matches_json:
+            return []
+        try:
+            return json.loads(matches_json)
+        except json.JSONDecodeError:
+            return []
 
     def set(
         self,

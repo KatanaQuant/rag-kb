@@ -122,24 +122,31 @@ class CompletenessAnalyzer:
 
     def _build_summary(self, reports: List[DocumentCompletenessReport]) -> Dict:
         """Build summary from reports"""
-        complete = [r for r in reports if r.is_complete]
+        complete_count = sum(1 for r in reports if r.is_complete)
         incomplete = [r for r in reports if not r.is_complete]
-
-        issues = []
-        for report in incomplete:
-            for issue in report.issues:
-                issues.append({
-                    'file_path': report.file_path,
-                    'document_id': report.document_id,
-                    'issue': issue.issue.value if issue.issue else 'unknown',
-                    'expected': issue.expected,
-                    'actual': issue.actual,
-                    'message': issue.message
-                })
 
         return {
             'total_documents': len(reports),
-            'complete': len(complete),
+            'complete': complete_count,
             'incomplete': len(incomplete),
-            'issues': issues
+            'issues': self._extract_issues(incomplete)
+        }
+
+    def _extract_issues(self, incomplete: List[DocumentCompletenessReport]) -> List[Dict]:
+        """Extract issues from incomplete reports"""
+        issues = []
+        for report in incomplete:
+            for issue in report.issues:
+                issues.append(self._format_issue(report, issue))
+        return issues
+
+    def _format_issue(self, report: DocumentCompletenessReport, issue) -> Dict:
+        """Format a single issue for output"""
+        return {
+            'file_path': report.file_path,
+            'document_id': report.document_id,
+            'issue': issue.issue.value if issue.issue else 'unknown',
+            'expected': issue.expected,
+            'actual': issue.actual,
+            'message': issue.message
         }

@@ -19,7 +19,7 @@ from pipeline.quarantine_manager import QuarantineManager, QUARANTINE_CHECKS
 SCAN_WORKERS = 8
 SUPPORTED_EXTENSIONS = [
     '.pdf', '.md', '.markdown', '.docx', '.epub', '.py', '.java',
-    '.ts', '.tsx', '.js', '.jsx', '.cs', '.go', '.ipynb', '.txt'
+    '.ts', '.tsx', '.js', '.jsx', '.cs', '.go', '.ipynb'
 ]
 
 

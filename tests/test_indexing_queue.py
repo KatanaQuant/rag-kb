@@ -180,17 +180,31 @@ class TestIndexingQueue:
         assert queue.is_empty()
 
     def test_duplicate_detection_with_force(self):
-        """Force flag bypasses duplicate detection"""
+        """Force flag does NOT bypass queue deduplication (v1.7.3 fix)
+
+        The force flag only affects reindexing behavior (whether to reindex
+        already-indexed files). Queue deduplication always applies to prevent
+        duplicate processing of files already in the queue.
+        """
         queue = IndexingQueue()
         path = Path("test.pdf")
 
         queue.add(path)
-        queue.add(path, force=True)  # Force - should be added
+        queue.add(path, force=True)  # Force only affects reindexing, not queue dedup
 
-        assert queue.size() == 2
+        # Queue deduplication always applies - only 1 item in queue
+        assert queue.size() == 1
+
+        # But the force flag should be preserved on the item
+        item = queue.get()
+        assert item.path == path
 
     def test_duplicate_tracking_after_get(self):
-        """File can be re-queued after being dequeued"""
+        """File stays tracked after get() - must call mark_complete() to re-queue
+
+        This prevents race conditions where a file could be re-queued during
+        processing (e.g., from duplicate watcher events).
+        """
         queue = IndexingQueue()
         path = Path("test.pdf")
 
@@ -198,7 +212,44 @@ class TestIndexingQueue:
         item = queue.get()
         assert item.path == path
 
-        # Should be able to add again after processing
+        # File is still tracked after get() - cannot re-add yet
+        queue.add(path)
+        assert queue.size() == 0  # Didn't get added - still tracked
+
+        # After mark_complete(), can re-queue
+        queue.mark_complete(path)
+        queue.add(path)
+        assert queue.size() == 1
+
+    def test_mark_complete(self):
+        """mark_complete() removes file from tracking set"""
+        queue = IndexingQueue()
+        path = Path("test.pdf")
+
+        queue.add(path)
+        queue.get()  # Dequeue but still tracked
+
+        # Can't add while tracked
+        queue.add(path)
+        assert queue.size() == 0
+
+        # After mark_complete, tracking removed
+        queue.mark_complete(path)
+        queue.add(path)
+        assert queue.size() == 1
+
+    def test_mark_complete_idempotent(self):
+        """mark_complete() is safe to call multiple times"""
+        queue = IndexingQueue()
+        path = Path("test.pdf")
+
+        queue.add(path)
+        queue.get()
+
+        # Multiple mark_complete calls are safe
+        queue.mark_complete(path)
+        queue.mark_complete(path)  # Should not raise
+
         queue.add(path)
         assert queue.size() == 1
 

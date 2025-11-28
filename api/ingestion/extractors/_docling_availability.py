@@ -2,19 +2,10 @@
 Docling availability flags
 
 Shared module for checking Docling library availability across extractors.
-Extracted from extractors.py during modularization refactoring.
 """
-import logging
 
-# Suppress verbose Docling/PDF warnings and errors
-logging.getLogger('pdfminer').setLevel(logging.CRITICAL)
-logging.getLogger('PIL').setLevel(logging.CRITICAL)
-logging.getLogger('docling').setLevel(logging.CRITICAL)
-logging.getLogger('docling_parse').setLevel(logging.CRITICAL)
-logging.getLogger('docling_core').setLevel(logging.CRITICAL)
-logging.getLogger('pdfium').setLevel(logging.CRITICAL)
-# RapidOCR/EasyOCR warnings (like "text detection result is empty") are normal
-# when OCR checks images/pages and finds no text to extract
+# Centralized logging configuration - import triggers suppression
+import ingestion.logging_config  # noqa: F401
 
 try:
     from docling.document_converter import DocumentConverter

@@ -16,14 +16,16 @@ services:
       - ./knowledge_base:/app/knowledge_base
       - ./data:/app/data
       - ./tests:/app/tests  # Mount tests directory for test execution
-      - ./api/ingestion:/app/ingestion  # Dev mount for ingestion modules
-      - ./api/operations:/app/operations  # Dev mount for API operations (query, list, search)
-      - ./api/routes:/app/routes  # Dev mount for route handlers
-      - ./api/pipeline:/app/pipeline  # Dev mount for pipeline services (embedding, queue, workers)
-      - ./api/startup:/app/startup  # Dev mount for startup services
-      - ./api/main.py:/app/main.py  # Dev mount for main.py changes
-      - ./api/config.py:/app/config.py  # Config file
-      - ./api/environment_config_loader.py:/app/environment_config_loader.py  # Environment loader
+      # HOT RELOAD DISABLED (production config)
+      # Uncomment for development:
+      # - ./api/ingestion:/app/ingestion
+      # - ./api/operations:/app/operations
+      # - ./api/routes:/app/routes
+      # - ./api/pipeline:/app/pipeline
+      # - ./api/startup:/app/startup
+      # - ./api/main.py:/app/main.py
+      # - ./api/config.py:/app/config.py
+      # - ./api/environment_config_loader.py:/app/environment_config_loader.py
       - ./api/migrations:/app/migrations  # Migration scripts
       - ./config:/app/yara_config  # Mount config directory for YARA rules
       - ./.cache/deepsearch_glm:/app/.cache/deepsearch_glm  # DeepSearch GLM cache
@@ -41,13 +43,14 @@ services:
       - SEMANTIC_CHUNKING=${SEMANTIC_CHUNKING:-true}  # Enable semantic chunking (default)
       - CHUNK_MAX_TOKENS=${CHUNK_MAX_TOKENS:-512}  # Max tokens per semantic chunk
       - AUTO_REPAIR_ORPHANS=${AUTO_REPAIR_ORPHANS:-true}  # Auto-repair orphaned files on startup
-      - CHUNK_WORKERS=${CHUNK_WORKERS:-1}  # Concurrent chunking threads
-      - EMBEDDING_WORKERS=${EMBEDDING_WORKERS:-2}  # Concurrent embedding threads (2 for CPU, increase for GPU)
+      - CHUNK_WORKERS=${CHUNK_WORKERS:-1}  # Concurrent chunking threads (1 for Balanced profile)
+      - EMBEDDING_WORKERS=${EMBEDDING_WORKERS:-2}  # Concurrent embedding threads (2 optimal for GIL)
+      - EMBEDDING_BATCH_SIZE=${EMBEDDING_BATCH_SIZE:-32}  # Chunks per batch for embedding (32 optimal for CPU)
       - MAX_PENDING_EMBEDDINGS=${MAX_PENDING_EMBEDDINGS:-6}  # Max queued embeddings before throttling
-      - OMP_NUM_THREADS=2  # Limit OpenMP threads to prevent deadlock
-      - MKL_NUM_THREADS=2  # Limit MKL threads
-      - OPENBLAS_NUM_THREADS=2  # Limit OpenBLAS threads
-      - NUMEXPR_NUM_THREADS=2  # Limit NumExpr threads
+      - OMP_NUM_THREADS=${OMP_NUM_THREADS:-2}  # OpenMP threads per worker
+      - MKL_NUM_THREADS=${MKL_NUM_THREADS:-2}  # MKL threads
+      - OPENBLAS_NUM_THREADS=${OMP_NUM_THREADS:-2}  # OpenBLAS threads (follows OMP)
+      - NUMEXPR_NUM_THREADS=${OMP_NUM_THREADS:-2}  # NumExpr threads (follows OMP)
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -57,5 +60,5 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '${MAX_CPUS:-12.8}'
-          memory: ${MAX_MEMORY:-24G}
+          cpus: '${MAX_CPUS:-4.0}'
+          memory: ${MAX_MEMORY:-8G}

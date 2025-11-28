@@ -148,56 +148,51 @@ class QuarantineManager:
             return False
 
     def restore_file(self, quarantined_filename: str, force: bool = False) -> bool:
-        """Restore file from quarantine to original location
-
-        Args:
-            quarantined_filename: Name of quarantined file (e.g., "file.pdf.REJECTED")
-            force: Force restore even if original path exists
-
-        Returns:
-            True if restored successfully
-        """
+        """Restore file from quarantine to original location"""
         quarantine_path = self.quarantine_dir / quarantined_filename
 
-        if not quarantine_path.exists():
-            print(f"  ❌ File not found in quarantine: {quarantined_filename}")
+        error = self._validate_restore(quarantine_path, quarantined_filename, force)
+        if error:
+            print(error)
             return False
 
-        # Load metadata
-        metadata = self._read_metadata(quarantined_filename)
+        return self._execute_restore(quarantine_path, quarantined_filename)
+
+    def _validate_restore(self, quarantine_path: Path, filename: str, force: bool) -> str | None:
+        """Validate restore is possible, returns error message or None"""
+        if not quarantine_path.exists():
+            return f"  ❌ File not found in quarantine: {filename}"
+
+        metadata = self._read_metadata(filename)
         if not metadata:
-            print(f"  ❌ No metadata found for {quarantined_filename}")
-            return False
+            return f"  ❌ No metadata found for {filename}"
 
         if metadata.restored:
-            print(f"  ⚠️  File already restored at {metadata.restored_at}")
-            return False
+            return f"  ⚠️  File already restored at {metadata.restored_at}"
 
         original_path = Path(metadata.original_path)
-
-        # Check if original location exists
         if original_path.exists() and not force:
-            print(f"  ❌ Original path already exists: {original_path}")
-            print(f"     Use --force to overwrite")
-            return False
+            return f"  ❌ Original path already exists: {original_path}\n     Use --force to overwrite"
+
+        return None
+
+    def _execute_restore(self, quarantine_path: Path, filename: str) -> bool:
+        """Execute the restore operation"""
+        metadata = self._read_metadata(filename)
+        original_path = Path(metadata.original_path)
 
         try:
-            # Ensure parent directory exists
             original_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Move back to original location
             shutil.move(str(quarantine_path), str(original_path))
 
-            # Update metadata
             metadata.restored = True
             metadata.restored_at = datetime.now(timezone.utc).isoformat()
-            self._write_metadata(quarantined_filename, metadata)
+            self._write_metadata(filename, metadata)
 
-            print(f"  ✅ Restored: {quarantined_filename} → {original_path}")
+            print(f"  ✅ Restored: {filename} → {original_path}")
             return True
-
         except Exception as e:
-            print(f"  ❌ Failed to restore {quarantined_filename}: {e}")
+            print(f"  ❌ Failed to restore {filename}: {e}")
             return False
 
     def list_quarantined(self) -> List[QuarantineMetadata]:
@@ -213,39 +208,40 @@ class QuarantineManager:
         return [m for m in all_metadata.values() if not m.restored]
 
     def purge_old_files(self, older_than_days: int, dry_run: bool = False) -> int:
-        """Delete quarantined files older than specified days
-
-        Args:
-            older_than_days: Delete files quarantined more than this many days ago
-            dry_run: If True, only show what would be deleted
-
-        Returns:
-            Number of files purged (or would be purged)
-        """
+        """Delete quarantined files older than specified days"""
         if not self.quarantine_dir.exists():
             return 0
 
         cutoff = datetime.now(timezone.utc).timestamp() - (older_than_days * 86400)
-        purged = 0
+        candidates = self._find_purgeable_files(cutoff)
 
+        for filename, metadata in candidates:
+            self._purge_file(filename, metadata, dry_run)
+
+        return len(candidates)
+
+    def _find_purgeable_files(self, cutoff_timestamp: float) -> list:
+        """Find non-restored files older than cutoff"""
         all_metadata = self._load_all_metadata()
-
+        candidates = []
         for filename, metadata in all_metadata.items():
             if metadata.restored:
                 continue
-
             quarantined_time = datetime.fromisoformat(metadata.quarantined_at).timestamp()
-            if quarantined_time < cutoff:
-                if dry_run:
-                    print(f"  Would purge: {filename} (quarantined {metadata.quarantined_at})")
-                else:
-                    quarantine_path = self.quarantine_dir / filename
-                    if quarantine_path.exists():
-                        quarantine_path.unlink()
-                        print(f"  🗑️  Purged: {filename}")
-                purged += 1
+            if quarantined_time < cutoff_timestamp:
+                candidates.append((filename, metadata))
+        return candidates
 
-        return purged
+    def _purge_file(self, filename: str, metadata: 'QuarantineMetadata', dry_run: bool) -> None:
+        """Purge a single file or print dry-run message"""
+        if dry_run:
+            print(f"  Would purge: {filename} (quarantined {metadata.quarantined_at})")
+            return
+
+        quarantine_path = self.quarantine_dir / filename
+        if quarantine_path.exists():
+            quarantine_path.unlink()
+            print(f"  🗑️  Purged: {filename}")
 
     def _write_metadata(self, quarantined_filename: str, metadata: QuarantineMetadata):
         """Write metadata for quarantined file

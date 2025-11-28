@@ -17,52 +17,45 @@ api/
 │   ├── extractors/           # Format-specific extractors (PDF, DOCX, Markdown, etc.)
 │   ├── chunkers/             # Chunking strategies (HybridChunker, AST-based, etc.)
 │   ├── file_filter.py        # File filtering and exclusion rules
-│   ├── go_chunker.py         # Go language AST chunker
 │   └── ...
-├── api_services/             # Application service layer (9 modules)
+├── operations/               # API operations layer
 │   ├── model_loader.py       # Embedding model management
-│   ├── file_walker.py        # Directory traversal
-│   ├── document_indexer.py   # Document processing orchestration
-│   ├── index_orchestrator.py # Index management
 │   ├── query_executor.py     # Semantic search execution
-│   ├── orphan_detector.py    # Orphan file detection
 │   ├── document_lister.py    # Document listing
-│   └── document_searcher.py  # Document search
-├── services/                 # Core services
+│   └── ...
+├── pipeline/                 # Background processing services
 │   ├── pipeline_coordinator.py  # 3-stage concurrent pipeline
 │   ├── pipeline_workers.py      # Worker pool implementations
 │   ├── indexing_queue.py        # Priority-based queue
 │   └── file_watcher.py          # Auto-sync file monitoring
 ├── startup/                  # Application lifecycle
 │   └── manager.py            # StartupManager
-└── tests/                    # Test suite
+└── tests/                    # Test suite (735 tests)
     ├── test_config.py
     ├── test_ingestion.py
     ├── test_main.py
-    ├── test_version.py
     └── ...
 ```
 
 ### Key Components
 
-**[api/main.py](../api/main.py)** - FastAPI application (530 lines, down from 1246)
+**[api/main.py](../api/main.py)** - FastAPI application entry point
 - Route handlers for all endpoints
 - Application state management
 - Background task coordination
 
-**[api/api_services/](../api/api_services/)** - Service layer (9 modules)
-- Extracted from main.py following single responsibility principle
+**[api/operations/](../api/operations/)** - API operations layer
+- Query execution, document management, security operations
 - Dependency injection for testability
-- Duck typing for flexibility
 
-**[api/services/](../api/services/)** - Core services
-- **PipelineCoordinator**: 3-stage concurrent pipeline (chunk → embed → store)
+**[api/pipeline/](../api/pipeline/)** - Background processing
+- **PipelineCoordinator**: 3-stage concurrent pipeline (chunk, embed, store)
 - **IndexingQueue**: Priority-based queue system (HIGH/NORMAL)
 - **FileWatcher**: Auto-sync with debouncing
 
 **[api/ingestion/](../api/ingestion/)** - Document processing
-- Format extractors (PDF, DOCX, Markdown, Text, EPUB, Jupyter, etc.)
-- Semantic chunking with HybridChunker or AST-based chunking
+- Format extractors (PDF, DOCX, Markdown, EPUB, Jupyter, Code)
+- HybridChunker for documents, AST-based chunking for code
 - Vector storage and retrieval
 
 ## Running Tests

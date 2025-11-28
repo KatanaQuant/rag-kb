@@ -172,6 +172,68 @@ def _extract_validation_check(error_message: str) -> Optional[str]:
     return None
 
 
+def _finding_from_summary(f) -> SecurityFinding:
+    """Convert scanner finding to API response model"""
+    return SecurityFinding(
+        file_path=f.file_path,
+        filename=f.filename,
+        severity=f.severity,
+        reason=f.reason,
+        validation_check=f.validation_check,
+        file_hash=f.file_hash,
+        matches=f.matches,
+        action_taken=f.action_taken
+    )
+
+
+def _build_threats_from_result(result) -> List[Dict[str, Any]]:
+    """Build threat list from validation result"""
+    threats = []
+    if result.matches:
+        for match in result.matches:
+            threats.append({
+                "severity": match.severity.value if match.severity else "UNKNOWN",
+                "rule_name": match.rule_name,
+                "description": match.description,
+                "context": match.context
+            })
+    else:
+        threats.append({
+            "severity": result.severity.value if result.severity else "UNKNOWN",
+            "validation_check": result.validation_check,
+            "reason": result.reason
+        })
+    return threats
+
+
+def _build_status_message(status: str, progress: int, total: int, error: Optional[str]) -> str:
+    """Build human-readable status message for scan job"""
+    if status == 'pending':
+        return "Scan queued, waiting to start"
+    if status == 'running':
+        pct = int(100 * progress / total) if total > 0 else 0
+        return f"Scanning: {progress}/{total} files ({pct}%)"
+    if status == 'completed':
+        return "Scan complete"
+    if status == 'failed':
+        return f"Scan failed: {error or 'Unknown error'}"
+    return f"Unknown status: {status}"
+
+
+def _build_scan_response(summary) -> "ScanResponse":
+    """Build ScanResponse from scanner summary"""
+    return ScanResponse(
+        total_files=summary.total_files,
+        clean_files=summary.clean_files,
+        critical_count=len(summary.critical_findings),
+        warning_count=len(summary.warning_findings),
+        critical_findings=[_finding_from_summary(f) for f in summary.critical_findings],
+        warning_findings=[_finding_from_summary(f) for f in summary.warning_findings],
+        auto_quarantine=summary.auto_quarantine,
+        message=summary.message
+    )
+
+
 # ============================================================================
 # Quarantine Management Endpoints
 # ============================================================================
@@ -355,38 +417,7 @@ def _run_scan_job(job_id: str, auto_quarantine: bool, verbose: bool):
         summary = scanner.scan(job_id, auto_quarantine, update_progress)
 
         _scan_jobs[job_id]['status'] = 'completed'
-        _scan_jobs[job_id]['result'] = ScanResponse(
-            total_files=summary.total_files,
-            clean_files=summary.clean_files,
-            critical_count=len(summary.critical_findings),
-            warning_count=len(summary.warning_findings),
-            critical_findings=[
-                SecurityFinding(
-                    file_path=f.file_path,
-                    filename=f.filename,
-                    severity=f.severity,
-                    reason=f.reason,
-                    validation_check=f.validation_check,
-                    file_hash=f.file_hash,
-                    matches=f.matches,
-                    action_taken=f.action_taken
-                ) for f in summary.critical_findings
-            ],
-            warning_findings=[
-                SecurityFinding(
-                    file_path=f.file_path,
-                    filename=f.filename,
-                    severity=f.severity,
-                    reason=f.reason,
-                    validation_check=f.validation_check,
-                    file_hash=f.file_hash,
-                    matches=f.matches,
-                    action_taken=f.action_taken
-                ) for f in summary.warning_findings
-            ],
-            auto_quarantine=summary.auto_quarantine,
-            message=summary.message
-        )
+        _scan_jobs[job_id]['result'] = _build_scan_response(summary)
 
     except Exception as e:
         _scan_jobs[job_id]['status'] = 'failed'
@@ -523,19 +554,7 @@ async def get_scan_status(job_id: str):
     status = job['status']
     progress = job.get('progress', 0)
     total = job.get('total_files', 0)
-
-    # Build message based on status
-    if status == 'pending':
-        message = "Scan queued, waiting to start"
-    elif status == 'running':
-        pct = int(100 * progress / total) if total > 0 else 0
-        message = f"Scanning: {progress}/{total} files ({pct}%)"
-    elif status == 'completed':
-        message = "Scan complete"
-    elif status == 'failed':
-        message = f"Scan failed: {job.get('error', 'Unknown error')}"
-    else:
-        message = f"Unknown status: {status}"
+    error = job.get('error')
 
     return ScanStatusResponse(
         job_id=job_id,
@@ -543,8 +562,8 @@ async def get_scan_status(job_id: str):
         progress=progress,
         total_files=total,
         result=job.get('result'),
-        error=job.get('error'),
-        message=message
+        error=error,
+        message=_build_status_message(status, progress, total, error)
     )
 
 
@@ -741,28 +760,13 @@ async def scan_single_file(file_path: str = Query(..., description="Relative pat
             "threats_found": 0,
             "scan_time_ms": scan_time_ms
         }
-    else:
-        threats = []
-        if result.matches:
-            for match in result.matches:
-                threats.append({
-                    "severity": match.severity.value if match.severity else "UNKNOWN",
-                    "rule_name": match.rule_name,
-                    "description": match.description,
-                    "context": match.context
-                })
-        else:
-            threats.append({
-                "severity": result.severity.value if result.severity else "UNKNOWN",
-                "validation_check": result.validation_check,
-                "reason": result.reason
-            })
 
-        return {
-            "file_path": file_path,
-            "file_type": result.file_type,
-            "status": "threat_detected",
-            "threats_found": len(threats),
-            "threats": threats,
-            "scan_time_ms": scan_time_ms
-        }
+    threats = _build_threats_from_result(result)
+    return {
+        "file_path": file_path,
+        "file_type": result.file_type,
+        "status": "threat_detected",
+        "threats_found": len(threats),
+        "threats": threats,
+        "scan_time_ms": scan_time_ms
+    }

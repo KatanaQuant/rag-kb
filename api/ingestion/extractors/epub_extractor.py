@@ -1,13 +1,7 @@
 """
-EPUB file extractor
+EPUB file extractor.
 
 Converts EPUB to PDF using Pandoc, keeps PDF, moves EPUB to original/.
-Extracted from extractors.py during modularization refactoring.
-
-Refactored following Sandi Metz principles:
-- Small methods: Each method < 10 lines
-- Single Responsibility: Each method does one thing
-- Reduced cyclomatic complexity from C-11 to A-grade
 """
 from pathlib import Path
 import subprocess
@@ -63,15 +57,27 @@ class EpubExtractor:
         Returns an empty ExtractionResult to signal conversion-only (no extraction).
         """
         EpubExtractor._validate_or_raise(path)
-        pdf_path = path.with_suffix('.pdf')
-        original_dir = EpubExtractor._prepare_original_dir(path)
+
+        # Determine PDF path and whether to archive EPUB
+        already_in_original = path.parent.name == 'original'
+        if already_in_original:
+            # EPUB is already in original/ - put PDF in parent directory (KB root or subdir)
+            pdf_path = path.parent.parent / path.with_suffix('.pdf').name
+            original_dir = None  # Don't move EPUB, it's already archived
+        else:
+            # EPUB is in KB - put PDF alongside it, move EPUB to original/ subdir
+            pdf_path = path.with_suffix('.pdf')
+            original_dir = EpubExtractor._prepare_original_dir(path)
 
         try:
             print(f"Converting EPUB to PDF: {path.name}")
             EpubExtractor._convert_with_pandoc(path, pdf_path)
             EpubExtractor._embed_fonts_with_ghostscript(pdf_path)
             page_count = EpubExtractor._count_pdf_pages(pdf_path)
-            EpubExtractor._archive_epub(path, original_dir)
+            if original_dir:
+                EpubExtractor._archive_epub(path, original_dir)
+            else:
+                print(f"  → EPUB already in original/, skipping archive")
             EpubExtractor._print_success(path.name, pdf_path.name, page_count)
             # Return empty result - PDF will be processed separately
             return ExtractionResult(pages=[], method='epub_conversion_only')

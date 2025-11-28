@@ -19,9 +19,8 @@ The RAG service automatically indexes files in `knowledge_base/` on startup. Sup
 - **C#** (`.cs`): Method and class-level chunking
 - **Go** (`.go`): Function and method-level chunking
 
-**Markdown & Text** (Semantic Chunking):
-- **Markdown** (`.md`, `.markdown`): Semantic chunking with paragraph/section boundary preservation
-- **Text** (`.txt`): Semantic chunking with natural boundary detection
+**Markdown** (HybridChunker):
+- **Markdown** (`.md`, `.markdown`): Token-aware semantic chunking with paragraph/section boundary preservation
 
 **Specialized Formats**:
 - **EPUB** (`.epub`): E-book extraction with chapter preservation
@@ -254,9 +253,112 @@ docker-compose up -d
 curl http://localhost:8000/health
 ```
 
+## Troubleshooting
+
+### No Search Results
+
+**Symptom**: Queries return empty results
+
+```bash
+# Check indexing status
+curl http://localhost:8000/health | jq
+
+# If indexed_documents = 0:
+ls -R knowledge_base/  # Verify files exist
+docker-compose logs rag-api | grep -i error  # Check for errors
+
+# Force reindex
+curl -X POST http://localhost:8000/index \
+  -H "Content-Type: application/json" \
+  -d '{"force_reindex": true}'
+```
+
+### Files Not Being Indexed
+
+**Symptom**: Health shows fewer documents than expected
+
+**Common causes**:
+
+1. **File type not supported**
+   ```bash
+   docker-compose logs rag-api | grep "Unsupported"
+   ```
+
+2. **File filtered out** (check `api/ingestion/file_filter.py`)
+   - Common exclusions: `.git/`, `node_modules/`, `__pycache__/`, `.env`
+
+3. **Extraction failed**
+   ```bash
+   docker-compose logs rag-api | grep -i "error\|failed"
+   ```
+
+**Fix**: Try priority indexing a specific file:
+```bash
+curl -X POST "http://localhost:8000/indexing/priority/knowledge_base/your-file.pdf"
+```
+
+### Slow Indexing
+
+**Symptom**: Indexing takes very long
+
+CPU-only processing is slow by design. Options:
+
+1. **Use faster model** (English-only):
+   ```bash
+   echo "MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1" > .env
+   docker-compose down && rm data/rag.db && docker-compose up --build -d
+   ```
+
+2. **Reduce batch size** (less memory, slower):
+   ```bash
+   echo "BATCH_SIZE=3" >> .env
+   docker-compose restart rag-api
+   ```
+
+See [CONFIGURATION.md](CONFIGURATION.md#resource-profiles) for tuning.
+
+### Poor Search Quality
+
+**Tips for better results**:
+
+1. **Use specific queries**:
+   - Bad: "python"
+   - Good: "python async await error handling patterns"
+
+2. **Increase result count**:
+   ```bash
+   curl -X POST http://localhost:8000/query \
+     -d '{"text": "your query", "top_k": 10}'
+   ```
+
+3. **Adjust threshold** (filter low-confidence results):
+   ```bash
+   curl -X POST http://localhost:8000/query \
+     -d '{"text": "your query", "threshold": 0.5}'
+   ```
+
+### Indexing Stuck
+
+**Symptom**: `indexing_in_progress: true` but no progress
+
+```bash
+# Check queue status
+curl http://localhost:8000/queue/jobs
+
+# Check for errors
+docker-compose logs rag-api --tail 50
+
+# Restart if stuck
+docker-compose restart rag-api
+```
+
+For more issues, see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
+---
+
 ## Next Steps
 
 - **Configuration**: See [CONFIGURATION.md](CONFIGURATION.md) for advanced settings
 - **Development**: See [DEVELOPMENT.md](DEVELOPMENT.md) for testing and development
-- **Troubleshooting**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for common issues
+- **Troubleshooting**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for general issues
 - **API Reference**: See [API.md](API.md) for complete API docs

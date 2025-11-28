@@ -1,10 +1,4 @@
-"""
-Database routes module
-
-Extracted from main.py following POODR principles:
-- Single responsibility: database operations only
-- Dependency injection via FastAPI Request
-"""
+"""Database routes module."""
 from fastapi import APIRouter, Request, HTTPException
 
 from operations.orphan_detector import OrphanDetector
