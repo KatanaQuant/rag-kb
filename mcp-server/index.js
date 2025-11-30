@@ -27,7 +27,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return {
     tools: [
       {
-        name: "query_knowledge_base",
+        name: "query_kb",
         description:
           "⚠️ **CHECK THIS FIRST** for technical questions, APIs, frameworks, algorithms, or domain-specific knowledge. " +
           "Search your personal knowledge base (books, notes, documentation) for relevant information. " +
@@ -86,7 +86,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   try {
     switch (name) {
-      case "query_knowledge_base": {
+      case "query_kb": {
         const { query, top_k = 5, threshold = 0.0 } = args;
 
         if (!query) {

@@ -202,11 +202,13 @@ To prevent system overload during large indexing operations, RAG-KB includes res
 Edit `.env`:
 
 ```bash
-MAX_CPUS=4.0          # Max CPU cores (default: 4.0)
+MAX_CPUS=4            # Max CPU cores - use integer or decimal (default: 4.0)
 MAX_MEMORY=8G         # Max memory usage (default: 8G)
 BATCH_SIZE=5          # Files per batch (default: 5)
 BATCH_DELAY=0.5       # Delay between batches in seconds (default: 0.5)
 ```
+
+**Note on MAX_CPUS**: Use integers for simplicity (e.g., `5`) or decimals for precision (e.g., `5.6`). Both work with docker-compose.
 
 **Note:** The defaults in `docker-compose.yml` are tuned for the **Balanced profile on an 8-core, 16GB system**. See [Resource Profiles](#resource-profiles) to find values for your hardware.
 
@@ -221,7 +223,7 @@ BATCH_DELAY=0.5       # Delay between batches in seconds (default: 0.5)
 **Low-end device (2GB RAM, 2 cores)**:
 ```bash
 echo "MAX_MEMORY=2G" >> .env
-echo "MAX_CPUS=1.0" >> .env
+echo "MAX_CPUS=1" >> .env
 echo "BATCH_SIZE=3" >> .env
 
 docker-compose up --build -d
@@ -230,7 +232,7 @@ docker-compose up --build -d
 **High-end device (16GB RAM, 8 cores)**:
 ```bash
 echo "MAX_MEMORY=8G" >> .env
-echo "MAX_CPUS=4.0" >> .env
+echo "MAX_CPUS=4" >> .env
 echo "BATCH_SIZE=10" >> .env
 echo "BATCH_DELAY=0.1" >> .env
 
@@ -594,7 +596,7 @@ EMBEDDING_DIMENSION=1024
 RAG_PORT=8000
 
 # Resource limits (defaults tuned for 8-core, 16GB Balanced profile)
-MAX_CPUS=4.0
+MAX_CPUS=4
 MAX_MEMORY=8G
 ```
 
@@ -687,7 +689,7 @@ Optimized for speed with English content:
 # .env
 MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1
 EMBEDDING_WORKERS=2
-MAX_CPUS=4.0
+MAX_CPUS=4
 MAX_MEMORY=8G
 CACHE_MAX_SIZE=200
 ```
@@ -700,7 +702,7 @@ Best quality for diverse content:
 # .env
 MODEL_NAME=Snowflake/snowflake-arctic-embed-l-v2.0
 EMBEDDING_WORKERS=2
-MAX_CPUS=4.0
+MAX_CPUS=4
 MAX_MEMORY=8G
 BATCH_SIZE=3
 BATCH_DELAY=1.0
@@ -713,7 +715,7 @@ For low-end devices:
 ```bash
 # .env
 MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
-MAX_CPUS=1.0
+MAX_CPUS=1
 MAX_MEMORY=2G
 EMBEDDING_WORKERS=1
 BATCH_SIZE=2
@@ -765,15 +767,15 @@ echo "CPU cores: $(sysctl -n hw.ncpu), RAM: $(($(sysctl -n hw.memsize) / 1024 / 
 
 | Your Hardware | MAX_CPUS | MAX_MEMORY | EMBEDDING_WORKERS | CHUNK_WORKERS | OMP_NUM_THREADS |
 |--------------|----------|------------|-------------------|---------------|-----------------|
-| 4 cores, 8GB | 2.0 | 4G | 1 | 1 | 1 |
-| 8 cores, 16GB | 4.0 | 8G | 2 | 1 | 2 |
-| 12 cores, 32GB | 6.0 | 16G | 2 | 1 | 2 |
-| 16 cores, 32GB | 8.0 | 16G | 2 | 1 | 3 |
-| 16 cores, 64GB | 8.0 | 32G | 2 | 1 | 3 |
+| 4 cores, 8GB | 2 | 4G | 1 | 1 | 1 |
+| 8 cores, 16GB | 4 | 8G | 2 | 1 | 2 |
+| 12 cores, 32GB | 6 | 16G | 2 | 1 | 2 |
+| 16 cores, 32GB | 8 | 16G | 2 | 1 | 3 |
+| 16 cores, 64GB | 8 | 32G | 2 | 1 | 3 |
 
 **Example .env for 8 cores, 16GB (Balanced):**
 ```bash
-MAX_CPUS=4.0
+MAX_CPUS=4
 MAX_MEMORY=8G
 EMBEDDING_WORKERS=2
 EMBEDDING_BATCH_SIZE=32
@@ -788,17 +790,17 @@ MKL_NUM_THREADS=2
 
 | Your Hardware | MAX_CPUS | MAX_MEMORY | EMBEDDING_WORKERS | CHUNK_WORKERS | OMP_NUM_THREADS |
 |--------------|----------|------------|-------------------|---------------|-----------------|
-| 4 cores, 8GB | 3.0 | 6G | 2 | 1 | 2 |
-| 8 cores, 16GB | 6.0 | 12G | 2 | 1 | 2 |
-| 12 cores, 32GB | 9.0 | 24G | 2 | 2 | 3 |
-| 16 cores, 32GB | 12.0 | 24G | 2 | 2 | 4 |
-| 16 cores, 64GB | 12.0 | 48G | 2 | 2 | 4 |
+| 4 cores, 8GB | 3 | 6G | 2 | 1 | 2 |
+| 8 cores, 16GB | 6 | 12G | 2 | 1 | 2 |
+| 12 cores, 32GB | 9 | 24G | 2 | 2 | 3 |
+| 16 cores, 32GB | 12 | 24G | 2 | 2 | 4 |
+| 16 cores, 64GB | 12 | 48G | 2 | 2 | 4 |
 
 **Note:** Workers stay at 2 due to GIL limitations (see below). More CPU budget goes to `OMP_NUM_THREADS` for NumPy/BLAS parallelism which releases the GIL.
 
 **Example .env for 8 cores, 16GB (Performance):**
 ```bash
-MAX_CPUS=6.0
+MAX_CPUS=6
 MAX_MEMORY=12G
 EMBEDDING_WORKERS=2
 EMBEDDING_BATCH_SIZE=32
@@ -813,7 +815,7 @@ MKL_NUM_THREADS=2
 # Create or edit .env with your chosen profile
 cat > .env << 'EOF'
 # Your chosen settings here
-MAX_CPUS=4.0
+MAX_CPUS=4
 MAX_MEMORY=8G
 EMBEDDING_WORKERS=2
 EMBEDDING_BATCH_SIZE=32

@@ -136,12 +136,15 @@ class TestPipelineLogging:
         assert "already indexed" not in captured.out
 
     @patch('pipeline.pipeline_coordinator.DocumentFile')
-    def test_epub_conversion_logs_success_not_zero_chunks(self, mock_doc_class, mock_services, mock_doc_file, capsys):
+    def test_epub_conversion_logs_success_not_zero_chunks(self, mock_doc_class, mock_services, capsys):
         """EPUB conversion should log success message, not '0 chunks extracted'
 
         Issue: EPUB files are converted to PDF, then the EPUB is moved to original/.
         The EPUB extraction intentionally returns 0 chunks because the PDF will be
         processed separately. The log should say 'conversion complete' not 'no chunks'.
+
+        Note: EPUBs are routed to _handle_epub_conversion() via add_file(),
+        NOT through _chunk_stage(). This test verifies the correct code path.
         """
         processor, indexer, embedding_service = mock_services
 
@@ -165,11 +168,8 @@ class TestPipelineLogging:
             force=False
         )
 
-        # Process the EPUB
-        result = coordinator._chunk_stage(item)
-
-        # Verify: Should return None (no chunks to embed)
-        assert result is None
+        # Process the EPUB via add_file (which routes to _handle_epub_conversion)
+        coordinator.add_file(item)
 
         # Verify: Should log [Convert] with conversion success, NOT "no chunks extracted"
         captured = capsys.readouterr()

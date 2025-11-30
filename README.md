@@ -6,7 +6,7 @@
 
 **Personal knowledge base with semantic search.** Index books, code, and notes—query with natural language. 100% local.
 
-**Current Version**: v1.7.11 ([Changelog](docs/RELEASES/))
+**Current Version**: v1.9.1 ([Changelog](docs/RELEASES/))
 
 ---
 
@@ -14,13 +14,11 @@
 
 - **Semantic Search** - Natural language queries across all documents
 - **Multi-Format** - PDF, EPUB, Markdown, Code (Python/Java/TS/Go/C#), Jupyter, Obsidian
+- **IDE Integration** - Works with Claude Code, Cursor, Codex, Gemini, Amp via MCP
+- **Network Ready** - HTTP transport for remote access, stdio for local
 - **Security Scanning** - ClamAV, YARA, hash blacklist (auto-quarantine)
 - **Self-Healing** - Auto-repair database issues at startup
-- **Concurrent Pipeline** - 4x throughput with parallel processing
-- **MCP Integration** - Use with Claude, Codex, or Gemini in VSCode
 - **100% Local** - No external APIs, complete privacy
-
-See [docs/USAGE.md](docs/USAGE.md) for full feature details.
 
 ---
 
@@ -29,7 +27,7 @@ See [docs/USAGE.md](docs/USAGE.md) for full feature details.
 ```bash
 # Clone and start
 git clone https://github.com/KatanaQuant/rag-kb.git
-cd rag-kb && git checkout v1.7.11
+cd rag-kb && git checkout v1.9.1
 
 # Add your content
 cp ~/Documents/*.pdf knowledge_base/books/
@@ -44,24 +42,34 @@ curl http://localhost:8000/health
 
 See [docs/QUICK_START.md](docs/QUICK_START.md) for detailed setup.
 
+> **Upgrading from v1.8.x or earlier?** MCP now uses HTTP transport (no Node.js needed).
+> stdio transport is deprecated and will be removed in v2.0.
+> Migrate: `claude mcp remove rag-kb && claude mcp add --transport http --scope user rag-kb http://localhost:8000/mcp`
+> See [Migration Guide](docs/MCP_CLAUDE.md#migrating-from-stdio-to-http-v190)
+
 ---
 
 ## Usage
 
+### REST API
 ```bash
-# Query
 curl -X POST http://localhost:8000/query \
   -H "Content-Type: application/json" \
   -d '{"text": "your question", "top_k": 5}'
-
-# Health check
-curl http://localhost:8000/health
-
-# List documents
-curl http://localhost:8000/documents
 ```
 
-See [docs/USAGE.md](docs/USAGE.md) for all query methods.
+### IDE Integration (MCP)
+Query your knowledge base directly from your AI assistant:
+
+| IDE | Setup Guide |
+|-----|-------------|
+| Claude Code | [MCP_CLAUDE.md](docs/MCP_CLAUDE.md) |
+| Cursor | [MCP_CODEX.md](docs/MCP_CODEX.md) |
+| Codex CLI | [MCP_CODEX.md](docs/MCP_CODEX.md) |
+| Gemini | [MCP_GEMINI.md](docs/MCP_GEMINI.md) |
+| Amp | [MCP_AMP.md](docs/MCP_AMP.md) |
+
+See [docs/USAGE.md](docs/USAGE.md) for all query methods and [docs/API.md](docs/API.md) for full API reference.
 
 ---
 
@@ -76,6 +84,8 @@ See [docs/USAGE.md](docs/USAGE.md) for all query methods.
 | [MCP_CLAUDE.md](docs/MCP_CLAUDE.md) | Claude Code setup |
 | [MCP_CODEX.md](docs/MCP_CODEX.md) | OpenAI Codex setup |
 | [MCP_GEMINI.md](docs/MCP_GEMINI.md) | Google Gemini setup |
+| [MCP_AMP.md](docs/MCP_AMP.md) | Amp (Sourcegraph) setup |
+| [MCP_NETWORK.md](docs/MCP_NETWORK.md) | Network configuration |
 | [SECURITY.md](docs/SECURITY.md) | Malware detection setup |
 | [MAINTENANCE.md](docs/MAINTENANCE.md) | Database health, self-healing |
 | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues |
@@ -88,14 +98,11 @@ See [docs/USAGE.md](docs/USAGE.md) for all query methods.
 
 ## Architecture
 
-```
-VSCode/IDE → MCP Server (Node.js) → RAG API (FastAPI/Docker) → SQLite + vec0
-                                            ↓
-                                    knowledge_base/
-```
+![RAG-KB Architecture](docs/images/architecture.png)
 
-1. **Ingestion**: Files → Extract → Chunk → Embed → Store
-2. **Query**: Question → Embed → Vector Search → Results
+**Ingestion**: Files → Security Scan → Chunk → Embed → Store
+
+**Query**: Question → Embed → Vector Search → Ranked Results
 
 ---
 
@@ -103,7 +110,7 @@ VSCode/IDE → MCP Server (Node.js) → RAG API (FastAPI/Docker) → SQLite + ve
 
 ```bash
 docker-compose down
-git fetch --tags && git checkout v1.7.11
+git fetch --tags && git checkout v1.9.1
 docker-compose build --no-cache
 docker-compose up -d
 ```

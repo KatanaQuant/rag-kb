@@ -1,0 +1,47 @@
+@startuml architecture
+!theme plain
+skinparam backgroundColor white
+skinparam componentStyle rectangle
+skinparam defaultFontSize 12
+
+title RAG-KB Architecture
+
+rectangle "Your IDE" as ide {
+  component "Claude Code" as claude
+  component "Cursor" as cursor
+  component "Codex CLI" as codex
+  component "Gemini" as gemini
+  component "Amp" as amp
+}
+
+rectangle "Docker Container" as docker {
+  component "FastAPI" as api {
+    portin "/mcp" as mcp
+    portin "/query" as query
+    portin "/docs" as docs
+  }
+
+  database "SQLite\n+ vec0" as db
+
+  component "Pipeline" as pipeline {
+    component "Security Scan" as scan
+    component "Chunk" as chunk
+    component "Embed" as embed
+    component "Store" as store
+  }
+}
+
+folder "Your Docs\n(volume mount)" as files
+
+ide -right-> api : HTTP :8000
+api --> db
+api --> pipeline
+pipeline --> db
+files --> pipeline
+
+note right of pipeline
+  Ingestion Flow:
+  Files → Scan → Chunk → Embed → Store
+end note
+
+@enduml

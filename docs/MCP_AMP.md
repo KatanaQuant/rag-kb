@@ -1,10 +1,8 @@
-# MCP Integration (Google Gemini)
+# MCP Integration (Amp)
 
-Use your knowledge base with Google Gemini CLI via MCP.
+Use your knowledge base with Amp (Sourcegraph's AI coding agent) via MCP (Model Context Protocol).
 
-> **Other AI Assistants**: See [MCP_CLAUDE.md](MCP_CLAUDE.md) for Claude Code or [MCP_CODEX.md](MCP_CODEX.md) for OpenAI Codex.
->
-> **Note**: MCP support requires the standalone **Gemini CLI** (npm). The **Gemini Code Assist** VSCode extension uses a different binary (`cloudcode_cli`) that does not have MCP commands.
+> **Other AI Assistants**: See [MCP_CLAUDE.md](MCP_CLAUDE.md) for Claude Code, [MCP_CODEX.md](MCP_CODEX.md) for OpenAI Codex, or [MCP_GEMINI.md](MCP_GEMINI.md) for Google Gemini.
 
 ---
 
@@ -16,7 +14,7 @@ Use your knowledge base with Google Gemini CLI via MCP.
    curl http://localhost:8000/health
    ```
 
-2. Gemini CLI installed (see [Installing Gemini CLI](#installing-gemini-cli) below)
+2. Amp VSCode extension installed (see [Installing Amp](#installing-amp-vscode-extension) below)
 
 ---
 
@@ -28,7 +26,7 @@ Use your knowledge base with Google Gemini CLI via MCP.
 
 | Scenario | URL | Example |
 |----------|-----|---------|
-| **Same machine** | `http://localhost:8000/mcp` | RAG and Gemini on same computer |
+| **Same machine** | `http://localhost:8000/mcp` | RAG and Amp on same computer |
 | **Local network (LAN)** | `http://LAN_IP:8000/mcp` | Laptop → Desktop on same WiFi/network |
 | **Remote/Internet** | `http://PUBLIC_IP:8000/mcp` | Access from anywhere (requires port forwarding) |
 
@@ -36,16 +34,16 @@ Use your knowledge base with Google Gemini CLI via MCP.
 
 ```bash
 # Same machine - use localhost
-gemini mcp add --transport http rag-kb http://localhost:8000/mcp
+amp mcp add --transport http rag-kb http://localhost:8000/mcp
 
 # Local network - use server's LAN IP
-gemini mcp add --transport http rag-kb http://192.168.1.100:8000/mcp
+amp mcp add --transport http rag-kb http://192.168.1.100:8000/mcp
 
 # Verify connection
-gemini mcp list
+amp mcp list
 ```
 
-**For VSCode users**: Reload window after adding: `Ctrl+Shift+P` → "Developer: Reload Window"
+**After adding**: Reload VSCode: `Ctrl+Shift+P` → "Developer: Reload Window"
 
 ### Finding Your Server's IP
 
@@ -68,13 +66,13 @@ If you previously used stdio transport, migrate to HTTP:
 
 ```bash
 # Step 1: Remove old stdio server
-gemini mcp remove rag-kb
+amp mcp remove rag-kb
 
 # Step 2: Add HTTP server
-gemini mcp add --transport http rag-kb http://localhost:8000/mcp
+amp mcp add --transport http rag-kb http://localhost:8000/mcp
 
 # Step 3: Verify
-gemini mcp list
+amp mcp list
 ```
 
 **Why migrate?**
@@ -95,52 +93,41 @@ If HTTP doesn't work, use stdio transport (requires Node.js):
 # Requires Node.js v14+
 node --version
 
-# Add MCP server with stdio (global)
-gemini mcp add rag-kb \
-  -e RAG_API_URL=http://localhost:8000 \
-  -s user \
-  node /absolute/path/to/rag-kb/mcp-server/index.js
+# Add MCP server with stdio
+amp mcp add rag-kb \
+  --env RAG_API_URL=http://localhost:8000 \
+  -- node /absolute/path/to/rag-kb/mcp-server/index.js
 ```
 
 **Important**: Replace `/absolute/path/to/rag-kb` with your actual path.
 
 ---
 
-## Installing Gemini CLI
+## Installing Amp VSCode Extension
 
-### Option 1: npm Install (Required for MCP)
+### Option 1: VSCode Marketplace (Recommended)
 
-```bash
-# Install globally
-npm install -g @google/gemini-cli
+Install the [Amp extension](https://marketplace.visualstudio.com/items?itemName=sourcegraph.amp) from VSCode marketplace:
 
-# Verify installation
-gemini --version
+1. Open VSCode
+2. Go to Extensions (`Ctrl+Shift+X`)
+3. Search for "Amp" (by Sourcegraph)
+4. Click Install
 
-# Authenticate
-gemini  # First run will prompt for Google login
-```
+### Option 2: Manual Installation
 
-### Option 2: VSCode Extension (No MCP CLI)
-
-The [Gemini Code Assist extension](https://marketplace.visualstudio.com/items?itemName=google.geminicodeassist) provides a built-in chat interface but bundles `cloudcode_cli` which does **not** have MCP commands.
-
-- Install via VSCode Extensions → search "Gemini Code Assist"
-- The extension reads MCP config from `~/.gemini/settings.json` (set up via npm CLI)
-- Agent Mode is required to use MCP tools in VSCode
+Visit [ampcode.com](https://ampcode.com) and follow the installation instructions.
 
 ---
 
 ## Verify Installation
 
 ```bash
-gemini mcp list
+amp mcp list
 # Should show: rag-kb - Connected
 ```
 
-**In VSCode**: Enable Agent Mode in Gemini Code Assist panel to use MCP tools.
-
-**In Gemini CLI**: Type `/mcp` in an interactive session to list tools.
+**In VSCode**: Open Amp panel → check MCP tools are available.
 
 ---
 
@@ -150,7 +137,7 @@ gemini mcp list
 
 ```
 [Your Computer]
-├── Gemini CLI / VSCode
+├── Amp / VSCode
 └── Docker (rag-api on port 8000)
 
 URL: http://localhost:8000/mcp
@@ -160,7 +147,7 @@ URL: http://localhost:8000/mcp
 
 ```
 [Your Laptop]                    [Desktop Server]
-├── Gemini CLI / VSCode    →     └── Docker (rag-api)
+├── Amp / VSCode           →     └── Docker (rag-api)
                                      IP: 192.168.1.100
 
 URL: http://192.168.1.100:8000/mcp
@@ -170,25 +157,13 @@ URL: http://192.168.1.100:8000/mcp
 
 ```
 [Your Laptop]                    [Remote Server]
-├── Gemini CLI / VSCode    →     └── Docker (rag-api)
+├── Amp / VSCode           →     └── Docker (rag-api)
     (anywhere)                       Public IP: 203.0.113.50
 
 URL: http://203.0.113.50:8000/mcp
 ```
 
 **Security Warning**: Exposing to internet without authentication is risky. Consider VPN or SSH tunnel.
-
----
-
-## Gemini Code Assist: Agent Mode
-
-Agent Mode is **required** to use MCP servers in VSCode:
-
-1. Open Gemini Code Assist panel
-2. Click the agent mode toggle (or use command palette: "Gemini: Enable Agent Mode")
-3. MCP tools become available in agent conversations
-
-Without Agent Mode, the extension operates as a regular chat without tool access.
 
 ---
 
@@ -210,16 +185,16 @@ threshold: 0.3    # Minimum similarity score (0-1)
 
 ---
 
-## Manual Config (~/.gemini/settings.json)
+## Manual Config (settings.json)
 
 If CLI doesn't work:
 
 **HTTP Transport (recommended):**
 ```json
 {
-  "mcpServers": {
+  "amp.mcpServers": {
     "rag-kb": {
-      "httpUrl": "http://localhost:8000/mcp"
+      "url": "http://localhost:8000/mcp"
     }
   }
 }
@@ -228,9 +203,9 @@ If CLI doesn't work:
 **For remote server:**
 ```json
 {
-  "mcpServers": {
+  "amp.mcpServers": {
     "rag-kb": {
-      "httpUrl": "http://192.168.1.100:8000/mcp"
+      "url": "http://192.168.1.100:8000/mcp"
     }
   }
 }
@@ -239,7 +214,7 @@ If CLI doesn't work:
 **stdio Transport (legacy):**
 ```json
 {
-  "mcpServers": {
+  "amp.mcpServers": {
     "rag-kb": {
       "command": "node",
       "args": ["/absolute/path/to/rag-kb/mcp-server/index.js"],
@@ -250,6 +225,12 @@ If CLI doesn't work:
   }
 }
 ```
+
+### Config File Locations
+
+- **macOS/Linux**: `~/.config/amp/settings.json`
+- **Windows**: `%APPDATA%\amp\settings.json`
+- **Project-specific**: `.amp/settings.json`
 
 ---
 
@@ -265,11 +246,11 @@ curl http://localhost:8000/health
 curl http://localhost:8000/mcp
 
 # 3. Check MCP status
-gemini mcp list
+amp mcp list
 
 # 4. If "Failed to connect" - remove and re-add
-gemini mcp remove rag-kb
-gemini mcp add --transport http rag-kb http://localhost:8000/mcp
+amp mcp remove rag-kb
+amp mcp add --transport http rag-kb http://localhost:8000/mcp
 ```
 
 ### HTTP vs stdio Comparison
@@ -281,15 +262,10 @@ gemini mcp add --transport http rag-kb http://localhost:8000/mcp
 | **Remote access** | Direct URL | SSH tunnel or local |
 | **Use case** | All scenarios | Backwards compatibility |
 
-### Gemini CLI Not Found
+### Settings Not Taking Effect
 
-```bash
-which gemini
-gemini --version
-
-# If not found, reinstall:
-npm install -g @google/gemini-cli
-```
+Reload VSCode after configuration changes:
+- `Ctrl+Shift+P` → "Developer: Reload Window"
 
 ---
 
@@ -297,6 +273,7 @@ npm install -g @google/gemini-cli
 
 - [MCP_CLAUDE.md](MCP_CLAUDE.md) - Claude Code setup
 - [MCP_CODEX.md](MCP_CODEX.md) - OpenAI Codex setup
+- [MCP_GEMINI.md](MCP_GEMINI.md) - Google Gemini setup
 - [MCP_NETWORK.md](MCP_NETWORK.md) - Network configuration details
 - [USAGE.md](USAGE.md) - Query methods
 
@@ -304,9 +281,9 @@ npm install -g @google/gemini-cli
 
 ## References
 
-- [Gemini CLI GitHub](https://github.com/google-gemini/gemini-cli)
+- [Amp Owner's Manual](https://ampcode.com/manual)
 - [MCP Protocol Specification](https://modelcontextprotocol.io/)
 
 Sources:
-- [Gemini CLI MCP Docs](https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html)
-- [Gemini CLI FastMCP Integration](https://developers.googleblog.com/en/gemini-cli-fastmcp-simplifying-mcp-server-development/)
+- [Amp Streamable HTTP Transport](https://ampcode.com/news/streamable-mcp)
+- [Amp MCP Setup Guide](https://github.com/sourcegraph/amp-examples-and-guides/blob/main/guides/amp-mcp-setup-guide.md)

@@ -1,9 +1,13 @@
 """Document routes module."""
+from pathlib import Path
+
 from fastapi import APIRouter, Request, HTTPException
 
+from config import default_config
 from models import DocumentInfoResponse
 from operations.document_lister import DocumentLister
 from operations.document_searcher import DocumentSearcher
+from pipeline import Priority
 from routes.deps import get_app_state
 
 router = APIRouter()
@@ -99,4 +103,78 @@ async def delete_document(file_path: str, request: Request):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to delete document: {str(e)}"
+        )
+
+
+@router.post("/document/{file_path:path}/reindex")
+async def reindex_document(file_path: str, request: Request):
+    """Re-index a document: delete from DB and queue for re-processing
+
+    This is a convenience endpoint that combines:
+    1. DELETE /document/{path} - removes from index
+    2. POST /indexing/priority/{path}?force=true - queues for re-indexing
+
+    Use cases:
+    - E2E testing: validate full pipeline (security scan → chunk → embed → store)
+    - Force re-processing after pipeline changes
+    - Re-index after manual file edits
+
+    Args:
+        file_path: Full path to the document (e.g., /app/knowledge_base/file.pdf)
+
+    Returns:
+        Status including deletion stats and queue position
+    """
+    try:
+        app_state = get_app_state(request)
+
+        # Verify file exists on disk
+        path = Path(file_path)
+        if not path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail=f"File not found on disk: {file_path}"
+            )
+
+        # Step 1: Delete from DB (if indexed)
+        deletion_result = {"deleted": False, "chunks_deleted": 0}
+        try:
+            result = await app_state.get_async_vector_store().delete_document(file_path)
+            deletion_result = {"deleted": True, **result}
+
+            # Also delete progress record
+            progress_tracker = app_state.get_progress_tracker()
+            if progress_tracker:
+                try:
+                    progress_tracker.delete_document(file_path)
+                except Exception:
+                    pass  # Progress record may not exist
+        except Exception:
+            pass  # Document may not be indexed yet
+
+        # Step 2: Queue for re-indexing with HIGH priority
+        if not app_state.indexing.queue:
+            raise HTTPException(
+                status_code=400,
+                detail="Indexing queue not initialized"
+            )
+
+        app_state.indexing.queue.add(path, priority=Priority.HIGH, force=True)
+
+        return {
+            "status": "success",
+            "file_path": file_path,
+            "action": "reindex",
+            "deletion": deletion_result,
+            "queued": True,
+            "priority": "HIGH",
+            "queue_size": app_state.queue_size()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to reindex document: {str(e)}"
         )

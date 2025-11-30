@@ -35,6 +35,10 @@ FROM python:3.13-slim AS runtime
 
 WORKDIR /app
 
+# Create non-root user EARLY (before any COPY commands)
+# This allows --chown flag to work without creating duplicate layers
+RUN useradd -m -u 1000 appuser
+
 # Install only runtime system dependencies (no build tools)
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
@@ -62,17 +66,17 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Copy Python packages from builder stage
-COPY --from=builder /opt/venv /opt/venv
+# Copy Python packages from builder stage WITH correct ownership (no extra chown layer)
+COPY --from=builder --chown=appuser:appuser /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy application code
-COPY . .
+# Copy application code WITH correct ownership
+COPY --chown=appuser:appuser . .
 
-# Create data directory and model cache
+# Create data directory and model cache (owned by appuser via --chown above)
 RUN mkdir -p /app/data /app/.cache/deepsearch_glm
 
-# Create model directories and make them writable (in venv)
+# Create model directories and make them writable (already owned by appuser via --chown)
 RUN mkdir -p /opt/venv/lib/python3.13/site-packages/deepsearch_glm/resources/models/crf/part-of-speech && \
     mkdir -p /opt/venv/lib/python3.13/site-packages/rapidocr/models
 
@@ -80,19 +84,17 @@ RUN mkdir -p /opt/venv/lib/python3.13/site-packages/deepsearch_glm/resources/mod
 RUN mkdir -p /var/lib/clamav /var/log/clamav /run/clamav && \
     chown -R clamav:clamav /var/lib/clamav /var/log/clamav /run/clamav
 
-# Initialize ClamAV virus database (download signatures)
-# Note: This may take a while on first build
-RUN freshclam || echo "ClamAV signatures will update on first run"
+# Skip signature download during build - let runtime handle it via bind mount
+# Signatures will be downloaded once on first container start to .cache/clamav
+# then reused across container restarts and rebuilds
+# This saves ~350MB image size and ~6 min build time (after initial download)
 
 # Copy and set up entrypoint script
-COPY docker-entrypoint.sh /usr/local/bin/
+COPY --chown=appuser:appuser docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Run as non-root user for security
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app && \
-    chown -R appuser:appuser /opt/venv && \
-    echo "appuser ALL=(clamav) NOPASSWD: /usr/sbin/clamd" >> /etc/sudoers
+# Configure sudo for ClamAV (appuser already created above)
+RUN echo "appuser ALL=(clamav) NOPASSWD: /usr/sbin/clamd" >> /etc/sudoers
 
 USER appuser
 

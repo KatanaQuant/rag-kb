@@ -5,6 +5,15 @@ set -e
 if [ "${CLAMAV_ENABLED:-true}" = "true" ]; then
     echo "Starting ClamAV daemon..."
 
+    # Update virus signatures if cache is empty (first run) or stale
+    # Downloads to bind-mounted .cache/clamav (persists across rebuilds)
+    if [ ! -f /var/lib/clamav/daily.cvd ] && [ ! -f /var/lib/clamav/daily.cld ]; then
+        echo "ClamAV signatures not found in cache. Downloading (~350MB, ~6 min)..."
+        sudo -u clamav freshclam || echo "WARNING: Failed to update ClamAV signatures. Continuing with stale/no signatures."
+    else
+        echo "ClamAV signatures found in cache. Skipping download."
+    fi
+
     # Start clamd as clamav user
     sudo -u clamav clamd &
 

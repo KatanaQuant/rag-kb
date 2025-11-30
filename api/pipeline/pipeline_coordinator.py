@@ -86,10 +86,16 @@ class PipelineCoordinator:
     def add_file(self, item: QueueItem):
         """Add file to processing queue (with pre-stage skip check)
 
-        Checks if file is already indexed BEFORE adding to chunk_queue.
-        This prevents the queue from filling up with already-indexed files.
+        EPUBs are handled separately - they only convert to PDF, don't chunk.
+        Other files are checked if already indexed before adding to chunk_queue.
         """
+        # Handle EPUB conversion outside pipeline (no chunking needed)
+        if item.path.suffix.lower() == '.epub':
+            self._handle_epub_conversion(item)
+            return
+
         if self._should_skip_before_queue(item):
+            self._mark_file_complete(item.path)  # Clear from queued_files tracking
             return
         self.queues.chunk_queue.put(item)
 
@@ -133,7 +139,11 @@ class PipelineCoordinator:
     # Stage processing functions
 
     def _chunk_stage(self, item: QueueItem) -> Optional[ChunkedDocument]:
-        """Process file: extract text and chunk it"""
+        """Process file: extract text and chunk it
+
+        Note: EPUBs are handled separately in _handle_epub_conversion()
+        and never reach this method.
+        """
         try:
             doc_file = DocumentFile.from_path(item.path)
 
@@ -141,22 +151,42 @@ class PipelineCoordinator:
                 self._mark_file_complete(item.path)  # Mark complete even if skipped
                 return None
 
-            stage = self._get_stage_name(item.path)
-            self._log_processing_start(stage, item.path.name)
+            self._log_processing_start("Chunk", item.path.name)
 
             chunks = self.processor.process_file(doc_file, force=item.force)
 
             if not chunks:
                 self._mark_file_complete(item.path)  # Mark complete even if no chunks
-                return self._handle_no_chunks(stage, item.path.name)
+                print(f"[Chunk] {item.path.name} - no chunks extracted")
+                self.progress_logger.log_complete("Chunk", item.path.name, 0)
+                return None
 
-            self.progress_logger.log_complete(stage, item.path.name, len(chunks))
+            self.progress_logger.log_complete("Chunk", item.path.name, len(chunks))
             return self._create_chunked_document(item, doc_file, chunks)
 
         except Exception as e:
             print(f"[Chunk] Error processing {item.path}: {e}")
             self._mark_file_complete(item.path)  # Mark complete on error
             return None
+
+    def _handle_epub_conversion(self, item: QueueItem):
+        """Handle EPUB conversion outside the chunking pipeline
+
+        EPUBs only convert to PDF - they don't need chunking/embedding.
+        The converted PDF will be picked up by file watcher and indexed separately.
+        """
+        try:
+            print(f"[Convert] {item.path.name}")
+            doc_file = DocumentFile.from_path(item.path)
+
+            # Just do the conversion (returns empty chunks)
+            self.processor.process_file(doc_file, force=item.force)
+
+            print(f"[Convert] {item.path.name} - conversion complete, PDF queued for indexing")
+            self._mark_file_complete(item.path)
+        except Exception as e:
+            print(f"[Convert] Error converting {item.path}: {e}")
+            self._mark_file_complete(item.path)
 
     def _mark_file_complete(self, path: Path):
         """Mark file as complete in indexing queue"""
@@ -172,29 +202,10 @@ class PipelineCoordinator:
             return True
         return False
 
-    def _get_stage_name(self, path) -> str:
-        """Determine stage name based on file type"""
-        return "Convert" if path.suffix.lower() == '.epub' else "Chunk"
-
     def _log_processing_start(self, stage: str, filename: str):
         """Log processing start with heartbeat"""
         self.progress_logger.log_start(stage, filename)
         self.progress_logger.start_heartbeat(stage, filename, interval=60)
-
-    def _handle_no_chunks(self, stage: str, filename: str) -> None:
-        """Handle case when no chunks were extracted
-
-        For EPUB files, this is expected - conversion succeeded and the
-        resulting PDF will be processed separately. Log success, not failure.
-        """
-        if stage == "Convert":
-            # EPUB conversion succeeded - PDF will be processed separately
-            print(f"[{stage}] {filename} - conversion complete, PDF queued for indexing")
-        else:
-            # Actual extraction failure
-            print(f"[{stage}] {filename} - no chunks extracted")
-        self.progress_logger.log_complete(stage, filename, 0)
-        return None
 
     def _create_chunked_document(self, item: QueueItem, doc_file, chunks) -> ChunkedDocument:
         """Create ChunkedDocument from processing results"""

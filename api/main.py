@@ -36,6 +36,7 @@ from routes.queue import router as queue_router
 from routes.completeness import router as completeness_router
 from routes.security import router as security_router
 from routes.maintenance import router as maintenance_router
+from routes.mcp import router as mcp_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -79,6 +80,7 @@ app.include_router(queue_router)
 app.include_router(completeness_router)
 app.include_router(security_router)
 app.include_router(maintenance_router)
+app.include_router(mcp_router)
 
 # All routes extracted to routes/ modules following POODR principles
 # - routes/health.py: Health and info endpoints
