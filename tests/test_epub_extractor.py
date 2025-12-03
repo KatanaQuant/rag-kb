@@ -55,7 +55,8 @@ class TestEpubConversionOnly:
                 tmp_pdf = tmp_path / "test.tmp.pdf"
                 tmp_pdf.touch()
 
-                result = EpubExtractor.extract(epub_path)
+                extractor = EpubExtractor()
+                result = extractor.extract(epub_path)
 
                 # Verify empty result (no extraction)
                 assert isinstance(result, ExtractionResult)
@@ -85,7 +86,8 @@ class TestEpubConversionOnly:
                 tmp_pdf = tmp_path / "System Design Interview.tmp.pdf"
                 tmp_pdf.touch()
 
-                EpubExtractor.extract(epub_path)
+                extractor = EpubExtractor()
+                extractor.extract(epub_path)
 
                 # PDF should exist
                 assert pdf_path.exists()
@@ -110,7 +112,8 @@ class TestEpubConversionOnly:
                 tmp_pdf = tmp_path / "book.tmp.pdf"
                 tmp_pdf.touch()
 
-                EpubExtractor.extract(epub_path)
+                extractor = EpubExtractor()
+                extractor.extract(epub_path)
 
                 # Verify EPUB was moved to original/
                 mock_move.assert_called_once()
@@ -134,8 +137,9 @@ class TestEpubConversionErrors:
         invalid_epub = tmp_path / "not_an_epub.epub"
         invalid_epub.write_text("This is not a valid EPUB file")
 
+        extractor = EpubExtractor()
         with pytest.raises(ValueError) as exc_info:
-            EpubExtractor.extract(invalid_epub)
+            extractor.extract(invalid_epub)
 
         assert "Invalid EPUB file" in str(exc_info.value)
         assert "not_an_epub.epub" in str(exc_info.value)
@@ -153,8 +157,9 @@ class TestEpubConversionErrors:
                 stderr="Error: Pandoc failed to convert EPUB"
             )
 
+            extractor = EpubExtractor()
             with pytest.raises(RuntimeError) as exc_info:
-                EpubExtractor.extract(epub_path)
+                extractor.extract(epub_path)
 
             assert "Pandoc EPUB conversion failed" in str(exc_info.value)
 
@@ -193,7 +198,8 @@ class TestEpubConversionErrors:
                     tmp_pdf = tmp_path / "nested_tables.tmp.pdf"
                     tmp_pdf.touch()
 
-                    result = EpubExtractor.extract(epub_path)
+                    extractor = EpubExtractor()
+                    result = extractor.extract(epub_path)
 
                     # Should complete via fallback
                     assert result.method == 'epub_conversion_only'
@@ -238,7 +244,8 @@ class TestEpubConversionErrors:
                     tmp_pdf = tmp_path / "nested_lists.tmp.pdf"
                     tmp_pdf.touch()
 
-                    result = EpubExtractor.extract(epub_path)
+                    extractor = EpubExtractor()
+                    result = extractor.extract(epub_path)
 
                     # Should complete via fallback
                     assert result.method == 'epub_conversion_only'
@@ -418,7 +425,8 @@ class TestEpubIntegration:
                 tmp_pdf = tmp_path / "Design Patterns.tmp.pdf"
                 tmp_pdf.touch()
 
-                result = EpubExtractor.extract(epub_path)
+                extractor = EpubExtractor()
+                result = extractor.extract(epub_path)
 
                 # Verify conversion-only result
                 assert result.method == 'epub_conversion_only'
@@ -447,7 +455,8 @@ class TestEpubIntegration:
             pdf_path.touch()
 
             try:
-                EpubExtractor.extract(epub_path)
+                extractor = EpubExtractor()
+                extractor.extract(epub_path)
                 assert False, "Should have raised RuntimeError"
             except RuntimeError:
                 # Verify cleanup happened

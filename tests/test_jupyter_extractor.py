@@ -10,8 +10,6 @@ import tempfile
 from pathlib import Path
 
 from ingestion.jupyter_extractor import JupyterExtractor
-from ingestion.jupyter.output_parser import NotebookOutputParser
-from ingestion.jupyter.language_detector import KernelLanguageDetector
 from domain_models import ExtractionResult
 
 
@@ -188,112 +186,6 @@ class TestNotebookToMarkdown:
             assert content.strip()
         finally:
             Path(temp_path).unlink()
-
-
-class TestOutputParsing:
-    """Test output parsing (used by other components)"""
-
-    def test_parse_outputs_stream(self):
-        """Test: Parse stdout/stderr stream outputs"""
-        outputs = [
-            type('obj', (object,), {
-                'output_type': 'stream',
-                'name': 'stdout',
-                'text': 'Hello, World!\n'
-            })()
-        ]
-
-        result = NotebookOutputParser.parse_outputs(outputs)
-
-        assert len(result) == 1
-        assert result[0]['output_type'] == 'stream'
-        assert result[0]['text'] == 'Hello, World!\n'
-        assert result[0]['stream_name'] == 'stdout'
-
-    def test_parse_outputs_execute_result(self):
-        """Test: Parse execution results (text/plain)"""
-        outputs = [
-            type('obj', (object,), {
-                'output_type': 'execute_result',
-                'data': {'text/plain': '42'},
-                'execution_count': 1
-            })()
-        ]
-
-        result = NotebookOutputParser.parse_outputs(outputs)
-
-        assert len(result) == 1
-        assert result[0]['output_type'] == 'execute_result'
-        assert result[0]['text'] == '42'
-
-    def test_parse_outputs_display_data_with_image(self):
-        """Test: Parse image outputs (PNG)"""
-        outputs = [
-            type('obj', (object,), {
-                'output_type': 'display_data',
-                'data': {
-                    'image/png': 'iVBORw0KGgoAAAANSUhEUgAAAAUA',
-                    'text/plain': '<Figure size 640x480>'
-                }
-            })()
-        ]
-
-        result = NotebookOutputParser.parse_outputs(outputs)
-
-        assert len(result) == 1
-        assert result[0]['has_image'] is True
-        assert result[0]['image_type'] == 'png'
-
-    def test_parse_outputs_error_traceback(self):
-        """Test: Parse error outputs with traceback"""
-        outputs = [
-            type('obj', (object,), {
-                'output_type': 'error',
-                'ename': 'ValueError',
-                'evalue': 'invalid value',
-                'traceback': ['Traceback (most recent call last):', '  File ...', 'ValueError: invalid value']
-            })()
-        ]
-
-        result = NotebookOutputParser.parse_outputs(outputs)
-
-        assert len(result) == 1
-        assert result[0]['output_type'] == 'error'
-        assert result[0]['error_name'] == 'ValueError'
-
-    def test_parse_outputs_empty_list(self):
-        """Test: Handle cells with no outputs"""
-        result = NotebookOutputParser.parse_outputs([])
-        assert result == []
-
-
-class TestLanguageDetection:
-    """Test language detection from kernel names"""
-
-    def test_detect_language_python_kernel(self):
-        """Test: 'python3' kernel -> 'python'"""
-        assert KernelLanguageDetector.detect_language('python3') == 'python'
-        assert KernelLanguageDetector.detect_language('python') == 'python'
-
-    def test_detect_language_r_kernel(self):
-        """Test: 'ir' kernel -> 'r'"""
-        assert KernelLanguageDetector.detect_language('ir') == 'r'
-        assert KernelLanguageDetector.detect_language('R') == 'r'
-
-    def test_detect_language_julia_kernel(self):
-        """Test: Julia kernel detection"""
-        assert KernelLanguageDetector.detect_language('julia') == 'julia'
-        assert KernelLanguageDetector.detect_language('julia-1.6') == 'julia'
-
-    def test_detect_language_javascript_kernel(self):
-        """Test: JavaScript kernel detection"""
-        assert KernelLanguageDetector.detect_language('javascript') == 'javascript'
-        assert KernelLanguageDetector.detect_language('node') == 'javascript'
-
-    def test_detect_language_unknown_kernel(self):
-        """Test: Unknown kernel -> defaults to 'python'"""
-        assert KernelLanguageDetector.detect_language('unknown') == 'python'
-        assert KernelLanguageDetector.detect_language('') == 'python'
 
 
 class TestIntegration:

@@ -2,35 +2,53 @@
 Extraction router.
 
 Routes extraction requests to specialized extractors based on file type.
+Uses PipelineFactory for component creation - fully modular and YAML-configurable.
 """
+import logging
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 from config import default_config
 from domain_models import ExtractionResult
-from ingestion.extractors.docling_extractor import DoclingExtractor
-from ingestion.extractors.epub_extractor import EpubExtractor
-from ingestion.extractors.code_extractor import CodeExtractor
-from ingestion.extractors.markdown_extractor import MarkdownExtractor
-from ingestion.jupyter_extractor import JupyterExtractor
+from pipeline.factory import PipelineFactory
+from pipeline.interfaces.extractor import ExtractorInterface
 from ingestion.obsidian_extractor import ObsidianExtractor
 from ingestion.obsidian_graph import ObsidianGraphBuilder
 from ingestion.obsidian_detector import get_obsidian_detector
 
+logger = logging.getLogger(__name__)
+
 
 class ExtractionRouter:
-    """Routes extraction requests to specialized extractors based on file type"""
+    """Routes extraction requests to specialized extractors based on file type.
 
-    def __init__(self, config=default_config):
+    Uses PipelineFactory for extractor creation, enabling:
+    - YAML configuration (config/pipeline.yaml)
+    - Easy swapping of extractors
+    - Consistent interface across all file types
+    """
+
+    def __init__(self, config=default_config, factory: Optional[PipelineFactory] = None):
+        """Initialize router with configuration and factory.
+
+        Args:
+            config: Application configuration
+            factory: Optional PipelineFactory. If None, creates default factory.
+        """
         self.config = config
+        self.factory = factory or PipelineFactory.default()
         self.last_method = None  # Track which method was used
         self.obsidian_graph = ObsidianGraphBuilder()  # Shared graph for vault
         self.obsidian_detector = get_obsidian_detector()
-        self.jupyter_extractor = JupyterExtractor()  # Instance for notebook extraction
-        self.extractors = self._build_extractors()
+        # Cache extractor instances for reuse
+        self._extractor_cache: Dict[str, ExtractorInterface] = {}
 
     def extract(self, file_path: Path) -> ExtractionResult:
-        """Extract text based on file extension"""
+        """Extract text based on file extension.
+
+        Uses factory-created extractors for modularity.
+        Special handling for Obsidian markdown (uses composition pattern).
+        """
         # Reset last_method to prevent stale values from previous extractions
         self.last_method = None
 
@@ -41,66 +59,53 @@ class ExtractionRouter:
         if ext in ['.md', '.markdown']:
             return self._extract_markdown_intelligently(file_path)
 
-        # Track which extraction method is being used
-        method_map = {
-            '.pdf': 'docling_hybrid',
-            '.docx': 'docling_hybrid',
-            '.epub': 'epub_pandoc_docling',
-            '.py': 'ast_python',
-            '.java': 'ast_java',
-            '.ts': 'ast_typescript',
-            '.tsx': 'ast_tsx',
-            '.js': 'ast_javascript',
-            '.jsx': 'ast_jsx',
-            '.cs': 'ast_c_sharp',
-            '.go': 'ast_go',
-            '.ipynb': 'jupyter_ast'
-        }
-        self.last_method = method_map.get(ext, 'unknown')
+        # Get or create extractor via factory
+        extractor = self._get_extractor(ext)
+        self.last_method = extractor.name
 
-        return self.extractors[ext](file_path)
+        return extractor.extract(file_path)
+
+    def _get_extractor(self, extension: str) -> ExtractorInterface:
+        """Get cached extractor or create via factory.
+
+        Args:
+            extension: File extension (e.g., '.pdf')
+
+        Returns:
+            ExtractorInterface implementation
+        """
+        if extension not in self._extractor_cache:
+            self._extractor_cache[extension] = self.factory.create_extractor(extension)
+        return self._extractor_cache[extension]
 
     def _extract_markdown_intelligently(self, file_path: Path) -> ExtractionResult:
-        """Choose between Obsidian Graph-RAG or regular markdown extraction"""
+        """Choose between Obsidian Graph-RAG or regular markdown extraction.
+
+        Obsidian uses composition pattern (different signature: extract(path, graph_builder))
+        rather than implementing ExtractorInterface. See design decision in state.json.
+        """
         if self.obsidian_detector.is_obsidian_note(file_path):
             self.last_method = 'obsidian_graph_rag'
             return ObsidianExtractor.extract(file_path, self.obsidian_graph)
         else:
-            self.last_method = 'docling_markdown'
-            return MarkdownExtractor.extract(file_path)
+            extractor = self._get_extractor('.md')
+            self.last_method = extractor.name
+            return extractor.extract(file_path)
 
     def get_last_method(self) -> str:
-        """Get the last extraction method used"""
+        """Get the last extraction method used."""
         return self.last_method or 'unknown'
 
     def get_obsidian_graph(self) -> ObsidianGraphBuilder:
-        """Get the shared Obsidian graph (for persistence)"""
+        """Get the shared Obsidian graph (for persistence)."""
         return self.obsidian_graph
 
-    def _build_extractors(self) -> Dict:
-        """Map extensions to extractors - Docling for docs, AST for code, Jupyter for notebooks, Graph-RAG for Obsidian"""
-        print("Using Docling + HybridChunker for PDF/DOCX/EPUB/Markdown, AST chunking for code, Jupyter for .ipynb, Graph-RAG for Obsidian vaults")
-        return {
-            # Documents (Docling with semantic chunking)
-            '.pdf': DoclingExtractor.extract,
-            '.docx': DoclingExtractor.extract,
-            '.epub': EpubExtractor.extract,
-            '.md': DoclingExtractor.extract,
-            '.markdown': DoclingExtractor.extract,
-            # Code files (AST-based chunking)
-            '.py': CodeExtractor.extract,
-            '.java': CodeExtractor.extract,
-            '.ts': CodeExtractor.extract,
-            '.tsx': CodeExtractor.extract,
-            '.js': CodeExtractor.extract,
-            '.jsx': CodeExtractor.extract,
-            '.cs': CodeExtractor.extract,
-            '.go': CodeExtractor.extract,
-            # Jupyter notebooks (AST + cell-aware chunking)
-            '.ipynb': self.jupyter_extractor.extract
-        }
+    def get_supported_extensions(self) -> list:
+        """Get list of supported file extensions from factory."""
+        return self.factory.get_supported_extensions()
 
     def _validate_extension(self, ext: str):
-        """Validate extension is supported"""
-        if ext not in self.extractors:
-            raise ValueError(f"Unsupported: {ext}")
+        """Validate extension is supported."""
+        if not self.factory.supports_extension(ext):
+            supported = self.factory.get_supported_extensions()
+            raise ValueError(f"Unsupported: {ext}. Supported: {', '.join(supported)}")

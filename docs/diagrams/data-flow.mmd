@@ -1,0 +1,52 @@
+%%{init: {'theme': 'neutral', 'themeVariables': { 'fontSize': '14px' }}}%%
+flowchart LR
+    subgraph input["Input"]
+        fs[(File System)]
+    end
+
+    subgraph ingestion["Ingestion"]
+        fw[FileWatcher]
+        ff[FileFilter]
+        ss[SecurityScanner]
+        ex[Extractor]
+    end
+
+    subgraph pipeline["Pipeline"]
+        cw[ChunkWorker]
+        ew[EmbedWorker]
+        sw[StoreWorker]
+    end
+
+    subgraph storage["Storage"]
+        db[(SQLite)]
+        vec[(Vector Index)]
+        fts[(FTS Index)]
+    end
+
+    subgraph query["Query"]
+        qe[QueryExecutor]
+        hs[HybridSearcher]
+        rr[Reranker]
+    end
+
+    subgraph output["Output"]
+        api([REST API])
+    end
+
+    fs --> fw
+    fw --> ff
+    ff --> ss
+    ss --> ex
+    ex -->|ExtractedDoc| cw
+    cw -->|ChunkedDoc| ew
+    ew -->|EmbeddedDoc| sw
+    sw --> db
+    sw --> vec
+    sw --> fts
+
+    api -->|Query| qe
+    qe --> hs
+    hs --> vec
+    hs --> fts
+    hs --> rr
+    rr -->|Results| api

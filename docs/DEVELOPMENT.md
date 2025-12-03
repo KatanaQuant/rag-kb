@@ -153,16 +153,6 @@ curl -X POST http://localhost:8000/query \
   -d '{"text": "test query", "top_k": 3}'
 ```
 
-
-
-## Advanced Development Workflows
-
-For maintainers performing advanced operations, see detailed guides in `internal_planning/`:
-
-- **[Blue-Green Deployment](../internal_planning/BLUE_GREEN_DEPLOYMENT.md)** - Side-by-side testing on port 8001 while production runs on port 8000
-- **[Model Migration Guide](../internal_planning/MODEL_MIGRATION_GUIDE.md)** - Zero-downtime model migration workflow  
-- **[Architecture Decisions](../internal_planning/ARCHITECTURE_DECISIONS.md)** - Technical decisions and rationale
-
 ---
 
 ## Contributing

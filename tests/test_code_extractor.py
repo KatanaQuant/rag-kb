@@ -28,7 +28,8 @@ class MyClass:
 """)
 
         # Extract with AST chunking
-        result = CodeExtractor.extract(python_file)
+        extractor = CodeExtractor()
+        result = extractor.extract(python_file)
 
         assert result.success is True
         assert result.method == 'ast_python'
@@ -41,8 +42,9 @@ class MyClass:
         unsupported_file = tmp_path / "test.xyz"
         unsupported_file.write_text("some content")
 
+        extractor = CodeExtractor()
         with pytest.raises(ValueError, match="Unsupported file extension"):
-            CodeExtractor.extract(unsupported_file)
+            extractor.extract(unsupported_file)
 
     def test_caches_chunker_by_language(self, tmp_path):
         """Should reuse chunker instance for same language"""
@@ -53,8 +55,9 @@ class MyClass:
         file2.write_text("def bar(): pass")
 
         # Extract both
-        CodeExtractor.extract(file1)
-        CodeExtractor.extract(file2)
+        extractor = CodeExtractor()
+        extractor.extract(file1)
+        extractor.extract(file2)
 
         # Should have cached the python chunker
         assert 'python' in CodeExtractor._chunker_cache
@@ -89,7 +92,8 @@ func (c *Calculator) Add(n int) {
 """)
 
         # Extract with AST chunking
-        result = CodeExtractor.extract(go_file)
+        extractor = CodeExtractor()
+        result = extractor.extract(go_file)
 
         assert result.success is True
         assert result.method == 'ast_go'
@@ -125,7 +129,8 @@ const add = (a, b) => a + b;
 """)
 
         # Extract with AST chunking
-        result = CodeExtractor.extract(js_file)
+        extractor = CodeExtractor()
+        result = extractor.extract(js_file)
 
         assert result.success is True
         assert result.method == 'ast_javascript'
@@ -153,7 +158,8 @@ const Greeting: React.FC<Props> = ({ name }) => {
 export default Greeting;
 """)
 
-        result = CodeExtractor.extract(tsx_file)
+        extractor = CodeExtractor()
+        result = extractor.extract(tsx_file)
 
         assert result.success is True
         assert result.method == 'ast_tsx'

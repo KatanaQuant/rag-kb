@@ -1,0 +1,48 @@
+# RAG-KB Pipeline Configuration - RTX 4080 Profile (16GB VRAM)
+#
+# Best for: High-performance workstations, production GPU servers
+#
+# Usage:
+#   cp config/profiles/rtx4080.yaml config/pipeline.yaml
+#   docker-compose -f docker-compose.yaml -f config/profiles/docker-compose.gpu.yaml up
+#
+# Expected Performance (estimated - GPU support untested):
+#   - Embedding speed: ~1500-2000 docs/min
+#   - Query latency: 0.1-0.3s
+#   - VRAM usage: ~8-10GB
+#
+# WARNING: GPU configurations are currently UNTESTED - awaiting hardware delivery.
+#          The `device: cuda` settings are commented out until validation.
+
+extraction:
+  provider: docling
+
+chunking:
+  strategy: hybrid
+  max_tokens: 512
+
+embedding:
+  provider: sentence-transformers
+  model: Snowflake/snowflake-arctic-embed-l-v2.0
+  batch_size: 128  # Large batches for throughput
+  # device: cuda   # UNCOMMENT when GPU support is validated
+
+reranking:
+  enabled: true
+  model: BAAI/bge-reranker-large
+  # model: BAAI/bge-reranker-v2-m3  # v2.0 FUTURE: Larger, better model
+  # device: cuda   # UNCOMMENT when GPU support is validated
+  top_n: 50        # Rerank more for quality with GPU speed
+
+# ============================================================================
+# FUTURE v2.0 OPTIONS (when available)
+# ============================================================================
+# Higher quality embeddings with large language model:
+#
+# embedding:
+#   provider: qwen3
+#   model: Qwen/Qwen3-8B-Embed  # 8B params, superior quality
+#   device: cuda
+#   batch_size: 16  # Smaller batches for larger model
+#
+# This requires v2.0 release with Qwen3Embedder implementation.

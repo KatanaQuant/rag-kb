@@ -1,0 +1,34 @@
+# RAG-KB Pipeline Configuration - RTX 3060 Profile (12GB VRAM)
+#
+# Best for: Desktop workstations, mid-range GPU servers
+#
+# Usage:
+#   cp config/profiles/rtx3060.yaml config/pipeline.yaml
+#   docker-compose -f docker-compose.yaml -f config/profiles/docker-compose.gpu.yaml up
+#
+# Expected Performance (estimated - GPU support untested):
+#   - Embedding speed: ~500-1000 docs/min
+#   - Query latency: 0.3-0.8s (with reranking)
+#   - VRAM usage: ~4GB (embedder + reranker)
+#
+# WARNING: GPU configurations are currently UNTESTED - awaiting hardware delivery.
+#          The `device: cuda` settings are commented out until validation.
+
+extraction:
+  provider: docling
+
+chunking:
+  strategy: hybrid
+  max_tokens: 512
+
+embedding:
+  provider: sentence-transformers
+  model: Snowflake/snowflake-arctic-embed-l-v2.0
+  batch_size: 64   # Larger batches on GPU
+  # device: cuda   # UNCOMMENT when GPU support is validated
+
+reranking:
+  enabled: true
+  model: BAAI/bge-reranker-large
+  # device: cuda   # UNCOMMENT when GPU support is validated
+  top_n: 30        # Can rerank more candidates with GPU speed

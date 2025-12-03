@@ -69,7 +69,7 @@ docker-compose exec rag-api python3 migrations/backfill_chunk_counts.py
 docker-compose exec rag-api python3 -c "
 import os
 # Replace with your file path
-fp = '/app/knowledge_base/example.md'
+fp = '/app/kb/example.md'
 print(f'Size: {os.path.getsize(fp)} bytes')
 with open(fp) as f:
     print(f'Content preview: {f.read(200)}')"
@@ -78,12 +78,12 @@ with open(fp) as f:
 **How to fix:**
 ```bash
 # Re-index specific file
-curl -X POST "http://localhost:8000/documents/reindex?path=/app/knowledge_base/example.md"
+curl -X POST "http://localhost:8000/document/kb/example.md/reindex"
 
 # Or delete and re-add
-curl -X DELETE "http://localhost:8000/documents?path=/app/knowledge_base/example.md"
-# Then trigger re-scan
-curl -X POST "http://localhost:8000/scan"
+curl -X DELETE "http://localhost:8000/document/kb/example.md"
+# Then trigger indexing
+curl -X POST "http://localhost:8000/index"
 ```
 
 ### 3. `processing_incomplete`
@@ -113,7 +113,7 @@ for row in cur.fetchall():
 **How to fix:**
 ```bash
 # For failed documents - force re-index
-curl -X POST "http://localhost:8000/documents/reindex?path=/app/knowledge_base/example.pdf&force=true"
+curl -X POST "http://localhost:8000/document/kb/example.pdf/reindex"
 ```
 
 ### 4. `missing_embeddings` (ERROR severity)
@@ -128,8 +128,8 @@ curl -X POST "http://localhost:8000/documents/reindex?path=/app/knowledge_base/e
 **How to fix:**
 ```bash
 # Delete the orphan document record and re-index
-curl -X DELETE "http://localhost:8000/documents?path=/app/knowledge_base/orphan.pdf"
-curl -X POST "http://localhost:8000/scan"
+curl -X DELETE "http://localhost:8000/document/kb/orphan.pdf"
+curl -X POST "http://localhost:8000/index"
 ```
 
 ## Migrations
@@ -219,7 +219,7 @@ curl -X POST http://localhost:8000/api/maintenance/reindex-failed-documents \
   -d '{"dry_run": true}'
 ```
 
-See [API.md](API.md#maintenance-endpoints) for full endpoint documentation.
+See [API.md](API.md#system-maintenance) for full endpoint documentation.
 
 ---
 
@@ -248,7 +248,7 @@ fi
 
 1. Check the specific document:
    ```bash
-   curl "http://localhost:8000/documents/integrity/app/knowledge_base/myfile.pdf"
+   curl "http://localhost:8000/documents/integrity/app/kb/myfile.pdf"
    ```
 
 2. Look at the issue type and follow the relevant section above.

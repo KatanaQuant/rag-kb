@@ -1,3 +1,8 @@
+"""Startup manager - orchestrates application initialization.
+
+Refactored from God Object (26 methods) to facade over focused phase classes.
+Phase classes are available in startup.phases for direct use if needed.
+"""
 import os
 import time
 from pathlib import Path
@@ -21,12 +26,35 @@ from operations.orphan_detector import OrphanDetector
 from startup.config_validator import ConfigValidator
 from startup.self_healing import SelfHealingService
 
+# Phase classes for focused responsibilities (Phase 2.1 refactoring)
+from startup.phases import (
+    ConfigurationPhase,
+    ComponentPhase,
+    PipelinePhase,
+    SanitizationPhase,
+    IndexingPhase,
+)
+
 
 class StartupManager:
-    """Manages application startup"""
+    """Manages application startup.
+
+    Facade over focused phase classes. Methods are organized into phases:
+    - Configuration: validate config
+    - Component: model, stores, processor, cache, reranker
+    - Pipeline: queue, worker, concurrent pipeline
+    - Sanitization: resume incomplete, repair orphans, self-healing
+    - Indexing: background indexing, file watching
+    """
 
     def __init__(self, app_state: AppState):
         self.state = app_state
+        # Phase objects available for direct testing/use
+        self._config_phase = ConfigurationPhase()
+        self._component_phase = ComponentPhase(app_state)
+        self._pipeline_phase = PipelinePhase(app_state)
+        self._sanitization_phase = SanitizationPhase(app_state)
+        self._indexing_phase = IndexingPhase(app_state, self._sanitization_phase)
 
     async def initialize(self):
         """Initialize all components (async for AsyncVectorStore)"""
@@ -37,15 +65,20 @@ class StartupManager:
         self._init_progress_tracker()
         self._init_processor()
         self._init_cache()
+        self._init_reranker()
         self._init_queue_and_worker()
         print("RAG system ready! Starting sanitization and indexing...")
         self._start_background_indexing()
+
+    # ============ Configuration Phase ============
 
     def _validate_config(self):
         """Validate configuration before startup"""
         validator = ConfigValidator(default_config)
         validator.validate()
         print("Configuration validated")
+
+    # ============ Component Phase ============
 
     def _load_model(self):
         """Load embedding model"""
@@ -91,6 +124,20 @@ class StartupManager:
             print(f"Query cache enabled (size: {default_config.cache.max_size})")
         else:
             print("Query cache disabled")
+
+    def _init_reranker(self):
+        """Initialize search result reranker from pipeline config"""
+        from pipeline.factory import PipelineFactory
+
+        factory = PipelineFactory.default()
+        self.state.query.reranker = factory.create_reranker()
+
+        if factory.reranking_enabled:
+            print(f"Reranker enabled: {factory.config.reranking.model} (top_n={factory.reranking_top_n})")
+        else:
+            print("Reranker disabled")
+
+    # ============ Pipeline Phase ============
 
     def _init_queue_and_worker(self):
         """Initialize indexing queue and worker"""
@@ -158,6 +205,8 @@ class StartupManager:
         self.state.start_pipeline_coordinator()
         print("Concurrent pipeline started")
 
+    # ============ Sanitization Phase ============
+
     def _sanitize_before_indexing(self):
         """Sanitization stage: detect and repair issues before new indexing
 
@@ -219,6 +268,8 @@ class StartupManager:
         detector.repair_orphans(self.state.indexing.queue)
         print("Orphans queued for reindexing")
 
+    # ============ Indexing Phase ============
+
     def _index_docs(self):
         """Index documents"""
         print("Indexing documents...")
@@ -264,6 +315,8 @@ class StartupManager:
             self.state.core.processor,
             embedding_service
         )
+
+    # ============ Background Tasks ============
 
     def _start_background_indexing(self):
         """Start indexing in background thread"""

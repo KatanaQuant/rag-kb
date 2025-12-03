@@ -48,7 +48,7 @@ class TestObsidianExtractorBasics:
         note_path = vault_path / "Note1.md"
 
         if not note_path.exists():
-            pytest.skip("Fixture note not found")
+            pytest.skip(f"Fixture note not found: {note_path}")
 
         result = ObsidianExtractor.extract(note_path, graph_builder=extractor.graph_builder)
 
@@ -61,7 +61,7 @@ class TestObsidianExtractorBasics:
         note_path = vault_path / "Note1.md"
 
         if not note_path.exists():
-            pytest.skip("Fixture note not found")
+            pytest.skip(f"Fixture note not found: {note_path}")
 
         result = ObsidianExtractor.extract(note_path, graph_builder=extractor.graph_builder)
 
@@ -73,7 +73,7 @@ class TestObsidianExtractorBasics:
         note_path = vault_path / "Note1.md"
 
         if not note_path.exists():
-            pytest.skip("Fixture note not found")
+            pytest.skip(f"Fixture note not found: {note_path}")
 
         result = ObsidianExtractor.extract(note_path, graph_builder=extractor.graph_builder)
 
@@ -174,9 +174,8 @@ class TestVaultLevelExtraction:
         assert isinstance(results, list)
         assert isinstance(graph_builder, ObsidianGraphBuilder)
         # Should have results from multiple notes (if fixture exists)
-        # Skipping if no fixtures found
         if len(results) == 0:
-            pytest.skip("No fixture notes found")
+            pytest.skip(f"No fixture notes found in vault: {vault_extractor.vault_path}")
 
     def test_vault_extractor_get_graph_stats(self, vault_extractor):
         """Test: Can retrieve graph statistics"""

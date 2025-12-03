@@ -11,9 +11,9 @@ services:
     image: rag-api:latest  # Tag the built image for cache_from to work
     container_name: rag-api
     ports:
-      - "${RAG_PORT:-8000}:8000"
+      - "0.0.0.0:${RAG_PORT:-8000}:8000"  # Listen on all interfaces for network access
     volumes:
-      - ./knowledge_base:/app/knowledge_base
+      - ./kb:/app/kb
       - ./data:/app/data
       - ./tests:/app/tests  # Mount tests directory for test execution
       - ./api/migrations:/app/migrations  # Migration scripts

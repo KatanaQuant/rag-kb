@@ -345,10 +345,11 @@ class ExecutablePermissionStrategy:
     """Detects files with executable permissions
 
     Files with execute permissions are suspicious in a document repository.
-    This catches:
-    - Shell scripts with execute bit set
-    - Python scripts with execute bit set
-    - Any document accidentally marked executable
+    Returns is_valid=False for ANY file with +x, allowing PipelineCoordinator
+    to attempt remediation (remove +x) before final rejection.
+
+    Shebang scripts (#!/bin/...) are distinguished via file_type='script'
+    so coordinator can reject them without remediation attempt.
     """
 
     def validate(self, file_path: Path, expected_type: str) -> ValidationResult:
@@ -359,32 +360,28 @@ class ExecutablePermissionStrategy:
             expected_type: Expected file type
 
         Returns:
-            ValidationResult with is_valid=False if file is executable
+            ValidationResult with is_valid=False if file has any execute bit
         """
         try:
-            # Check if file has execute permission for owner, group, or others
             mode = file_path.stat().st_mode
-            is_executable = bool(mode & 0o111)  # Check any execute bit
+            is_executable = bool(mode & 0o111)
 
             if is_executable:
-                # Read first line to check for shebang
-                try:
-                    with open(file_path, 'rb') as f:
-                        first_line = f.read(2)
-                        has_shebang = first_line == b'#!'
-                except:
-                    has_shebang = False
-
+                has_shebang = self._has_shebang(file_path)
                 if has_shebang:
                     return ValidationResult(
                         is_valid=False,
                         file_type='script',
-                        reason=f'File has executable permissions and shebang (script masquerading as {expected_type})',
+                        reason=f'Script with executable permissions (shebang detected)',
                         validation_check='ExecutablePermissionStrategy'
                     )
                 else:
-                    # Just warn but allow (might be accidental chmod)
-                    print(f"  ⚠️  File has executable permissions: {file_path.name}")
+                    return ValidationResult(
+                        is_valid=False,
+                        file_type=expected_type,
+                        reason='Executable permission detected',
+                        validation_check='ExecutablePermissionStrategy'
+                    )
 
         except Exception:
             # If we can't check permissions, let it through
@@ -395,3 +392,11 @@ class ExecutablePermissionStrategy:
             file_type=expected_type,
             reason=''
         )
+
+    def _has_shebang(self, file_path: Path) -> bool:
+        """Check if file starts with shebang (#!)"""
+        try:
+            with open(file_path, 'rb') as f:
+                return f.read(2) == b'#!'
+        except Exception:
+            return False

@@ -1,0 +1,38 @@
+# Docker Compose GPU Override for RAG-KB
+#
+# WARNING: UNTESTED - GPU hardware not yet available for validation.
+#          Use at your own risk and report issues to the project.
+#
+# Prerequisites:
+#   1. NVIDIA GPU with CUDA support
+#   2. NVIDIA Container Toolkit installed:
+#      https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html
+#   3. Docker 19.03+ with GPU support
+#
+# Usage:
+#   docker-compose -f docker-compose.yaml -f config/profiles/docker-compose.gpu.yaml up
+#
+# Verify GPU access:
+#   docker exec rag-api nvidia-smi
+#   docker exec rag-api python -c "import torch; print(torch.cuda.is_available())"
+
+version: '3.8'
+
+services:
+  api:
+    # Enable GPU access via NVIDIA Container Toolkit
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1              # Use 1 GPU (change to 'all' for multi-GPU)
+              capabilities: [gpu]
+
+    environment:
+      # Make all GPUs visible to the container
+      - NVIDIA_VISIBLE_DEVICES=all
+      # Use only the first GPU (change for multi-GPU setups)
+      - CUDA_VISIBLE_DEVICES=0
+      # Optional: Limit GPU memory growth (uncomment if needed)
+      # - TF_FORCE_GPU_ALLOW_GROWTH=true

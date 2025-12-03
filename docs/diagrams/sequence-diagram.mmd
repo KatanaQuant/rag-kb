@@ -1,0 +1,34 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e3f2fd', 'secondaryColor': '#fff8e1', 'tertiaryColor': '#fce4ec'}}}%%
+sequenceDiagram
+    autonumber
+    participant Client
+    participant QueryExecutor
+    participant Embedder as EmbedderInterface
+    participant VectorStore as ChromaDB
+    participant Reranker as RerankerInterface
+
+    Client->>QueryExecutor: query("How does pipeline work?", top_k=5)
+
+    Note over QueryExecutor: Check cache first
+    QueryExecutor->>QueryExecutor: cache.get(query_hash)
+
+    alt Cache Miss
+        QueryExecutor->>Embedder: embed([query_text])
+        Embedder-->>QueryExecutor: query_vector [1024 dims]
+
+        Note over QueryExecutor: Fetch extra candidates for reranking
+        QueryExecutor->>VectorStore: search(vector, top_n=20)
+        VectorStore-->>QueryExecutor: 20 candidate chunks
+
+        alt Reranking Enabled
+            QueryExecutor->>Reranker: rerank(query, candidates, top_k=5)
+            Note over Reranker: Cross-encoder scoring
+            Reranker-->>QueryExecutor: 5 best results (reordered)
+        else Reranking Disabled
+            QueryExecutor->>QueryExecutor: candidates[:top_k]
+        end
+
+        QueryExecutor->>QueryExecutor: cache.set(query_hash, results)
+    end
+
+    QueryExecutor-->>Client: QueryResponse(results, metadata)

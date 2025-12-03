@@ -32,7 +32,7 @@ class TestObsidianGraphCleanup:
             import sqlite_vec
             sqlite_vec.load(conn)
         except ImportError:
-            pytest.skip("sqlite-vec not available")
+            pytest.skip("sqlite-vec not available - install with: pip install sqlite-vec")
 
         # Create schema
         from config import DatabaseConfig
@@ -253,7 +253,7 @@ class TestGraphRepositoryCleanupMethods:
             import sqlite_vec
             sqlite_vec.load(conn)
         except ImportError:
-            pytest.skip("sqlite-vec not available")
+            pytest.skip("sqlite-vec not available - install with: pip install sqlite-vec")
 
         from config import DatabaseConfig
         config = DatabaseConfig(path=':memory:', embedding_dim=1024)

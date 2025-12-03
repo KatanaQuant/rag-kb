@@ -102,7 +102,10 @@ class EnvironmentConfigLoader:
 
     def _load_path_config(self) -> PathConfig:
         """Load path configuration from environment"""
-        kb_path = self._get_path("KNOWLEDGE_BASE_PATH", Path("/app/knowledge_base"))
+        # Support both KB_PATH (new) and KNOWLEDGE_BASE_PATH (deprecated)
+        kb_path = self._get_path("KB_PATH", None)
+        if kb_path is None:
+            kb_path = self._get_path("KNOWLEDGE_BASE_PATH", Path("/app/kb"))
         return PathConfig(knowledge_base=kb_path)
 
     def _load_file_validation_config(self) -> FileValidationConfig:

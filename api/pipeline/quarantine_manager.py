@@ -21,7 +21,7 @@ from dataclasses import dataclass, asdict
 QUARANTINE_CHECKS = {
     'ExtensionMismatchStrategy',      # Executables as documents
     'ArchiveBombStrategy',            # Zip bombs
-    'ExecutablePermissionStrategy',   # Scripts with +x
+    'ExecutablePermissionStrategy',   # Shebang scripts only (non-shebang +x is auto-remediated)
     'ClamAVStrategy',                 # Confirmed virus detection
     'HashBlacklistStrategy',          # Known malware hash
 }

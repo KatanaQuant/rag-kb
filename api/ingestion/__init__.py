@@ -14,7 +14,6 @@ from .helpers import FileHasher, GhostscriptHelper
 # Extractors
 from .extractors import (
     DoclingExtractor,
-    DOCXExtractor,
     MarkdownExtractor,
     EpubExtractor,
     ExtractionRouter
@@ -54,7 +53,6 @@ __all__ = [
     'GhostscriptHelper',
     # Extractors
     'DoclingExtractor',
-    'DOCXExtractor',
     'MarkdownExtractor',
     'EpubExtractor',
     'ExtractionRouter',

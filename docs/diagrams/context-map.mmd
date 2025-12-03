@@ -1,0 +1,57 @@
+%%{init: {'theme': 'neutral', 'themeVariables': { 'fontSize': '14px' }}}%%
+flowchart TB
+    subgraph ing["Ingestion Context"]
+        direction TB
+        dp[DocumentProcessor]
+        er[ExtractionRouter]
+        fv[FileTypeValidator]
+    end
+
+    subgraph pipe["Pipeline Context"]
+        direction TB
+        pc[PipelineCoordinator]
+        ew[EmbedWorkerPool]
+        pf[PipelineFactory]
+    end
+
+    subgraph store["Storage Context"]
+        direction TB
+        vs[VectorStore]
+        dr[DocumentRepository]
+        cr[ChunkRepository]
+    end
+
+    subgraph query["Query Context"]
+        direction TB
+        qe[QueryExecutor]
+        hs[HybridSearcher]
+        qc[QueryCache]
+    end
+
+    subgraph idx["Indexing Context"]
+        direction TB
+        iq[IndexingQueue]
+        od[OrphanDetector]
+        fw[FileWatcher]
+    end
+
+    subgraph sec["Security Context"]
+        direction TB
+        ss[SecurityScanner]
+        qm[QuarantineManager]
+    end
+
+    %% Relationships
+    ing -->|ExtractedDocument| pipe
+    pipe -->|EmbeddedDocument| store
+    store -.->|reads| query
+    idx -->|QueueItem| pipe
+    sec -->|ValidationResult| ing
+
+    %% External
+    fs([File System])
+    api([REST API])
+
+    fs --> ing
+    fs --> idx
+    query --> api

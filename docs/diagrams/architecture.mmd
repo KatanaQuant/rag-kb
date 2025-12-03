@@ -1,0 +1,52 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e8f5e9', 'secondaryColor': '#fff3e0', 'tertiaryColor': '#e3f2fd'}}}%%
+flowchart LR
+    subgraph Input["INPUT"]
+        Files[/"kb/<br/>PDF, EPUB, MD, Code"/]
+    end
+
+    subgraph Pipeline["RAG PIPELINE"]
+        direction TB
+        Sec[Security Scan<br/>ClamAV + YARA]
+        Ext[Extract Text<br/>Docling]
+        Chunk[Chunk<br/>HybridChunker]
+        Embed[Embed<br/>Arctic Embed L]
+        DB[(SQLite<br/>+ vec)]
+    end
+
+    subgraph Query["QUERY"]
+        direction TB
+        API[REST API<br/>:8000]
+        MCP[MCP Server<br/>/mcp]
+        Rerank[Rerank<br/>BGE]
+    end
+
+    subgraph Output["OUTPUT"]
+        IDE[/"AI Assistants<br/>Claude, Codex, Gemini"/]
+        App[/"Applications<br/>curl, Python"/]
+    end
+
+    Files --> Sec
+    Sec --> Ext
+    Ext --> Chunk
+    Chunk --> Embed
+    Embed --> DB
+
+    DB --> API
+    DB --> MCP
+    API --> Rerank
+    MCP --> Rerank
+
+    Rerank --> IDE
+    Rerank --> App
+
+    classDef input fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef pipeline fill:#fff3e0,stroke:#ff9800,stroke-width:1px
+    classDef store fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+    classDef query fill:#f3e5f5,stroke:#9c27b0,stroke-width:1px
+    classDef output fill:#fce4ec,stroke:#e91e63,stroke-width:1px
+
+    class Files input
+    class Sec,Ext,Chunk,Embed pipeline
+    class DB store
+    class API,MCP,Rerank query
+    class IDE,App output

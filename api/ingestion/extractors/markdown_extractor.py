@@ -4,21 +4,29 @@ Markdown file extractor.
 Extracts text from Markdown files using Docling HybridChunker.
 """
 from pathlib import Path
+from typing import ClassVar, Set
+
 from domain_models import ExtractionResult
 from ingestion.extractors._docling_availability import (
     DOCLING_AVAILABLE,
     DOCLING_CHUNKING_AVAILABLE
 )
+from pipeline.interfaces import ExtractorInterface
 
 
-class MarkdownExtractor:
+class MarkdownExtractor(ExtractorInterface):
     """Extracts text from Markdown files using Docling HybridChunker
 
     NO FALLBACKS: Fails explicitly if Docling is unavailable or fails.
     """
 
-    @staticmethod
-    def extract(path: Path) -> ExtractionResult:
+    SUPPORTED_EXTENSIONS: ClassVar[Set[str]] = {'.md', '.markdown'}
+
+    @property
+    def name(self) -> str:
+        return "markdown_docling"
+
+    def extract(self, path: Path) -> ExtractionResult:
         """Extract markdown using Docling converter + HybridChunker
 
         NO FALLBACKS: Raises exceptions if Docling is unavailable or fails.

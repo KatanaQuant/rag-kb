@@ -1,0 +1,81 @@
+# RAG-KB Pipeline Configuration v1.10.x
+#
+# Modular pipeline architecture - all stages are swappable.
+# Each stage implements an interface (see api/pipeline/interfaces/).
+#
+# Override settings via environment variables:
+#   EXTRACTION_PROVIDER, CHUNK_STRATEGY, CHUNK_MAX_TOKENS,
+#   EMBEDDING_PROVIDER, MODEL_NAME, EMBEDDING_BATCH_SIZE,
+#   RERANKING_ENABLED, RERANKING_MODEL, RERANKING_TOP_N
+#
+# See docs/EXTENDING.md for how to add custom implementations.
+
+# =============================================================================
+# EXTRACTION STAGE
+# =============================================================================
+# Extracts text from documents. Each extractor implements ExtractorInterface.
+#
+# Available extractors (auto-selected by file extension):
+#   - DoclingExtractor: .pdf, .docx (uses Docling for semantic extraction)
+#   - MarkdownExtractor: .md, .markdown (preserves structure)
+#   - EpubExtractor: .epub (pandoc + docling)
+#   - CodeExtractor: .py, .java, .ts, .tsx, .js, .jsx, .cs, .go (AST-based)
+#   - JupyterExtractor: .ipynb (cell-aware extraction)
+#
+# Note: ObsidianExtractor uses composition pattern for Graph-RAG (not swappable)
+extraction:
+  provider: docling  # Default provider for document extraction
+
+# =============================================================================
+# CHUNKING STAGE
+# =============================================================================
+# Splits extracted text into semantic chunks. Implements ChunkerInterface.
+#
+# Available strategies:
+#   - hybrid: Docling HybridChunker (semantic + structural) [RECOMMENDED]
+#   - semantic: Sentence/paragraph-aware splitting
+#   - fixed: Simple token-based splitting with overlap
+#
+# For code files, AST-based chunking is used regardless of this setting.
+chunking:
+  strategy: hybrid   # Options: hybrid, semantic, fixed
+  max_tokens: 512    # Maximum tokens per chunk (affects retrieval granularity)
+
+# =============================================================================
+# EMBEDDING STAGE
+# =============================================================================
+# Converts text chunks to vectors. Implements EmbedderInterface.
+#
+# Available providers:
+#   - sentence-transformers: Local CPU/GPU embedding
+#
+# Recommended models:
+#   CPU: Snowflake/snowflake-arctic-embed-l-v2.0 (1024 dim, fast)
+#   GPU: (v2.0) Will support larger models
+embedding:
+  provider: sentence-transformers
+  model: Snowflake/snowflake-arctic-embed-l-v2.0
+  batch_size: 32     # Reduce for low-memory systems
+
+# =============================================================================
+# RERANKING STAGE
+# =============================================================================
+# Reranks search results for better relevance. Implements RerankerInterface.
+#
+# Available rerankers:
+#   - BGEReranker: BAAI/bge-reranker-large (560MB, CPU-viable, +20-30% quality)
+#   - NoopReranker: Pass-through (used when enabled: false)
+#
+# How it works:
+#   1. Retrieve top_n candidates from vector search
+#   2. Rerank using cross-encoder model
+#   3. Return top_k results (from query request)
+#
+# Performance notes:
+#   - First query: ~30-60s (model download + load)
+#   - Subsequent queries: ~1-3s (CPU), ~0.1-0.3s (GPU)
+#   - Set enabled: false for faster queries without quality boost
+reranking:
+  enabled: true                    # Set false to disable (uses NoopReranker)
+  model: BAAI/bge-reranker-large   # 560MB, CPU-viable
+  top_n: 20                        # Retrieve this many, rerank to top_k

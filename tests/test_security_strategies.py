@@ -254,8 +254,12 @@ class TestExecutablePermissionStrategy:
         assert "executable" in result.reason.lower()
         assert "shebang" in result.reason.lower()
 
-    def test_warns_on_executable_without_shebang(self, temp_dir, capsys):
-        """File with execute bit but no shebang should warn"""
+    def test_rejects_executable_without_shebang(self, temp_dir):
+        """File with execute bit but no shebang should fail validation
+
+        This allows PipelineCoordinator to attempt remediation (chmod -x)
+        before final rejection decision.
+        """
         file_path = temp_dir / "document.pdf"
         file_path.write_bytes(b"%PDF-1.4\nContent")
         os.chmod(file_path, 0o755)  # rwxr-xr-x (accidental chmod)
@@ -263,10 +267,11 @@ class TestExecutablePermissionStrategy:
         strategy = ExecutablePermissionStrategy()
         result = strategy.validate(file_path, 'pdf')
 
-        # Still passes but warns
-        assert result.is_valid is True
-        captured = capsys.readouterr()
-        assert "executable permissions" in captured.out.lower()
+        # Now fails validation (coordinator will remediate)
+        assert result.is_valid is False
+        assert result.file_type == 'pdf'  # Preserves expected type (not 'script')
+        assert result.validation_check == 'ExecutablePermissionStrategy'
+        assert "executable" in result.reason.lower()
 
     def test_detects_any_execute_bit(self, temp_dir):
         """Should detect execute bit for owner, group, or others"""

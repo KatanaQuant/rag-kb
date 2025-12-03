@@ -44,7 +44,7 @@ class FileFilterPolicy:
         '.gitignore', '.dockerignore', '.eslintrc',  # Config files (usually empty)
     ]
 
-    EXCLUDED_SUBDIRS = {'problematic', 'original'}
+    EXCLUDED_SUBDIRS = {'problematic', 'original', '.quarantine'}
     TEMP_PDF_PATTERNS = {'.tmp.pdf', '.gs_tmp.pdf'}
 
     def should_exclude(self, path: Path) -> bool:

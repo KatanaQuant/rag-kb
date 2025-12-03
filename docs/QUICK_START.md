@@ -5,7 +5,6 @@ This guide will get you up and running with RAG-KB in under 5 minutes.
 ## Prerequisites
 
 - **Docker** and **Docker Compose**
-- **Node.js v14+** (for MCP server - optional)
 - **Git**
 
 ## Step 0: Clone Repository
@@ -16,7 +15,7 @@ git clone https://github.com/KatanaQuant/rag-kb.git
 cd rag-kb
 
 # Checkout latest stable release
-git checkout v1.9.1
+git checkout v1.9.1  # or v1.10.0-beta.1 for beta
 
 # Optional: Change port if 8000 is in use
 echo "RAG_PORT=8001" > .env
@@ -27,7 +26,7 @@ echo "MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1" >> .env
 
 ## Step 1: Add Content
 
-The `knowledge_base/` directory is where you put your documents and code. It's **gitignored by default** to protect your personal/copyrighted content.
+The `kb/` directory is where you put your documents and code. It's **gitignored by default** to protect your personal/copyrighted content.
 
 > **Custom Location?** See [CONFIGURATION.md - Knowledge Base Directory](CONFIGURATION.md#knowledge-base-directory) to use an external drive, NAS, or custom path.
 
@@ -35,20 +34,20 @@ The `knowledge_base/` directory is where you put your documents and code. It's *
 
 ```bash
 # Create organization structure (optional)
-mkdir -p knowledge_base/{books,notes,docs,papers}
+mkdir -p kb/{books,notes,docs,papers}
 
 # Add some content
-cp ~/Documents/my-book.pdf knowledge_base/books/
-cp ~/Documents/*.md knowledge_base/docs/
-cp ~/notes/*.txt knowledge_base/notes/
+cp ~/Documents/my-book.pdf kb/books/
+cp ~/Documents/*.md kb/docs/
+cp ~/notes/*.txt kb/notes/
 ```
 
 ### Add Codebases (v0.8.0+)
 
-Same simple workflow - just drop repos into `knowledge_base/`:
+Same simple workflow - just drop repos into `kb/`:
 
 ```bash
-cd knowledge_base
+cd kb
 git clone https://github.com/anthropics/anthropic-sdk-python.git
 
 # Or copy your own projects
@@ -180,7 +179,7 @@ docker images | grep rag-api
 
 ## Next Steps
 
-- **MCP Integration**: See [MCP_CLAUDE.md](MCP_CLAUDE.md), [MCP_CODEX.md](MCP_CODEX.md), or [MCP_GEMINI.md](MCP_GEMINI.md)
+- **MCP Integration**: See [MCP.md](MCP.md)
 - **Usage Patterns**: See [USAGE.md](USAGE.md) for different query methods
 - **Configuration**: See [CONFIGURATION.md](CONFIGURATION.md) for advanced settings
 - **Troubleshooting**: See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) if you encounter issues

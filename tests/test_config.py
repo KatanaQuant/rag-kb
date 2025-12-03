@@ -94,7 +94,7 @@ class TestPathConfig:
     def test_default_paths(self):
         """Test default paths"""
         config = PathConfig()
-        assert str(config.knowledge_base) == "/app/knowledge_base"
+        assert str(config.knowledge_base) == "/app/kb"
         assert str(config.data_dir) == "/app/data"
 
 
@@ -124,7 +124,7 @@ class TestConfig:
         assert config.model.name is not None
 
         # Path config
-        assert "knowledge_base" in str(config.paths.knowledge_base)
+        assert "kb" in str(config.paths.knowledge_base)
 
         # Watcher config
         assert config.watcher is not None

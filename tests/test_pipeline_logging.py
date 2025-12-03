@@ -177,3 +177,297 @@ class TestPipelineLogging:
         assert "conversion complete" in captured.out.lower()
         # The misleading message should NOT appear
         assert "no chunks extracted" not in captured.out
+
+    @patch('pipeline.pipeline_coordinator.DocumentFile')
+    def test_heartbeat_stops_on_rejection(self, mock_doc_class, mock_services, capsys):
+        """Heartbeat should stop when file is rejected by security
+
+        Bug: When a file is rejected, _chunk_stage() returns early without
+        calling log_complete(), leaving the heartbeat thread running forever.
+        This causes confusing "processing... 540s elapsed" messages after rejection.
+        """
+        processor, indexer, embedding_service = mock_services
+
+        # Create mock for rejected file
+        rejected_file = Mock()
+        rejected_file.path = Path("/test/rejected.md")
+        rejected_file.hash = "rejected_hash"
+        mock_doc_class.from_path.return_value = rejected_file
+
+        # Setup: File is NOT indexed (so it goes through processing)
+        embedding_service.store.is_document_indexed.return_value = False
+
+        # File is rejected - returns empty chunks
+        processor.process_file.return_value = []
+        # Mark as rejected
+        processor.is_rejected.return_value = True
+
+        coordinator = PipelineCoordinator(processor, indexer, embedding_service)
+
+        item = QueueItem(
+            priority=Priority.NORMAL,
+            path=Path("/test/rejected.md"),
+            force=False
+        )
+
+        # Process the file (will be rejected)
+        result = coordinator._chunk_stage(item)
+
+        # Verify: Should return None (rejected)
+        assert result is None
+
+        # Verify: Heartbeat should be stopped (key should not exist)
+        heartbeat_key = "Chunk:rejected.md"
+        assert heartbeat_key not in coordinator.progress_logger.heartbeat_threads
+        assert heartbeat_key not in coordinator.progress_logger.heartbeat_stop_flags
+
+    @patch('pipeline.pipeline_coordinator.DocumentFile')
+    def test_heartbeat_stops_on_empty_extraction(self, mock_doc_class, mock_services, capsys):
+        """Heartbeat should stop when file produces no chunks (not rejected)
+
+        Some files may extract successfully but produce 0 chunks (e.g., empty files).
+        The heartbeat should still be stopped and a proper message logged.
+        """
+        processor, indexer, embedding_service = mock_services
+
+        # Create mock for empty file
+        empty_file = Mock()
+        empty_file.path = Path("/test/empty.go")
+        empty_file.hash = "empty_hash"
+        mock_doc_class.from_path.return_value = empty_file
+
+        # Setup: File is NOT indexed
+        embedding_service.store.is_document_indexed.return_value = False
+
+        # File extracts but produces no chunks
+        processor.process_file.return_value = []
+        # NOT rejected - just empty
+        processor.is_rejected.return_value = False
+
+        coordinator = PipelineCoordinator(processor, indexer, embedding_service)
+
+        item = QueueItem(
+            priority=Priority.NORMAL,
+            path=Path("/test/empty.go"),
+            force=False
+        )
+
+        # Process the file
+        result = coordinator._chunk_stage(item)
+
+        # Verify: Should return None
+        assert result is None
+
+        # Verify: Heartbeat should be stopped
+        heartbeat_key = "Chunk:empty.go"
+        assert heartbeat_key not in coordinator.progress_logger.heartbeat_threads
+        assert heartbeat_key not in coordinator.progress_logger.heartbeat_stop_flags
+
+        # Verify: Should log "no chunks extracted" message
+        captured = capsys.readouterr()
+        assert "no chunks extracted" in captured.out
+
+
+class TestPreQueueValidation:
+    """Test pre-queue validation for clean rejection logs
+
+    Issue: Rejected files should NOT get [Chunk] prefix because they never
+    actually enter the chunking stage. Validation should happen BEFORE
+    adding to queue, resulting in clean logs:
+
+    BEFORE (misleading):
+        [Chunk] malware.exe
+        REJECTED (security): malware.exe - Malware detected
+        [Chunk] malware.exe - 0 chunks complete
+
+    AFTER (clean):
+        REJECTED (security): malware.exe - Malware detected
+    """
+
+    @pytest.fixture
+    def mock_services(self):
+        """Create mock services for testing"""
+        processor = Mock()
+        indexer = Mock()
+        embedding_service = Mock()
+        embedding_service.store = Mock()
+        return processor, indexer, embedding_service
+
+    @pytest.fixture
+    def mock_validation_result(self):
+        """Create mock validation result"""
+        result = Mock()
+        result.is_valid = False
+        result.reason = "File is empty"
+        result.validation_check = "empty_file"
+        return result
+
+    @patch('pipeline.pipeline_coordinator.DocumentFile')
+    def test_rejected_file_no_chunk_prefix(self, mock_doc_class, mock_services, mock_validation_result, capsys):
+        """Rejected files should NOT log [Chunk] prefix
+
+        When a file fails security validation, it should be rejected
+        BEFORE entering the chunk stage, so no [Chunk] appears in logs.
+        """
+        processor, indexer, embedding_service = mock_services
+
+        # Create mock for file that will be rejected
+        rejected_file = Mock()
+        rejected_file.path = Path("/test/empty_file.py")
+        rejected_file.name = "empty_file.py"
+        rejected_file.hash = "test_hash"
+        mock_doc_class.from_path.return_value = rejected_file
+
+        # Setup: Validator returns failure
+        processor.validator = Mock()
+        processor.validator.validate.return_value = mock_validation_result
+
+        # Setup: Quarantine manager mock
+        processor.quarantine = Mock()
+
+        # Setup: Tracker mock
+        processor.tracker = Mock()
+
+        coordinator = PipelineCoordinator(processor, indexer, embedding_service)
+
+        item = QueueItem(
+            priority=Priority.NORMAL,
+            path=Path("/test/empty_file.py"),
+            force=False
+        )
+
+        # Add file (should validate and reject BEFORE queue)
+        coordinator.add_file(item)
+
+        # Verify: Should NOT log [Chunk] prefix
+        captured = capsys.readouterr()
+        assert "[Chunk]" not in captured.out
+
+    @patch('pipeline.pipeline_coordinator.DocumentFile')
+    def test_rejected_file_logs_rejection_message(self, mock_doc_class, mock_services, mock_validation_result, capsys):
+        """Rejected files should log REJECTED message only
+
+        The rejection message should be the ONLY output for a rejected file,
+        with no misleading stage prefixes.
+        """
+        processor, indexer, embedding_service = mock_services
+
+        # Create mock for file that will be rejected
+        rejected_file = Mock()
+        rejected_file.path = Path("/test/malware.exe")
+        rejected_file.name = "malware.exe"
+        rejected_file.hash = "test_hash"
+        mock_doc_class.from_path.return_value = rejected_file
+
+        # Setup: Validator returns failure with malware reason
+        mock_validation_result.reason = "Malware detected: EICAR-Test-File"
+        mock_validation_result.validation_check = "malware"
+        processor.validator = Mock()
+        processor.validator.validate.return_value = mock_validation_result
+
+        # Setup: Quarantine manager mock
+        processor.quarantine = Mock()
+
+        # Setup: Tracker mock
+        processor.tracker = Mock()
+
+        coordinator = PipelineCoordinator(processor, indexer, embedding_service)
+
+        item = QueueItem(
+            priority=Priority.NORMAL,
+            path=Path("/test/malware.exe"),
+            force=False
+        )
+
+        # Add file
+        coordinator.add_file(item)
+
+        # Verify: Should log REJECTED message
+        captured = capsys.readouterr()
+        assert "REJECTED" in captured.out
+        assert "malware.exe" in captured.out
+
+    @patch('pipeline.pipeline_coordinator.DocumentFile')
+    def test_valid_file_enters_queue(self, mock_doc_class, mock_services, capsys):
+        """Valid files should pass validation and enter the queue
+
+        Files that pass security validation should be added to chunk_queue
+        normally and will get [Chunk] prefix when actually processed.
+        """
+        processor, indexer, embedding_service = mock_services
+
+        # Create mock for valid file
+        valid_file = Mock()
+        valid_file.path = Path("/test/valid.py")
+        valid_file.name = "valid.py"
+        valid_file.hash = "test_hash"
+        mock_doc_class.from_path.return_value = valid_file
+
+        # Setup: Validator returns success
+        valid_result = Mock()
+        valid_result.is_valid = True
+        processor.validator = Mock()
+        processor.validator.validate.return_value = valid_result
+
+        # Setup: File is NOT already indexed (so it passes skip check)
+        embedding_service.store.is_document_indexed.return_value = False
+
+        coordinator = PipelineCoordinator(processor, indexer, embedding_service)
+
+        item = QueueItem(
+            priority=Priority.NORMAL,
+            path=Path("/test/valid.py"),
+            force=False
+        )
+
+        # Mock queue to verify file is added
+        coordinator.queues.chunk_queue = Mock()
+
+        # Add file
+        coordinator.add_file(item)
+
+        # Verify: Should be added to chunk_queue
+        coordinator.queues.chunk_queue.put.assert_called_once_with(item)
+
+        # Verify: No REJECTED message
+        captured = capsys.readouterr()
+        assert "REJECTED" not in captured.out
+
+    @patch('pipeline.pipeline_coordinator.DocumentFile')
+    def test_rejected_file_not_queued(self, mock_doc_class, mock_services, mock_validation_result):
+        """Rejected files should NOT be added to the queue
+
+        Files that fail validation should be rejected immediately,
+        never entering the chunk queue.
+        """
+        processor, indexer, embedding_service = mock_services
+
+        # Create mock for rejected file
+        rejected_file = Mock()
+        rejected_file.path = Path("/test/bad.py")
+        rejected_file.name = "bad.py"
+        rejected_file.hash = "test_hash"
+        mock_doc_class.from_path.return_value = rejected_file
+
+        # Setup: Validator returns failure
+        processor.validator = Mock()
+        processor.validator.validate.return_value = mock_validation_result
+        processor.quarantine = Mock()
+        processor.tracker = Mock()
+
+        coordinator = PipelineCoordinator(processor, indexer, embedding_service)
+
+        item = QueueItem(
+            priority=Priority.NORMAL,
+            path=Path("/test/bad.py"),
+            force=False
+        )
+
+        # Mock queue to verify file is NOT added
+        coordinator.queues.chunk_queue = Mock()
+
+        # Add file
+        coordinator.add_file(item)
+
+        # Verify: Should NOT be added to chunk_queue
+        coordinator.queues.chunk_queue.put.assert_not_called()

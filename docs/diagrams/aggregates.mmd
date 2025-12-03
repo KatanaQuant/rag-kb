@@ -1,0 +1,64 @@
+%%{init: {'theme': 'neutral', 'themeVariables': { 'fontSize': '14px' }}}%%
+classDiagram
+    direction LR
+
+    class Document {
+        +file_path: str
+        +hash: str
+        +indexed_at: datetime
+        +extraction_method: str
+    }
+
+    class Chunk {
+        +content: str
+        +page: int
+        +chunk_index: int
+        +document_id: FK
+    }
+
+    class Embedding {
+        +vector: float[384]
+    }
+
+    class ProcessingProgress {
+        +file_path: str
+        +file_hash: str
+        +status: enum
+        +started_at: datetime
+        +completed_at: datetime
+    }
+
+    class QueueItem {
+        +file_path: str
+        +priority: Priority
+        +force: bool
+        +added_at: datetime
+    }
+
+    class SearchResult {
+        +content: str
+        +score: float
+        +source: str
+        +page: int
+    }
+
+    class GraphNode {
+        +file_path: str
+        +title: str
+        +content: str
+        +frontmatter: dict
+    }
+
+    class GraphEdge {
+        +source_path: str
+        +target_path: str
+        +link_text: str
+    }
+
+    Document "1" --> "*" Chunk : contains
+    Chunk "1" --> "1" Embedding : has
+    Document "1" --> "1" ProcessingProgress : tracks
+    QueueItem ..> Document : references
+    SearchResult ..> Chunk : from
+    GraphNode "1" --> "*" GraphEdge : outgoing
+    GraphEdge --> GraphNode : target

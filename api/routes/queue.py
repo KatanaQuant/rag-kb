@@ -49,10 +49,10 @@ def _validate_indexing_components(app_state):
     Raises:
         HTTPException: If components are not initialized
     """
-    if not app_state.indexing.queue or not app_state.indexing.worker:
+    if not app_state.get_indexing_queue() or not app_state.is_worker_running():
         raise HTTPException(status_code=400, detail="Indexing queue not initialized")
 
-    if not app_state.indexing.pipeline_coordinator:
+    if not app_state.get_pipeline_coordinator():
         raise HTTPException(status_code=400, detail="Concurrent pipeline not initialized")
 
 
@@ -71,7 +71,7 @@ async def get_queue_jobs(request: Request):
         _validate_indexing_components(app_state)
 
         # Get pipeline statistics
-        pipeline_stats = app_state.indexing.pipeline_coordinator.get_stats()
+        pipeline_stats = app_state.get_pipeline_stats()
 
         # Get security scan status if running
         security_scan = _get_active_security_scan()

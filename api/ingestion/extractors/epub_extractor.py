@@ -8,11 +8,13 @@ import subprocess
 import tempfile
 import shutil
 import zipfile
+from typing import ClassVar, Set
 
 from domain_models import ExtractionResult
+from pipeline.interfaces import ExtractorInterface
 
 
-class EpubExtractor:
+class EpubExtractor(ExtractorInterface):
     """Converts EPUB to PDF using Pandoc, keeps PDF, moves EPUB to original/
 
     Refactored following Sandi Metz principles:
@@ -20,6 +22,12 @@ class EpubExtractor:
     - Single Responsibility: Each method does one thing
     - Reduced cyclomatic complexity from C-11 to A-grade
     """
+
+    SUPPORTED_EXTENSIONS: ClassVar[Set[str]] = {'.epub'}
+
+    @property
+    def name(self) -> str:
+        return "epub_pandoc"
 
     @staticmethod
     def _validate_epub_file(path: Path) -> bool:
@@ -46,8 +54,7 @@ class EpubExtractor:
         except Exception:
             return False
 
-    @staticmethod
-    def extract(path: Path) -> ExtractionResult:
+    def extract(self, path: Path) -> ExtractionResult:
         """Convert EPUB to PDF, move EPUB to original/, DO NOT extract
 
         EPUB files are only converted to PDF, not extracted.

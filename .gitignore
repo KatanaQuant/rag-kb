@@ -26,7 +26,8 @@ data/
 
 # Knowledge base (contains personal/copyrighted content)
 internal_planning/
-knowledge_base/
+kb/*
+!kb/.gitkeep
 
 # Agent session files
 .agent/

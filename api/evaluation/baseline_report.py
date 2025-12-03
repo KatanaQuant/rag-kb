@@ -237,8 +237,8 @@ def main():
     )
     parser.add_argument(
         '--db-path',
-        default='data/knowledge_base.db',
-        help='Path to database (default: data/knowledge_base.db)'
+        default='data/rag.db',
+        help='Path to database (default: data/rag.db)'
     )
     parser.add_argument(
         '--output', '-o',

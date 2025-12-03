@@ -106,12 +106,19 @@ class OrphanDetector:
         The PDF is indexed instead, so the EPUB progress entry is stale.
 
         Works for both cases:
-        - EPUB still at original location (not yet moved)
-        - EPUB already moved to original/ (path doesn't exist)
+        - Case 1: EPUB already in original/ - PDF is in parent directory
+        - Case 2: EPUB at original location - original/ copy and PDF exist
         """
         if path.suffix.lower() != '.epub':
             return False
 
+        # Case 1: EPUB is already in original/ directory
+        # Check if PDF exists in parent directory
+        if path.parent.name == 'original':
+            pdf_path = path.parent.parent / path.with_suffix('.pdf').name
+            return pdf_path.exists()
+
+        # Case 2: EPUB at original location (database has old path)
         # Check if EPUB was moved to original/ and PDF exists
         original_path = path.parent / 'original' / path.name
         pdf_path = path.with_suffix('.pdf')

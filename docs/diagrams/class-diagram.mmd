@@ -1,0 +1,137 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e1f5fe', 'primaryTextColor': '#01579b', 'primaryBorderColor': '#0288d1', 'lineColor': '#0288d1', 'secondaryColor': '#fff3e0', 'tertiaryColor': '#f3e5f5'}}}%%
+classDiagram
+    direction TB
+
+    %% Interfaces
+    class ExtractorInterface {
+        <<interface>>
+        +SUPPORTED_EXTENSIONS Set~str~
+        +extract(path Path) ExtractionResult
+        +supports(extension str) bool
+        +name str
+    }
+
+    class ChunkerInterface {
+        <<interface>>
+        +chunkify(source str) List~Dict~
+        +name str
+    }
+
+    class EmbedderInterface {
+        <<interface>>
+        +embed(texts List~str~) List~List~float~~
+        +dimension int
+        +model_name str
+    }
+
+    class RerankerInterface {
+        <<interface>>
+        +rerank(query str, candidates List, top_k int) List
+        +model_name str
+        +is_enabled bool
+    }
+
+    %% Extractor Implementations
+    class DoclingExtractor {
+        +SUPPORTED_EXTENSIONS pdf docx
+        +extract(path) ExtractionResult
+        +name docling
+    }
+
+    class CodeExtractor {
+        +SUPPORTED_EXTENSIONS py java ts js go
+        +extract(path) ExtractionResult
+        +name code
+    }
+
+    class MarkdownExtractor {
+        +SUPPORTED_EXTENSIONS md markdown
+        +extract(path) ExtractionResult
+        +name markdown
+    }
+
+    class EpubExtractor {
+        +SUPPORTED_EXTENSIONS epub
+        +extract(path) ExtractionResult
+        +name epub
+    }
+
+    class JupyterExtractor {
+        +SUPPORTED_EXTENSIONS ipynb
+        +extract(path) ExtractionResult
+        +name jupyter
+    }
+
+    %% Chunker Implementations
+    class HybridChunker {
+        +max_tokens int
+        +chunkify(source) List~Dict~
+        +name hybrid
+    }
+
+    class SemanticChunker {
+        +max_tokens int
+        +chunkify(source) List~Dict~
+        +name semantic
+    }
+
+    class FixedChunker {
+        +max_tokens int
+        +overlap int
+        +chunkify(source) List~Dict~
+        +name fixed
+    }
+
+    %% Embedder Implementation
+    class SentenceTransformerEmbedder {
+        +model SentenceTransformer
+        +batch_size int
+        +embed(texts) List~List~float~~
+        +dimension 1024
+        +model_name str
+    }
+
+    %% Reranker Implementations
+    class BGEReranker {
+        +model CrossEncoder
+        +rerank(query, candidates, top_k) List
+        +model_name bge-reranker-large
+        +is_enabled true
+    }
+
+    class NoopReranker {
+        +rerank(query, candidates, top_k) List
+        +model_name noop
+        +is_enabled false
+    }
+
+    %% Factory
+    class PipelineFactory {
+        +config PipelineConfig
+        +create_extractor(extension str) ExtractorInterface
+        +create_chunker() ChunkerInterface
+        +create_embedder(model) EmbedderInterface
+        +create_reranker() RerankerInterface
+        +from_yaml(path Path)$ PipelineFactory
+    }
+
+    %% Relationships
+    ExtractorInterface <|.. DoclingExtractor
+    ExtractorInterface <|.. CodeExtractor
+    ExtractorInterface <|.. MarkdownExtractor
+    ExtractorInterface <|.. EpubExtractor
+    ExtractorInterface <|.. JupyterExtractor
+
+    ChunkerInterface <|.. HybridChunker
+    ChunkerInterface <|.. SemanticChunker
+    ChunkerInterface <|.. FixedChunker
+
+    EmbedderInterface <|.. SentenceTransformerEmbedder
+
+    RerankerInterface <|.. BGEReranker
+    RerankerInterface <|.. NoopReranker
+
+    PipelineFactory ..> ExtractorInterface : creates
+    PipelineFactory ..> ChunkerInterface : creates
+    PipelineFactory ..> EmbedderInterface : creates
+    PipelineFactory ..> RerankerInterface : creates

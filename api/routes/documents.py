@@ -153,13 +153,13 @@ async def reindex_document(file_path: str, request: Request):
             pass  # Document may not be indexed yet
 
         # Step 2: Queue for re-indexing with HIGH priority
-        if not app_state.indexing.queue:
+        if not app_state.get_indexing_queue():
             raise HTTPException(
                 status_code=400,
                 detail="Indexing queue not initialized"
             )
 
-        app_state.indexing.queue.add(path, priority=Priority.HIGH, force=True)
+        app_state.add_to_queue(path, priority=Priority.HIGH, force=True)
 
         return {
             "status": "success",

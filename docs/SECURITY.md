@@ -1,22 +1,18 @@
-# Advanced Malware Detection Setup (v1.5.0)
-
-**Status:** Phase 3 Complete
-**Version:** v1.5.0
-**Date:** 2025-11-26
+# Advanced Malware Detection Setup
 
 ## Overview
 
-Phase 3 adds three layers of advanced malware detection to the RAG knowledge base:
+RAG-KB includes three layers of malware detection for the knowledge base:
 
 1. **ClamAV Integration** - Virus signature scanning using ClamAV daemon
 2. **Hash Blacklist** - SHA256 hash checking against known malware database
 3. **YARA Rules** - Custom pattern matching for suspicious content
 
-All three are **optional** and can be enabled independently via environment variables.
+All three are **enabled by default** and can be disabled independently via environment variables.
 
 ## Quick Start
 
-All malware detection features are **disabled by default**. Enable only what you need:
+All malware detection features are **enabled by default** for maximum security:
 
 ```yaml
 # docker-compose.yml
@@ -33,7 +29,7 @@ services:
 
       # Enable YARA rules
       YARA_ENABLED: "true"
-      YARA_RULES_PATH: "/app/config/yara_rules.yar"
+      YARA_RULES_PATH: "/app/yara_config/yara_rules.yar"
 ```
 
 ## 1. ClamAV Integration
@@ -95,7 +91,7 @@ services:
 docker-compose exec rag-api clamdscan --version
 
 # Scan a test file
-docker-compose exec rag-api clamdscan /app/knowledge_base/test.pdf
+docker-compose exec rag-api clamdscan /app/kb/test.pdf
 ```
 
 ### Dependencies
@@ -251,12 +247,12 @@ If any check fails, the file is **rejected** and:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CLAMAV_ENABLED` | `false` | Enable ClamAV virus scanning |
+| `CLAMAV_ENABLED` | `true` | Enable ClamAV virus scanning |
 | `CLAMAV_SOCKET` | `/var/run/clamav/clamd.ctl` | ClamAV socket or host:port |
-| `HASH_BLACKLIST_ENABLED` | `false` | Enable hash blacklist checking |
+| `HASH_BLACKLIST_ENABLED` | `true` | Enable hash blacklist checking |
 | `HASH_BLACKLIST_PATH` | `/app/data/malware_hashes.txt` | Path to hash blacklist file |
-| `YARA_ENABLED` | `false` | Enable YARA pattern matching |
-| `YARA_RULES_PATH` | `/app/config/yara_rules.yar` | Path to YARA rules file |
+| `YARA_ENABLED` | `true` | Enable YARA pattern matching |
+| `YARA_RULES_PATH` | `/app/yara_config/yara_rules.yar` | Path to YARA rules file |
 
 ### Config Object
 
@@ -328,7 +324,7 @@ docker-compose exec rag-api pytest tests/test_malware_detection.py -v
 **Test hash blacklist:**
 ```bash
 # Add test file hash to blacklist
-sha256sum knowledge_base/test.pdf >> data/malware_hashes.txt
+sha256sum kb/test.pdf >> data/malware_hashes.txt
 
 # Try to index it (should be rejected)
 curl -X POST "http://localhost:8000/api/index?path=test.pdf&force=true"
@@ -337,7 +333,7 @@ curl -X POST "http://localhost:8000/api/index?path=test.pdf&force=true"
 **Test ClamAV:**
 ```bash
 # Download EICAR test file (harmless malware test)
-curl -o knowledge_base/eicar.txt https://secure.eicar.org/eicar.com.txt
+curl -o kb/eicar.txt https://secure.eicar.org/eicar.com.txt
 
 # Try to index it (should be rejected)
 curl -X POST "http://localhost:8000/api/index?path=eicar.txt&force=true"
@@ -346,7 +342,7 @@ curl -X POST "http://localhost:8000/api/index?path=eicar.txt&force=true"
 **Test YARA:**
 ```bash
 # Create file with suspicious pattern
-echo "MZ" > knowledge_base/suspicious.bin
+echo "MZ" > kb/suspicious.bin
 
 # Try to index it (should be rejected by Suspicious_Embedded_Executable rule)
 curl -X POST "http://localhost:8000/api/index?path=suspicious.bin&force=true"
@@ -398,7 +394,7 @@ cat data/malware_hashes.txt | grep -v '^#' | head
 
 **Verify hash calculation:**
 ```bash
-sha256sum knowledge_base/test.pdf
+sha256sum kb/test.pdf
 ```
 
 ## Security Best Practices

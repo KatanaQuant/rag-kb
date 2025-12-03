@@ -29,6 +29,7 @@ class QueryServices:
 
     def __init__(self):
         self.cache = None
+        self.reranker = None
 
 class IndexingComponents:
     """Indexing queue and worker infrastructure
@@ -92,6 +93,10 @@ class AppState:
     def get_query_cache(self):
         """Get query cache"""
         return self.query.cache
+
+    def get_reranker(self):
+        """Get search result reranker"""
+        return self.query.reranker
 
     def get_processor(self):
         """Get document processor"""
@@ -197,3 +202,44 @@ class AppState:
         """Start file watcher service"""
         if self.runtime.watcher:
             self.runtime.watcher.start()
+
+    # === Queue Operations (Fix Law of Demeter in routes) ===
+
+    def add_to_queue(self, path, priority=None, force: bool = False):
+        """Add file to indexing queue.
+
+        Fixes Law of Demeter: routes call this instead of
+        app_state.indexing.queue.add()
+        """
+        if self.indexing.queue:
+            self.indexing.queue.add(path, priority=priority, force=force)
+
+    def add_many_to_queue(self, paths, priority=None, force: bool = False):
+        """Add multiple files to indexing queue."""
+        if self.indexing.queue:
+            self.indexing.queue.add_many(paths, priority=priority, force=force)
+
+    def pause_queue(self):
+        """Pause indexing queue."""
+        if self.indexing.queue:
+            self.indexing.queue.pause()
+
+    def resume_queue(self):
+        """Resume indexing queue."""
+        if self.indexing.queue:
+            self.indexing.queue.resume()
+
+    def clear_queue(self):
+        """Clear indexing queue."""
+        if self.indexing.queue:
+            self.indexing.queue.clear()
+
+    def get_pipeline_stats(self) -> dict:
+        """Get pipeline coordinator statistics.
+
+        Fixes Law of Demeter: routes call this instead of
+        app_state.indexing.pipeline_coordinator.get_stats()
+        """
+        if self.indexing.pipeline_coordinator:
+            return self.indexing.pipeline_coordinator.get_stats()
+        return {'queue_sizes': {}, 'active_jobs': {}, 'workers_running': {}}

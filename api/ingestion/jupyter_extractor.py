@@ -12,19 +12,26 @@ fragmenting by cell boundaries, resulting in better chunk coherence.
 """
 
 from pathlib import Path
-from typing import List, Tuple
+from typing import ClassVar, List, Set, Tuple
 import tempfile
 import os
 
 from domain_models import ExtractionResult
+from pipeline.interfaces import ExtractorInterface
 
 
-class JupyterExtractor:
+class JupyterExtractor(ExtractorInterface):
     """Extract and chunk Jupyter notebooks using HybridChunker
 
     Converts notebook to markdown, then applies Docling's HybridChunker
     for semantic chunking that respects document structure.
     """
+
+    SUPPORTED_EXTENSIONS: ClassVar[Set[str]] = {'.ipynb'}
+
+    @property
+    def name(self) -> str:
+        return "jupyter"
 
     def extract(self, path: Path) -> ExtractionResult:
         """Extract and chunk Jupyter notebook

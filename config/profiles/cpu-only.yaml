@@ -1,0 +1,30 @@
+# RAG-KB Pipeline Configuration - CPU-Only Profile
+#
+# Best for: Servers without GPU, development machines, low-cost deployments
+#
+# Usage:
+#   cp config/profiles/cpu-only.yaml config/pipeline.yaml
+#   docker-compose restart api
+#
+# Expected Performance:
+#   - Embedding speed: ~50-100 docs/min
+#   - Query latency: 1-3s (with reranking)
+#   - Memory usage: ~4GB for models
+#   - First query: ~30-60s (model download)
+
+extraction:
+  provider: docling
+
+chunking:
+  strategy: hybrid
+  max_tokens: 512
+
+embedding:
+  provider: sentence-transformers
+  model: Snowflake/snowflake-arctic-embed-l-v2.0  # 568MB, 1024 dims
+  batch_size: 32
+
+reranking:
+  enabled: true
+  model: BAAI/bge-reranker-large  # 560MB, CPU-viable
+  top_n: 20

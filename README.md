@@ -2,11 +2,17 @@
 
 [![Latest Release](https://img.shields.io/github/v/release/KatanaQuant/rag-kb?include_prereleases)](https://github.com/KatanaQuant/rag-kb/releases)
 [![Docker](https://img.shields.io/badge/docker-ready-blue)](https://github.com/KatanaQuant/rag-kb)
-[![License](https://img.shields.io/badge/license-Public%20Domain-green)](https://github.com/KatanaQuant/rag-kb)
+[![License](https://img.shields.io/badge/license-CC%20BY--NC%204.0-blue)](LICENSE)
 
 **Personal knowledge base with semantic search.** Index books, code, and notes—query with natural language. 100% local.
 
-**Current Version**: v1.9.1 ([Changelog](docs/RELEASES/))
+**Current Version**: v2.1.5-beta ([Changelog](docs/RELEASES/)) | **Latest Stable**: [v1.9.1](https://github.com/KatanaQuant/rag-kb/releases/tag/v1.9.1)
+
+> **BREAKING CHANGES in v2.x** - Migration required from v1.x. See [Migration Guide](docs/RELEASES/v2.1.5-beta.md).
+> - Directory renamed: `knowledge_base/` → `kb/`
+> - MCP stdio removed (HTTP transport only)
+>
+> **Note**: GPU support was originally planned for v2.0. Breaking changes in the kb/ rename and MCP simplification triggered the major version bump early. This beta polishes the foundation before GPU support arrives.
 
 ---
 
@@ -15,7 +21,7 @@
 - **Semantic Search** - Natural language queries across all documents
 - **Multi-Format** - PDF, EPUB, Markdown, Code (Python/Java/TS/Go/C#), Jupyter, Obsidian
 - **IDE Integration** - Works with Claude Code, Cursor, Codex, Gemini, Amp via MCP
-- **Network Ready** - HTTP transport for remote access, stdio for local
+- **Network Ready** - HTTP transport for local and remote access
 - **Security Scanning** - ClamAV, YARA, hash blacklist (auto-quarantine)
 - **Self-Healing** - Auto-repair database issues at startup
 - **100% Local** - No external APIs, complete privacy
@@ -27,10 +33,10 @@
 ```bash
 # Clone and start
 git clone https://github.com/KatanaQuant/rag-kb.git
-cd rag-kb && git checkout v1.9.1
+cd rag-kb && git checkout v2.1.5-beta
 
 # Add your content
-cp ~/Documents/*.pdf knowledge_base/books/
+cp ~/Documents/*.pdf kb/books/
 
 # Build and run
 export DOCKER_BUILDKIT=1
@@ -41,11 +47,6 @@ curl http://localhost:8000/health
 ```
 
 See [docs/QUICK_START.md](docs/QUICK_START.md) for detailed setup.
-
-> **Upgrading from v1.8.x or earlier?** MCP now uses HTTP transport (no Node.js needed).
-> stdio transport is deprecated and will be removed in v2.0.
-> Migrate: `claude mcp remove rag-kb && claude mcp add --transport http --scope user rag-kb http://localhost:8000/mcp`
-> See [Migration Guide](docs/MCP_CLAUDE.md#migrating-from-stdio-to-http-v190)
 
 ---
 
@@ -61,13 +62,12 @@ curl -X POST http://localhost:8000/query \
 ### IDE Integration (MCP)
 Query your knowledge base directly from your AI assistant:
 
-| IDE | Setup Guide |
-|-----|-------------|
-| Claude Code | [MCP_CLAUDE.md](docs/MCP_CLAUDE.md) |
-| Cursor | [MCP_CODEX.md](docs/MCP_CODEX.md) |
-| Codex CLI | [MCP_CODEX.md](docs/MCP_CODEX.md) |
-| Gemini | [MCP_GEMINI.md](docs/MCP_GEMINI.md) |
-| Amp | [MCP_AMP.md](docs/MCP_AMP.md) |
+```bash
+# Claude Code, Codex, Gemini, Amp - all use HTTP transport
+claude mcp add --transport http --scope user rag-kb http://localhost:8000/mcp
+```
+
+See [docs/MCP.md](docs/MCP.md) for setup guides for all supported IDEs.
 
 See [docs/USAGE.md](docs/USAGE.md) for all query methods and [docs/API.md](docs/API.md) for full API reference.
 
@@ -80,19 +80,17 @@ See [docs/USAGE.md](docs/USAGE.md) for all query methods and [docs/API.md](docs/
 | [QUICK_START.md](docs/QUICK_START.md) | Get running in 5 minutes |
 | [USAGE.md](docs/USAGE.md) | Query methods, content ingestion |
 | [API.md](docs/API.md) | Complete API reference |
-| [CONFIGURATION.md](docs/CONFIGURATION.md) | Settings, models, performance |
-| [MCP_CLAUDE.md](docs/MCP_CLAUDE.md) | Claude Code setup |
-| [MCP_CODEX.md](docs/MCP_CODEX.md) | OpenAI Codex setup |
-| [MCP_GEMINI.md](docs/MCP_GEMINI.md) | Google Gemini setup |
-| [MCP_AMP.md](docs/MCP_AMP.md) | Amp (Sourcegraph) setup |
-| [MCP_NETWORK.md](docs/MCP_NETWORK.md) | Network configuration |
+| [MCP.md](docs/MCP.md) | IDE integration (Claude, Codex, Gemini, Amp) |
+| [CONFIGURATION.md](docs/CONFIGURATION.md) | Infrastructure settings (.env) |
+| [PIPELINE.md](docs/PIPELINE.md) | ML pipeline config, hardware profiles |
+| [EXTENDING.md](docs/EXTENDING.md) | Custom extractors, chunkers, embedders |
 | [SECURITY.md](docs/SECURITY.md) | Malware detection setup |
 | [MAINTENANCE.md](docs/MAINTENANCE.md) | Database health, self-healing |
 | [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues |
-| [KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md) | Active issues and limitations |
 | [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Architecture, testing |
 | [ROADMAP.md](docs/ROADMAP.md) | Project roadmap |
 | [RELEASES/](docs/RELEASES/) | Version history |
+| [domain/](docs/domain/) | Domain model (DDD glossary, context map) |
 
 ---
 
@@ -110,12 +108,12 @@ See [docs/USAGE.md](docs/USAGE.md) for all query methods and [docs/API.md](docs/
 
 ```bash
 docker-compose down
-git fetch --tags && git checkout v1.9.1
+git fetch --tags && git checkout v2.1.5-beta
 docker-compose build --no-cache
 docker-compose up -d
 ```
 
-Your data (`data/rag.db`, `knowledge_base/`) persists across updates.
+Your data (`data/rag.db`, `kb/`) persists across updates.
 
 ---
 

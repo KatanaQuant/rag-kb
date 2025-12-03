@@ -4,7 +4,7 @@ This guide covers different ways to use RAG-KB for querying your knowledge base.
 
 ## Content Ingestion
 
-The RAG service automatically indexes files in `knowledge_base/` on startup. Supported formats are detected and processed accordingly.
+The RAG service automatically indexes files in `kb/` on startup. Supported formats are detected and processed accordingly.
 
 ### Supported Formats
 
@@ -33,7 +33,7 @@ The RAG service automatically indexes files in `knowledge_base/` on startup. Sup
 
 ```bash
 # 1. Add files
-cp ~/Downloads/book.pdf knowledge_base/books/
+cp ~/Downloads/book.pdf kb/books/
 
 # 2. Restart to index (or wait for auto-sync)
 docker-compose restart rag-api
@@ -44,7 +44,7 @@ curl http://localhost:8000/health
 
 ### Auto-Sync
 
-The system automatically watches for new and modified files in `knowledge_base/` and indexes them without requiring a restart. Changes are detected in real-time with smart debouncing.
+The system automatically watches for new and modified files in `kb/` and indexes them without requiring a restart. Changes are detected in real-time with smart debouncing.
 
 See [CONFIGURATION.md](CONFIGURATION.md#auto-sync-configuration) for auto-sync settings.
 
@@ -54,7 +54,7 @@ See [CONFIGURATION.md](CONFIGURATION.md#auto-sync-configuration) for auto-sync s
 
 Ask Claude questions naturally in VSCode. Claude automatically decides when to query your knowledge base.
 
-See [MCP_CLAUDE.md](MCP_CLAUDE.md) for setup instructions (also [MCP_CODEX.md](MCP_CODEX.md) for Codex, [MCP_GEMINI.md](MCP_GEMINI.md) for Gemini).
+See [MCP.md](MCP.md) for setup instructions.
 
 ### Via Command Line
 
@@ -152,7 +152,7 @@ Fast-track specific files:
 
 ```bash
 # Add file to high-priority queue
-curl -X POST "http://localhost:8000/indexing/priority/knowledge_base/important.pdf"
+curl -X POST "http://localhost:8000/indexing/priority/kb/important.pdf"
 
 # Check indexing status
 curl http://localhost:8000/indexing/status
@@ -165,7 +165,7 @@ curl http://localhost:8000/indexing/status
 curl -X POST http://localhost:8000/api/maintenance/reindex-orphaned-files
 
 # Delete specific document
-curl -X DELETE "http://localhost:8000/document/knowledge_base/old-file.pdf"
+curl -X DELETE "http://localhost:8000/document/kb/old-file.pdf"
 
 # Force reindex all files
 curl -X POST http://localhost:8000/index \
@@ -224,13 +224,13 @@ Access via: `http://YOUR_LOCAL_IP:8000`
 **Automated backups (cron):**
 ```bash
 # Add to crontab
-0 2 * * * tar -czf ~/backups/rag-$(date +\%Y\%m\%d).tar.gz /path/to/rag-kb/data/ /path/to/rag-kb/knowledge_base/
+0 2 * * * tar -czf ~/backups/rag-$(date +\%Y\%m\%d).tar.gz /path/to/rag-kb/data/ /path/to/rag-kb/kb/
 ```
 
 **Manual backup:**
 ```bash
 # Full backup
-tar -czf rag-backup-$(date +%Y%m%d).tar.gz data/ knowledge_base/
+tar -czf rag-backup-$(date +%Y%m%d).tar.gz data/ kb/
 
 # Database only
 cp data/rag.db ~/backups/kb-$(date +%Y%m%d).db
@@ -243,7 +243,7 @@ Transfer database and files (no re-indexing needed):
 ```bash
 # On Machine A
 cd rag-kb
-tar -czf rag-migration.tar.gz knowledge_base/ data/ docker-compose.yml .env api/ mcp-server/ *.sh
+tar -czf rag-migration.tar.gz kb/ data/ docker-compose.yml .env api/ mcp-server/ *.sh
 scp rag-migration.tar.gz user@machine-b:~/
 
 # On Machine B
@@ -264,7 +264,7 @@ curl http://localhost:8000/health
 curl http://localhost:8000/health | jq
 
 # If indexed_documents = 0:
-ls -R knowledge_base/  # Verify files exist
+ls -R kb/  # Verify files exist
 docker-compose logs rag-api | grep -i error  # Check for errors
 
 # Force reindex
@@ -294,7 +294,7 @@ curl -X POST http://localhost:8000/index \
 
 **Fix**: Try priority indexing a specific file:
 ```bash
-curl -X POST "http://localhost:8000/indexing/priority/knowledge_base/your-file.pdf"
+curl -X POST "http://localhost:8000/indexing/priority/kb/your-file.pdf"
 ```
 
 ### Slow Indexing

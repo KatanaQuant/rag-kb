@@ -268,6 +268,23 @@ class TestPriorityEndpoint:
         assert response.status_code == 400
         assert 'not initialized' in response.json()['detail'].lower()
 
+    def test_add_priority_directory_fails(self, client, tmp_path):
+        """Priority endpoint should reject directories with 400 error"""
+        from main import state, default_config
+
+        # Create a directory (not a file)
+        test_dir = tmp_path / "subdir"
+        test_dir.mkdir()
+
+        default_config.paths.knowledge_base = tmp_path
+
+        state.indexing.queue = Mock()
+
+        response = client.post("/indexing/priority/subdir")
+
+        assert response.status_code == 400
+        assert 'not a file' in response.json()['detail'].lower()
+
 
 class TestReindexOrphanedFilesEndpoint:
     """Test /api/maintenance/reindex-orphaned-files endpoint"""

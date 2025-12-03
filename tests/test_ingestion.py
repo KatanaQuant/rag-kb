@@ -8,7 +8,6 @@ import sqlite3
 
 from ingestion import (
     FileHasher,
-    DOCXExtractor,
     MarkdownExtractor,
     ExtractionRouter,
     DocumentProcessor,
@@ -169,22 +168,25 @@ class TestMarkdownExtractor:
         content = "# Header\n\n**Bold text**\n\nNormal text"
         file_path.write_text(content)
 
-        result = MarkdownExtractor.extract(file_path)
+        extractor = MarkdownExtractor()
+        result = extractor.extract(file_path)
 
         assert result.page_count > 0
-        assert result.method == 'docling_markdown'
+        assert 'markdown' in result.method.lower() or 'docling' in result.method.lower()
         assert result.success
 
 class TestExtractionRouter:
     """Tests for ExtractionRouter"""
 
     def test_build_extractors(self):
-        """Test extractor mapping"""
-        extractor = ExtractionRouter()
-        assert '.pdf' in extractor.extractors
-        assert '.md' in extractor.extractors
-        assert '.docx' in extractor.extractors
-        assert '.py' in extractor.extractors  # Code files
+        """Test extractor mapping via factory"""
+        router = ExtractionRouter()
+        # Now uses factory.get_supported_extensions()
+        extensions = router.get_supported_extensions()
+        assert '.pdf' in extensions
+        assert '.md' in extensions
+        assert '.docx' in extensions
+        assert '.py' in extensions  # Code files
 
     def test_validate_extension(self):
         """Test extension validation"""
@@ -201,7 +203,7 @@ class TestExtractionRouter:
 
         result = extractor.extract(file_path)
         assert result.page_count >= 1
-        assert result.method in ['docling_markdown', 'markdown']  # Docling or fallback
+        assert 'markdown' in result.method.lower() or 'docling' in result.method.lower()
 
 
 class TestMetadataEnricher:

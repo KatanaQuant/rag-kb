@@ -4,17 +4,28 @@ Code file extractor with AST-based chunking.
 Extracts and chunks source code files using AST parsing.
 """
 from pathlib import Path
+from typing import ClassVar, Set
+
 from domain_models import ExtractionResult
+from pipeline.interfaces import ExtractorInterface
 
 
-class CodeExtractor:
+class CodeExtractor(ExtractorInterface):
     """Extracts code with AST-based chunking using astchunk
 
     NO FALLBACKS: If AST chunking fails, we fail explicitly.
     This ensures we never silently degrade to inferior text extraction.
     """
 
+    SUPPORTED_EXTENSIONS: ClassVar[Set[str]] = {
+        '.py', '.java', '.ts', '.tsx', '.js', '.jsx', '.cs', '.go'
+    }
+
     _chunker_cache = {}  # Cache chunkers by language
+
+    @property
+    def name(self) -> str:
+        return "code_ast"
 
     @staticmethod
     def _get_language(path: Path) -> str:
@@ -82,8 +93,7 @@ class CodeExtractor:
         CodeExtractor._chunker_cache[language] = chunker
         return chunker
 
-    @staticmethod
-    def extract(path: Path) -> ExtractionResult:
+    def extract(self, path: Path) -> ExtractionResult:
         """Extract code with AST-based chunking
 
         NO FALLBACKS: Raises exceptions if AST chunking fails.

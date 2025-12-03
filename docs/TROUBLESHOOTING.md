@@ -5,7 +5,7 @@ This guide covers general issues that span multiple areas. For topic-specific tr
 - **Build/startup issues**: [QUICK_START.md](QUICK_START.md#troubleshooting)
 - **Indexing/search issues**: [USAGE.md](USAGE.md#troubleshooting)
 - **Configuration issues**: [CONFIGURATION.md](CONFIGURATION.md#troubleshooting-configuration-issues)
-- **MCP integration issues**: [MCP_CLAUDE.md](MCP_CLAUDE.md#troubleshooting)
+- **MCP integration issues**: [MCP.md](MCP.md#troubleshooting)
 - **API/queue issues**: [API.md](API.md#troubleshooting)
 - **Database integrity**: [MAINTENANCE.md](MAINTENANCE.md#troubleshooting)
 - **Security scanning**: [SECURITY.md](SECURITY.md#troubleshooting)
@@ -84,11 +84,11 @@ docker system df
 
 ### Permission Denied Errors
 
-**Symptom**: Can't read/write files in knowledge_base/
+**Symptom**: Can't read/write files in kb/
 
 ```bash
 # Fix permissions (Linux)
-sudo chown -R $USER:$USER knowledge_base/ data/
+sudo chown -R $USER:$USER kb/ data/
 
 # Or run with sudo (not recommended)
 sudo docker-compose up -d

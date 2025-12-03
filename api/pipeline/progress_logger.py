@@ -53,10 +53,21 @@ class ProgressLogger:
         print(f"[{stage}] {document} | {current}/{total} ({percentage}%) | "
               f"{elapsed:.1f}s elapsed | {rate:.1f} chunks/s | ETA: {eta:.1f}s")
 
-    def log_complete(self, stage: str, document: str, total: int):
-        """Log completion with final stats"""
+    def log_complete(self, stage: str, document: str, total: int, start_time: float = None):
+        """Log completion with final stats
+
+        Args:
+            stage: Pipeline stage name
+            document: Document name
+            total: Total chunks processed
+            start_time: Optional explicit start time (for accurate timing when
+                        log_start wasn't called or extraction took significant time)
+        """
         key = self._make_key(stage, document)
-        elapsed = self._elapsed(key)
+        if start_time is not None:
+            elapsed = self.time_source() - start_time
+        else:
+            elapsed = self._elapsed(key)
         rate = self._rate(total, elapsed)
 
         print(f"[{stage}] {document} - {total} chunks complete in {elapsed:.1f}s ({rate:.1f} chunks/s)")

@@ -1,0 +1,97 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#e8f5e9', 'secondaryColor': '#fff3e0', 'tertiaryColor': '#e3f2fd'}}}%%
+flowchart TB
+    subgraph Ingestion["INGESTION PIPELINE"]
+        direction TB
+        Doc[/"Document<br/>.pdf, .md, .py, .epub"/]
+
+        subgraph Extract["1. EXTRACTION"]
+            Router{Extension<br/>Router}
+            DocE[DoclingExtractor<br/>.pdf, .docx]
+            CodeE[CodeExtractor<br/>.py, .java, .ts]
+            MdE[MarkdownExtractor<br/>.md]
+            EpubE[EpubExtractor<br/>.epub]
+            JupyE[JupyterExtractor<br/>.ipynb]
+        end
+
+        Raw[/"Raw Text +<br/>Metadata"/]
+
+        subgraph Chunk["2. CHUNKING"]
+            ChunkS{Strategy}
+            Hybrid[HybridChunker<br/>semantic + structural]
+            Semantic[SemanticChunker<br/>sentence-aware]
+            Fixed[FixedChunker<br/>token-based]
+        end
+
+        Chunks[/"Text Chunks<br/>~512 tokens each"/]
+
+        subgraph Embed["3. EMBEDDING"]
+            STEmbed[SentenceTransformer<br/>Embedder]
+        end
+
+        Vectors[/"Vectors<br/>1024 dimensions"/]
+
+        Store[(ChromaDB<br/>Vector Store)]
+    end
+
+    subgraph Query["QUERY PIPELINE"]
+        direction TB
+        Q[/"User Query"/]
+        QEmbed[Embed Query]
+        Search[Vector Search<br/>top_n candidates]
+
+        subgraph Rerank["4. RERANKING"]
+            RankS{Enabled?}
+            BGE[BGEReranker<br/>cross-encoder]
+            Noop[NoopReranker<br/>pass-through]
+        end
+
+        Results[/"Top-k Results"/]
+    end
+
+    %% Ingestion Flow
+    Doc --> Router
+    Router -->|.pdf, .docx| DocE
+    Router -->|.py, .java, .ts| CodeE
+    Router -->|.md| MdE
+    Router -->|.epub| EpubE
+    Router -->|.ipynb| JupyE
+
+    DocE --> Raw
+    CodeE --> Raw
+    MdE --> Raw
+    EpubE --> Raw
+    JupyE --> Raw
+
+    Raw --> ChunkS
+    ChunkS -->|hybrid| Hybrid
+    ChunkS -->|semantic| Semantic
+    ChunkS -->|fixed| Fixed
+
+    Hybrid --> Chunks
+    Semantic --> Chunks
+    Fixed --> Chunks
+
+    Chunks --> STEmbed
+    STEmbed --> Vectors
+    Vectors --> Store
+
+    %% Query Flow
+    Q --> QEmbed
+    QEmbed --> Search
+    Store -.->|similarity search| Search
+    Search --> RankS
+    RankS -->|true| BGE
+    RankS -->|false| Noop
+    BGE --> Results
+    Noop --> Results
+
+    %% Styling
+    classDef interface fill:#e1f5fe,stroke:#0288d1,stroke-width:2px
+    classDef impl fill:#fff3e0,stroke:#ff9800,stroke-width:1px
+    classDef data fill:#f3e5f5,stroke:#9c27b0,stroke-width:1px
+    classDef store fill:#e8f5e9,stroke:#4caf50,stroke-width:2px
+
+    class Router,ChunkS,RankS interface
+    class DocE,CodeE,MdE,EpubE,JupyE,Hybrid,Semantic,Fixed,STEmbed,BGE,Noop impl
+    class Doc,Raw,Chunks,Vectors,Q,Results data
+    class Store store

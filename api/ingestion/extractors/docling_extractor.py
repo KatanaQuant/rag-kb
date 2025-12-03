@@ -5,8 +5,7 @@ Extracts text from PDF and DOCX files using Docling library with advanced parsin
 Extracted from extractors.py during modularization refactoring.
 """
 from pathlib import Path
-from typing import List, Tuple
-from dataclasses import dataclass
+from typing import ClassVar, List, Set, Tuple
 
 from config import default_config
 from domain_models import ExtractionResult
@@ -16,14 +15,20 @@ from ingestion.extractors._docling_availability import (
     DOCLING_AVAILABLE,
     DOCLING_CHUNKING_AVAILABLE
 )
+from pipeline.interfaces import ExtractorInterface
 
 
-@dataclass
-class DoclingExtractor:
+class DoclingExtractor(ExtractorInterface):
     """Extracts text from documents using Docling (advanced parsing)"""
+
+    SUPPORTED_EXTENSIONS: ClassVar[Set[str]] = {'.pdf', '.docx'}
 
     _converter = None
     _chunker = None
+
+    @property
+    def name(self) -> str:
+        return "docling"
 
     @classmethod
     def get_converter(cls):
@@ -59,8 +64,7 @@ class DoclingExtractor:
             cls._chunker = HybridChunker(tokenizer=hf_tokenizer, merge_peers=True)
         return cls._chunker
 
-    @staticmethod
-    def extract(path: Path, retry_with_ghostscript: bool = True) -> ExtractionResult:
+    def extract(self, path: Path, retry_with_ghostscript: bool = True) -> ExtractionResult:
         """Extract text from PDF/DOCX using Docling with HybridChunker
 
         Args:

@@ -2,7 +2,7 @@
 
 Complete guide to managing and monitoring your RAG-KB instance via API endpoints.
 
-**Version**: v1.7.11
+**Version**: v1.10.1
 
 ---
 
@@ -15,6 +15,7 @@ Complete guide to managing and monitoring your RAG-KB instance via API endpoints
 - [Security Scanning](#security-scanning)
 - [System Maintenance](#system-maintenance)
 - [Monitoring](#monitoring)
+- [MCP Protocol](#mcp-protocol)
 
 ---
 
@@ -26,7 +27,7 @@ RAG-KB automatically handles most operations. You typically don't need to call A
 
 | Event | Automatic Action |
 |-------|------------------|
-| **API startup** | Index all new/modified files in `knowledge_base/` |
+| **API startup** | Index all new/modified files in `kb/` |
 | **File added/modified** | File watcher queues it for indexing (2s debounce) |
 | **File added during indexing** | Queued with NORMAL priority, processed in order |
 | **Crash recovery** | Incomplete files resumed on next startup |
@@ -37,7 +38,7 @@ RAG-KB automatically handles most operations. You typically don't need to call A
 On every API startup, the system automatically:
 
 1. **Validates configuration** - Checks paths, model, database
-2. **Starts file watcher** - Monitors `knowledge_base/` for changes
+2. **Starts file watcher** - Monitors `kb/` for changes
 3. **Sanitization stage**:
    - Resumes incomplete files (from previous crash)
    - Detects and repairs orphaned files (HIGH priority)
@@ -45,7 +46,7 @@ On every API startup, the system automatically:
 
 ### File Watcher
 
-The file watcher monitors `knowledge_base/` recursively and automatically queues files for indexing.
+The file watcher monitors `kb/` recursively and automatically queues files for indexing.
 
 **Supported file types**: `.pdf`, `.md`, `.docx`, `.epub`, `.py`, `.java`, `.ts`, `.tsx`, `.js`, `.jsx`, `.cs`, `.go`, `.ipynb`
 
@@ -260,7 +261,7 @@ Fast-track specific files to the front of the queue.
 **Endpoint**: `POST /indexing/priority/{file_path}`
 
 **Parameters**:
-- `file_path`: Path relative to knowledge_base/ directory
+- `file_path`: Path relative to kb/ directory
 - `force`: (optional, default: false) Reindex even if already indexed
 
 **Example**:
@@ -375,21 +376,100 @@ Remove document and all its chunks from the index.
 
 **Endpoint**: `DELETE /document/{file_path}`
 
-**Example**:
+**Path format**: Use the container path (e.g., `/app/kb/...`) and URL-encode it.
+
+**Example** (simple path):
 ```bash
-curl -X DELETE "http://localhost:8000/document/books/old-notes.pdf"
+curl -X DELETE "http://localhost:8000/document/%2Fapp%2Fkb%2Fbooks%2Fold-notes.pdf"
+```
+
+**Example** (path with spaces - requires URL encoding):
+```bash
+# Use docker exec to avoid local Python version issues
+encoded=$(docker exec rag-api python3 -c "import urllib.parse; print(urllib.parse.quote('/app/kb/My Book - Author.pdf', safe=''))")
+curl -X DELETE "http://localhost:8000/document/$encoded"
 ```
 
 **Response**:
 ```json
 {
   "status": "success",
-  "message": "Document deleted",
-  "chunks_deleted": 42
+  "file_path": "/app/kb/books/old-notes.pdf",
+  "found": true,
+  "document_id": 123,
+  "chunks_deleted": 42,
+  "document_deleted": true
 }
 ```
 
 **Note**: This only removes from the index, not from the file system.
+
+---
+
+### Reindex Document
+
+Delete and re-queue a document for processing. Combines delete + priority queue operations.
+
+**Endpoint**: `POST /document/{file_path}/reindex`
+
+**Example**:
+```bash
+curl -X POST "http://localhost:8000/document/books/mybook.pdf/reindex"
+```
+
+**Response**:
+```json
+{
+  "status": "success",
+  "file_path": "/app/kb/books/mybook.pdf",
+  "action": "reindex",
+  "deletion": {
+    "deleted": true,
+    "chunks_deleted": 234
+  },
+  "queued": true,
+  "priority": "HIGH",
+  "queue_size": 1
+}
+```
+
+**Use Cases**:
+- Force re-processing after pipeline changes
+- Re-index after manual file edits
+- E2E testing (validates full pipeline)
+
+---
+
+### Check Document Integrity
+
+Get integrity status for all documents.
+
+**Endpoint**: `GET /documents/integrity`
+
+```bash
+curl http://localhost:8000/documents/integrity
+```
+
+**Response**:
+```json
+{
+  "total_documents": 1576,
+  "complete": 1570,
+  "incomplete": 6,
+  "issues": [
+    {
+      "file_path": "/app/kb/broken.pdf",
+      "issue_type": "zero_chunks",
+      "details": "Document has 0 chunks"
+    }
+  ]
+}
+```
+
+**Check single document**:
+```bash
+curl "http://localhost:8000/documents/integrity/books/mybook.pdf"
+```
 
 ---
 
@@ -455,7 +535,7 @@ curl http://localhost:8000/api/security/scan/8dc87920
     "critical_findings": [],
     "warning_findings": [
       {
-        "file_path": "/app/knowledge_base/notes/empty.md",
+        "file_path": "/app/kb/notes/empty.md",
         "filename": "empty.md",
         "severity": "WARNING",
         "reason": "File is empty"
@@ -570,12 +650,16 @@ curl http://localhost:8000/api/security/quarantine
 
 **Restore File from Quarantine**:
 ```bash
-curl -X POST "http://localhost:8000/api/security/quarantine/restore?file_path=suspicious.pdf"
+curl -X POST http://localhost:8000/api/security/quarantine/restore \
+  -H "Content-Type: application/json" \
+  -d '{"filename": "suspicious.pdf.REJECTED", "force": false}'
 ```
 
 **Purge Old Quarantined Files** (default: 30 days):
 ```bash
-curl -X POST "http://localhost:8000/api/security/quarantine/purge?days=30"
+curl -X POST http://localhost:8000/api/security/quarantine/purge \
+  -H "Content-Type: application/json" \
+  -d '{"older_than_days": 30, "dry_run": false}'
 ```
 
 ---
@@ -1086,8 +1170,66 @@ curl http://localhost:8000/health
 
 ---
 
+## MCP Protocol
+
+The API exposes an MCP (Model Context Protocol) endpoint for AI tool integration.
+
+### MCP Info
+
+Get MCP server capabilities.
+
+**Endpoint**: `GET /mcp`
+
+```bash
+curl http://localhost:8000/mcp
+```
+
+**Response**:
+```json
+{
+  "name": "rag-kb-http",
+  "version": "1.0.0",
+  "protocol": "MCP Streamable HTTP",
+  "transport": "HTTP + SSE",
+  "authentication": "none (local network only)",
+  "tools": ["query_kb", "list_indexed_documents", "get_kb_stats"],
+  "endpoint": "/mcp"
+}
+```
+
+### MCP JSON-RPC
+
+Send JSON-RPC 2.0 requests for AI tool calls.
+
+**Endpoint**: `POST /mcp`
+
+**Supported Methods**:
+- `initialize`: Initialize MCP session
+- `tools/list`: List available tools
+- `tools/call`: Call a tool (query_kb, list_indexed_documents, get_kb_stats)
+
+**Example**:
+```bash
+curl -X POST http://localhost:8000/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "tools/call",
+    "params": {
+      "name": "query_kb",
+      "arguments": {"query": "python async patterns", "top_k": 5}
+    }
+  }'
+```
+
+For SSE streaming responses, include `text/event-stream` in the Accept header.
+
+---
+
 ## See Also
 
 - [README.md](../README.md) - Main documentation
 - [ROADMAP.md](ROADMAP.md) - Planned features
-- [KNOWN_ISSUES.md](KNOWN_ISSUES.md) - Known bugs and workarounds
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues

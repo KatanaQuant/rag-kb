@@ -83,18 +83,19 @@ class DocumentProcessor:
     }
 
     # All extraction methods produce pre-chunked content
+    # Method names come from ExtractorInterface.name property
     PRE_CHUNKED_METHODS = {
         # Docling HybridChunker (structure + token-aware)
-        'docling', 'docling_hybrid', 'docling_markdown',
+        'docling', 'docling_hybrid', 'docling_markdown', 'markdown_docling',
         # AST-based code chunking (per-function, per-class)
         'ast_python', 'ast_java', 'ast_typescript', 'ast_tsx',
-        'ast_javascript', 'ast_jsx', 'ast_c_sharp', 'ast_go',
+        'ast_javascript', 'ast_jsx', 'ast_c_sharp', 'ast_go', 'code_ast',
         # Jupyter cell-aware chunking
-        'jupyter_ast',
+        'jupyter_ast', 'jupyter',
         # Obsidian Graph-RAG
         'obsidian_graph_rag',
         # EPUB (converts to PDF then Docling)
-        'epub_pandoc_docling',
+        'epub_pandoc_docling', 'epub_pandoc',
     }
 
     def __init__(self, progress_tracker: Optional[ProcessingProgressTracker] = None):
@@ -124,6 +125,16 @@ class DocumentProcessor:
         """
         if self.tracker:
             self.tracker.delete_document(file_path)
+
+    def is_rejected(self, file_path: str) -> bool:
+        """Check if a file was rejected by validation.
+
+        Delegation method to avoid Law of Demeter violation.
+        """
+        if not self.tracker:
+            return False
+        progress = self.tracker.get_progress(file_path)
+        return progress and progress.status == 'rejected'
 
     def get_obsidian_graph(self):
         """Get Obsidian knowledge graph from extractor.

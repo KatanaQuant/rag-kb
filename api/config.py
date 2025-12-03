@@ -46,7 +46,7 @@ class ModelConfig:
 @dataclass
 class PathConfig:
     """File path configuration"""
-    knowledge_base: Path = Path("/app/knowledge_base")
+    knowledge_base: Path = Path("/app/kb")
     data_dir: Path = Path("/app/data")
 
 @dataclass

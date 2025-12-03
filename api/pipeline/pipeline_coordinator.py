@@ -6,6 +6,7 @@
 Coordinates the flow of documents through extraction, chunking, embedding, and storage stages.
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import Optional
@@ -21,6 +22,9 @@ from pipeline.indexing_queue import QueueItem
 from pipeline.progress_logger import ProgressLogger
 from pipeline.skip_batcher import SkipBatcher
 from domain_models import DocumentFile
+
+logger = logging.getLogger(__name__)
+
 
 class PipelineCoordinator:
     """Coordinates concurrent pipeline processing
@@ -84,20 +88,112 @@ class PipelineCoordinator:
         self.skip_batcher.stop()  # Print final skip summary
 
     def add_file(self, item: QueueItem):
-        """Add file to processing queue (with pre-stage skip check)
+        """Add file to processing queue (with pre-queue validation)
 
-        EPUBs are handled separately - they only convert to PDF, don't chunk.
-        Other files are checked if already indexed before adding to chunk_queue.
+        Validation order:
+        1. EPUB detection - route to conversion handler
+        2. Security validation - reject dangerous files BEFORE queue
+        3. Already indexed check - skip duplicates
+        4. Add to chunk queue
         """
         # Handle EPUB conversion outside pipeline (no chunking needed)
         if item.path.suffix.lower() == '.epub':
             self._handle_epub_conversion(item)
             return
 
+        # Security validation BEFORE queue - rejected files never get [Chunk] prefix
+        if self._should_reject_before_queue(item):
+            self._mark_file_complete(item.path)
+            return
+
         if self._should_skip_before_queue(item):
             self._mark_file_complete(item.path)  # Clear from queued_files tracking
             return
         self.queues.chunk_queue.put(item)
+
+    def _should_reject_before_queue(self, item: QueueItem) -> bool:
+        """Pre-queue security validation with remediation - reject dangerous files early
+
+        This runs BEFORE adding to chunk_queue, so rejected files:
+        - Never get misleading [Chunk] prefix in logs
+        - Never waste queue space
+        - Get clean REJECTED message only
+
+        Flow:
+        1. Validate file
+        2. If validation fails, attempt remediation (e.g., remove +x permission)
+        3. If remediation succeeds, re-validate
+        4. Only reject if remediation fails or isn't applicable
+        """
+        try:
+            validation_result = self.processor.validator.validate(item.path)
+            if validation_result.is_valid:
+                return False
+
+            # Attempt remediation before rejecting
+            if self._attempt_permission_remediation(item, validation_result):
+                # Re-validate after remediation
+                revalidation = self.processor.validator.validate(item.path)
+                if revalidation.is_valid:
+                    return False  # Fixed! Don't reject
+                # Still failing after remediation - update result for rejection
+                validation_result = revalidation
+
+            # File failed validation - handle rejection
+            self._handle_pre_queue_rejection(item, validation_result)
+            return True
+        except Exception:
+            # If validation fails, let it through to chunk_stage for proper handling
+            return False
+
+    def _attempt_permission_remediation(self, item: QueueItem, validation_result) -> bool:
+        """Attempt to remediate executable permission issue
+
+        Returns True if remediation succeeded and file should be re-validated.
+        Only remediates accidental +x on documents, NOT actual scripts (shebang).
+        """
+        if validation_result.validation_check != 'ExecutablePermissionStrategy':
+            return False
+
+        # Don't remediate actual scripts (shebang) - those should be rejected
+        if validation_result.file_type == 'script':
+            return False
+
+        try:
+            current_mode = item.path.stat().st_mode
+            new_mode = current_mode & ~0o111  # Remove all execute bits
+            os.chmod(item.path, new_mode)
+            print(f"  [Remediated] Removed +x permission from: {item.path.name}")
+            return True
+        except OSError as e:
+            print(f"  [Warning] Could not remove +x from {item.path.name}: {e}")
+            return False
+
+    def _handle_pre_queue_rejection(self, item: QueueItem, validation_result):
+        """Handle file rejection before queue entry
+
+        Prints REJECTED message and quarantines file if needed.
+        """
+        print(f"REJECTED (security): {item.path.name} - {validation_result.reason}")
+
+        # Quarantine and track using processor's methods
+        try:
+            doc_file = DocumentFile.from_path(item.path)
+            if validation_result.validation_check:
+                self.processor.quarantine.quarantine_file(
+                    doc_file.path,
+                    validation_result.reason,
+                    validation_result.validation_check,
+                    doc_file.hash
+                )
+            if self.processor.tracker:
+                self.processor.tracker.mark_rejected(
+                    str(doc_file.path),
+                    validation_result.reason,
+                    validation_result.validation_check
+                )
+        except Exception as e:
+            logger.debug("Failed to track rejection for %s: %s", doc_file.path, e)
 
     def _should_skip_before_queue(self, item: QueueItem) -> bool:
         """Pre-stage skip check - filter out already-indexed files
@@ -113,9 +209,9 @@ class PipelineCoordinator:
             if self.embedding_service.store.is_document_indexed(str(item.path), doc_file.hash):
                 self.skip_batcher.record_skip(item.path.name, "already indexed")
                 return True
-        except Exception:
+        except Exception as e:
             # If we can't check, let it through to chunk_stage for proper error handling
-            pass
+            logger.debug("Pre-queue check failed for %s, proceeding to queue: %s", item.path, e)
 
         return False
 
@@ -144,6 +240,7 @@ class PipelineCoordinator:
         Note: EPUBs are handled separately in _handle_epub_conversion()
         and never reach this method.
         """
+        import time
         try:
             doc_file = DocumentFile.from_path(item.path)
 
@@ -151,17 +248,23 @@ class PipelineCoordinator:
                 self._mark_file_complete(item.path)  # Mark complete even if skipped
                 return None
 
+            # Log start before extraction (which is the slow part)
             self._log_processing_start("Chunk", item.path.name)
+            start_time = time.time()
 
             chunks = self.processor.process_file(doc_file, force=item.force)
 
             if not chunks:
                 self._mark_file_complete(item.path)  # Mark complete even if no chunks
-                print(f"[Chunk] {item.path.name} - no chunks extracted")
-                self.progress_logger.log_complete("Chunk", item.path.name, 0)
+                # Stop heartbeat - either file was rejected or produced no chunks
+                self.progress_logger.log_complete("Chunk", item.path.name, 0, start_time)
+                # Only log additional message for non-rejected files
+                # Rejected files already logged their own REJECTED message
+                if not self.processor.is_rejected(str(item.path)):
+                    print(f"[Chunk] {item.path.name} - no chunks extracted")
                 return None
 
-            self.progress_logger.log_complete("Chunk", item.path.name, len(chunks))
+            self.progress_logger.log_complete("Chunk", item.path.name, len(chunks), start_time)
             return self._create_chunked_document(item, doc_file, chunks)
 
         except Exception as e:
