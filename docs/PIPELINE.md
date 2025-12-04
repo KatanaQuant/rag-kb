@@ -30,7 +30,7 @@ embedding:
   batch_size: 32
 
 reranking:
-  enabled: true
+  enabled: false  # ** Requires GPU (20x slower on CPU)
   model: BAAI/bge-reranker-large
   top_n: 20
 ```
@@ -64,9 +64,11 @@ reranking:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `enabled` | `true` | Enable reranking |
+| `enabled` | `false` | Enable reranking (** **GPU required**) |
 | `model` | `BAAI/bge-reranker-large` | Reranker model |
 | `top_n` | `20` | Candidates to rerank |
+
+> ** **GPU REQUIRED**: Reranking uses cross-encoder models that are ~20x slower on CPU (~20s vs ~1s per query). Keep disabled for CPU-only builds.
 
 ---
 
@@ -85,19 +87,69 @@ export RERANKING_ENABLED=false
 
 ## Hardware Profiles
 
-Pre-configured profiles in `config/profiles/`:
+### CPU-Only Build (Default)
 
-| Profile | Use Case |
-|---------|----------|
-| `cpu-only.yaml` | Default, works everywhere |
-| `rtx3060.yaml` | 12GB VRAM GPU |
-| `rtx4080.yaml` | 16GB VRAM GPU |
+For machines without GPU. Uses vectorlite HNSW index for fast queries.
+
+```yaml
+# config/pipeline.yaml (default)
+reranking:
+  enabled: false
+```
+
+```bash
+# .env
+RERANKING_ENABLED=false  # Default
+```
+
+**Performance** (benchmarked on 16-core/30GB, 59K vectors):
+- Startup: ~1s (vectorlite HNSW index)
+- Query latency: **~10-200ms** (depends on embedding model cold start)
+- Retrieval quality: Good (vector similarity + query decomposition)
+- Suitable for: Development, single-user, production without GPU
+
+> **Note**: Query decomposition is enabled by default, automatically breaking compound queries ("X and Y") into sub-queries for better recall. This adds ~80% latency overhead but improves relevance scores by ~2-6%.
+
+### GPU Build
+
+For machines with NVIDIA GPU. Enables reranking for ~20-30% better retrieval.
+
+```yaml
+# config/pipeline.yaml
+reranking:
+  enabled: true
+  model: BAAI/bge-reranker-large
+  top_n: 20
+```
+
+```bash
+# .env
+RERANKING_ENABLED=true
+```
+
+**Performance** (with GPU acceleration):
+- Startup: ~3s (vectorlite HNSW + reranker model)
+- Query latency: **~1-2 seconds** (GPU-accelerated reranking)
+- Retrieval quality: Excellent (+20-30% vs CPU-only)
+- Suitable for: Production, multi-agent, high-volume
+
+> ** **CPU Warning**: Reranking on CPU takes ~20 seconds per query. Only enable with GPU.
+
+### Pre-configured Profiles
+
+Available in `config/profiles/`:
+
+| Profile | Use Case | Reranking |
+|---------|----------|-----------|
+| `cpu-only.yaml` | Default, works everywhere | Disabled |
+| `rtx3060.yaml` | 12GB VRAM GPU | Enabled |
+| `rtx4080.yaml` | 16GB VRAM GPU | Enabled |
 
 ### Using Profiles
 
 ```bash
 cp config/profiles/cpu-only.yaml config/pipeline.yaml
-docker-compose restart api
+docker-compose restart rag-api
 ```
 
 ---

@@ -1,6 +1,3 @@
-# Copyright (c) 2024 RAG-KB Contributors
-# SPDX-License-Identifier: MIT
-
 """Security scan result caching service
 
 Caches ClamAV/YARA/hash blacklist scan results by file hash to avoid

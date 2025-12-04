@@ -1,7 +1,7 @@
 """
 Completeness verification strategies
 
-Following Sandi Metz patterns:
+Principles:
 - Strategy Pattern for composable checks
 - Single Responsibility per strategy
 - Tell, Don't Ask principle

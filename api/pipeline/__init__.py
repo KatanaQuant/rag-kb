@@ -1,6 +1,3 @@
-# Copyright (c) 2024 RAG-KB Contributors
-# SPDX-License-Identifier: MIT
-
 """Pipeline layer for RAG system.
 
 This package handles background document processing:
@@ -10,7 +7,7 @@ This package handles background document processing:
 - Pipeline coordination (PipelineCoordinator)
 - Security scanning (QuarantineManager)
 
-Following Sandi Metz principles:
+Principles:
 - Single Responsibility Principle
 - Dependency Injection
 """

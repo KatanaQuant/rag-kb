@@ -7,7 +7,7 @@ from collections import defaultdict
 class FileDiscovery:
     """Discovers and categorizes files for display
 
-    Sandi Metz compliance:
+    Design principles:
     - Single responsibility: file discovery and categorization
     - Small methods (< 5 lines each)
     """

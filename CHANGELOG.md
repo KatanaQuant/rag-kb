@@ -11,6 +11,38 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.2.0-beta] - 2025-12-04
+
+Performance release: 200x faster queries with persistent vector index.
+
+### Added
+- **Vectorlite HNSW index** - Persistent approximate nearest neighbor search (~10ms queries, was ~2s)
+- **Query decomposition v2** - Break compound queries into sub-queries (+5.6% top score)
+- **Follow-up suggestions** - `suggestions` field in `/query` response with related queries
+- **Confidence scores** - `rerank_score` field in results when reranking enabled
+- **Migration script** - `api/ingestion/vector_migration.py` for sqlite-vec to vectorlite migration
+- **Migration tests** - Integration tests verifying migration script works correctly
+- Benchmark scripts for agentic query testing
+
+### Changed
+- **API Response** - `/query` now returns `decomposition` object and `suggestions` array
+- **API Request** - `/query` accepts `decompose` parameter (default: true)
+- Query cache key now includes `decompose` parameter
+
+### Performance
+- Vector search: ~10ms (was ~2s with NumPy brute-force)
+- Startup: ~1s index load (persistent HNSW index on disk)
+- Query overhead: +81% latency for decomposition (acceptable with vectorlite speed)
+
+### Migration
+**Existing users must run migration script** (one-time, ~78s for 59K vectors):
+```bash
+docker exec rag-api python /app/ingestion/vector_migration.py /app/data/rag.db 1024
+```
+New installations create vectorlite tables automatically.
+
+---
+
 ## [2.1.5-beta] - 2025-12-03
 
 Major version bump due to breaking changes. See Migration Guide in `docs/RELEASES/v2.1.5-beta.md`.

@@ -3,7 +3,7 @@ Document completeness/integrity routes
 
 Provides API endpoints for checking document integrity.
 
-Following Sandi Metz patterns:
+Principles:
 - Single Responsibility: route handlers only
 - Dependency Injection: receive services via Request
 """

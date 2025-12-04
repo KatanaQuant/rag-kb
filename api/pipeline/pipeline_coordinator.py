@@ -1,6 +1,3 @@
-# Copyright (c) 2024 RAG-KB Contributors
-# SPDX-License-Identifier: MIT
-
 """Pipeline coordinator for concurrent document processing.
 
 Coordinates the flow of documents through extraction, chunking, embedding, and storage stages.

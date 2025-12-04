@@ -1,9 +1,6 @@
-# Copyright (c) 2024 RAG-KB Contributors
-# SPDX-License-Identifier: MIT
-
 """Progress logging with time tracking for pipeline stages.
 
-Following Sandi Metz POODR principles:
+Principles:
 - Single Responsibility: Progress logging only
 - Small methods: Each method <10 lines
 - Duck typing: Works with any stage name

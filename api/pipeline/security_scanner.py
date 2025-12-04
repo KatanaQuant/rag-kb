@@ -1,7 +1,7 @@
 """Security scanner for batch file scanning
 
 Extracted from routes/security.py to follow Single Responsibility Principle.
-Each method is focused and under 20 lines per Sandi Metz guidelines.
+Each method is focused and under 20 lines for maintainability.
 """
 from pathlib import Path
 from typing import List, Dict, Any, Optional

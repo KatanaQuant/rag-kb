@@ -451,5 +451,3 @@ All security features are implemented and available via REST API:
 - [ClamAV Documentation](https://docs.clamav.net/)
 - [YARA Documentation](https://yara.readthedocs.io/)
 - [MalwareBazaar](https://bazaar.abuse.ch/)
-- [VALIDATION_FAILURE_UX.md](VALIDATION_FAILURE_UX.md) - Phase 1 & 2 docs
-- [REJECTION_TRACKING_IMPLEMENTATION.md](REJECTION_TRACKING_IMPLEMENTATION.md) - Phase 1 details

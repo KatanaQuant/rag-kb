@@ -1,9 +1,6 @@
-# Copyright (c) 2024 RAG-KB Contributors
-# SPDX-License-Identifier: MIT
-
 """Indexing queue service for managing document processing with priorities.
 
-Follows Sandi Metz OOP principles:
+Principles:
 - Single Responsibility: Queue management only
 - Dependency Injection: No hardcoded dependencies
 - Small classes: < 100 lines
@@ -37,7 +34,7 @@ class IndexingQueue:
     Thread-safe implementation using PriorityQueue with duplicate detection.
     Tracks queued files to prevent duplicate processing.
 
-    Follows Sandi Metz rules:
+    Follows design principles:
     - < 100 lines
     - 4 instance variables
     - Methods < 5 lines (mostly)

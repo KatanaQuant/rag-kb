@@ -17,7 +17,7 @@ from pipeline.interfaces import ExtractorInterface
 class EpubExtractor(ExtractorInterface):
     """Converts EPUB to PDF using Pandoc, keeps PDF, moves EPUB to original/
 
-    Refactored following Sandi Metz principles:
+    Refactored for code quality:
     - Small methods: Each method < 10 lines
     - Single Responsibility: Each method does one thing
     - Reduced cyclomatic complexity from C-11 to A-grade

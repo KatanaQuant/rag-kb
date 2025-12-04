@@ -1,4 +1,4 @@
-"""Tests for DocumentFile factory method - Sandi Metz refactoring
+"""Tests for DocumentFile factory method
 
 Following 'Tell, Don't Ask' principle: DocumentFile should know how to create itself
 from a path, rather than having clients construct it manually.

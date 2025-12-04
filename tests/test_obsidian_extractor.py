@@ -231,7 +231,7 @@ class TestGraphBuilderIntegration:
         assert hasattr(extractor, 'graph_builder')
 
     def test_extractor_uses_injected_graph_builder(self, vault_path):
-        """Test: Uses injected graph builder (future POODR-compliant behavior)"""
+        """Test: Uses injected graph builder (dependency injection pattern)"""
         mock_builder = Mock(spec=ObsidianGraphBuilder)
 
         extractor = ObsidianExtractor(graph_builder=mock_builder)

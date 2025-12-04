@@ -1,9 +1,6 @@
-# Copyright (c) 2024 RAG-KB Contributors
-# SPDX-License-Identifier: MIT
-
 """Pipeline queue data structures for concurrent processing.
 
-Follows Sandi Metz OOP principles:
+Principles:
 - Single Responsibility: Each class represents one pipeline stage
 - Small classes: < 100 lines
 - Few instance variables: < 4

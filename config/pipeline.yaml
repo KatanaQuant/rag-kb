@@ -62,8 +62,11 @@ embedding:
 # =============================================================================
 # Reranks search results for better relevance. Implements RerankerInterface.
 #
+# ⚠️ GPU REQUIRED: Cross-encoder reranking is ~100x slower on CPU (~150s vs ~1.5s)
+#    Keep disabled for CPU-only builds!
+#
 # Available rerankers:
-#   - BGEReranker: BAAI/bge-reranker-large (560MB, CPU-viable, +20-30% quality)
+#   - BGEReranker: BAAI/bge-reranker-large (560MB, +20-30% quality)
 #   - NoopReranker: Pass-through (used when enabled: false)
 #
 # How it works:
@@ -71,11 +74,10 @@ embedding:
 #   2. Rerank using cross-encoder model
 #   3. Return top_k results (from query request)
 #
-# Performance notes:
-#   - First query: ~30-60s (model download + load)
-#   - Subsequent queries: ~1-3s (CPU), ~0.1-0.3s (GPU)
-#   - Set enabled: false for faster queries without quality boost
+# Performance:
+#   - GPU: ~1-2s per query (recommended)
+#   - CPU: ~20s per query (NOT recommended)
 reranking:
-  enabled: true                    # Set false to disable (uses NoopReranker)
-  model: BAAI/bge-reranker-large   # 560MB, CPU-viable
+  enabled: false                   # ⚠️ Enable ONLY with GPU (see PIPELINE.md)
+  model: BAAI/bge-reranker-large   # 560MB cross-encoder
   top_n: 20                        # Retrieve this many, rerank to top_k

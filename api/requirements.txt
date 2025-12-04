@@ -13,8 +13,10 @@ sentence-transformers>=3.0.0
 transformers>=4.30.0
 
 # Vector database
-sqlite-vec==0.1.1
+vectorlite-py>=0.2.0
+sqlite-vec==0.1.1  # Keep for migration from old databases
 aiosqlite>=0.20.0
+apsw>=3.46.0  # Required for vectorlite (better SQLite version support)
 
 # Document processing
 python-docx>=1.1.2

@@ -1,9 +1,6 @@
-# Copyright (c) 2024 RAG-KB Contributors
-# SPDX-License-Identifier: MIT
-
 """Indexing worker service for processing files from queue.
 
-Follows Sandi Metz OOP principles:
+Principles:
 - Single Responsibility: Route files from queue to pipeline
 - Dependency Injection: queue and pipeline_coordinator injected
 - Small class: < 100 lines

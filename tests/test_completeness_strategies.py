@@ -6,7 +6,7 @@ Following TDD Red/Green/Refactor:
 - GREEN: Implement strategy classes to make tests pass
 - REFACTOR: Compose strategies in CompletenessAnalyzer
 
-Goal: Detect incomplete documents via Strategy pattern (Sandi Metz style)
+Goal: Detect incomplete documents via Strategy pattern
 """
 import pytest
 from unittest.mock import Mock, MagicMock

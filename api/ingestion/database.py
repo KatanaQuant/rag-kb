@@ -81,19 +81,17 @@ class DatabaseConnection:
         return hasattr(self.conn, 'enable_load_extension')
 
     def _try_load(self):
-        """Try loading extension"""
-        try:
-            self.conn.load_extension("vec0")
-        except Exception:
-            self._load_python_bindings()
+        """Try loading vectorlite extension"""
+        self._load_python_bindings()
 
     def _load_python_bindings(self):
-        """Fallback to Python bindings"""
+        """Load vectorlite extension using Python bindings"""
         try:
-            import sqlite_vec
-            sqlite_vec.load(self.conn)
+            import vectorlite_py
+            self.conn.enable_load_extension(True)
+            self.conn.load_extension(vectorlite_py.vectorlite_path())
         except Exception as e:
-            raise RuntimeError(f"sqlite-vec failed: {e}")
+            raise RuntimeError(f"vectorlite failed: {e}")
 
     def close(self):
         """Close connection"""
@@ -155,19 +153,31 @@ class SchemaManager:
         """)
 
     def _create_vector_table(self):
-        """Create vector embeddings table"""
+        """Create vector embeddings table using vectorlite HNSW index"""
         try:
             self._execute_create_vec_table()
         except Exception as e:
             print(f"Note: vec_chunks exists: {e}")
 
     def _execute_create_vec_table(self):
-        """Execute vector table creation"""
+        """Execute vector table creation with vectorlite HNSW index
+
+        vectorlite syntax:
+        - float32[dim] for 32-bit floats (standard)
+        - cosine for cosine distance metric
+        - hnsw(max_elements) for HNSW index with capacity
+        - index_file_path for persistent HNSW index (required for persistence!)
+        """
+        import os
+        db_dir = os.path.dirname(self.config.path)
+        index_path = os.path.join(db_dir, "vec_chunks.idx")
+
         self.conn.execute(f"""
             CREATE VIRTUAL TABLE IF NOT EXISTS vec_chunks
-            USING vec0(
-                chunk_id INTEGER PRIMARY KEY,
-                embedding FLOAT[{self.config.embedding_dim}]
+            USING vectorlite(
+                embedding float32[{self.config.embedding_dim}] cosine,
+                hnsw(max_elements=200000),
+                "{index_path}"
             )
         """)
 

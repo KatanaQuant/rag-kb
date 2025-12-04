@@ -1,12 +1,9 @@
-# Copyright (c) 2024 RAG-KB Contributors
-# SPDX-License-Identifier: MIT
-
 """Batch logger for skip events during indexing.
 
 Reduces log noise by batching skip messages and printing periodic summaries
 instead of individual "[Skip] file.pdf - already indexed" for every file.
 
-Following Sandi Metz POODR principles:
+Principles:
 - Single Responsibility: Batch skip logging only
 - Small methods: Each method <10 lines
 - Thread-safe: Uses locks for concurrent access

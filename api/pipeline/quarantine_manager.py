@@ -107,7 +107,7 @@ class QuarantineManager:
 
         # Check file exists
         if not file_path.exists():
-            print(f"  ⚠️  Cannot quarantine {file_path.name}: File not found")
+            print(f"  [WARNING]  Cannot quarantine {file_path.name}: File not found")
             return False
 
         # Create quarantine directory
@@ -140,11 +140,11 @@ class QuarantineManager:
             )
             self._write_metadata(quarantined_name, metadata)
 
-            print(f"  🔒 Quarantined: {file_path.name} → {quarantine_path}")
+            print(f"  [QUARANTINED] {file_path.name} -> {quarantine_path}")
             return True
 
         except Exception as e:
-            print(f"  ❌ Failed to quarantine {file_path.name}: {e}")
+            print(f"  [FAILED] Failed to quarantine {file_path.name}: {e}")
             return False
 
     def restore_file(self, quarantined_filename: str, force: bool = False) -> bool:
@@ -161,18 +161,18 @@ class QuarantineManager:
     def _validate_restore(self, quarantine_path: Path, filename: str, force: bool) -> str | None:
         """Validate restore is possible, returns error message or None"""
         if not quarantine_path.exists():
-            return f"  ❌ File not found in quarantine: {filename}"
+            return f"  [FAILED] File not found in quarantine: {filename}"
 
         metadata = self._read_metadata(filename)
         if not metadata:
-            return f"  ❌ No metadata found for {filename}"
+            return f"  [FAILED] No metadata found for {filename}"
 
         if metadata.restored:
-            return f"  ⚠️  File already restored at {metadata.restored_at}"
+            return f"  [WARNING] File already restored at {metadata.restored_at}"
 
         original_path = Path(metadata.original_path)
         if original_path.exists() and not force:
-            return f"  ❌ Original path already exists: {original_path}\n     Use --force to overwrite"
+            return f"  [FAILED] Original path already exists: {original_path}\n     Use --force to overwrite"
 
         return None
 
@@ -189,10 +189,10 @@ class QuarantineManager:
             metadata.restored_at = datetime.now(timezone.utc).isoformat()
             self._write_metadata(filename, metadata)
 
-            print(f"  ✅ Restored: {filename} → {original_path}")
+            print(f"  [OK] Restored: {filename} -> {original_path}")
             return True
         except Exception as e:
-            print(f"  ❌ Failed to restore {filename}: {e}")
+            print(f"  [FAILED] Failed to restore {filename}: {e}")
             return False
 
     def list_quarantined(self) -> List[QuarantineMetadata]:
@@ -299,5 +299,5 @@ class QuarantineManager:
                     for filename, meta_dict in data.items()
                 }
         except Exception as e:
-            print(f"  ⚠️  Failed to load quarantine metadata: {e}")
+            print(f"  [WARNING]  Failed to load quarantine metadata: {e}")
             return {}

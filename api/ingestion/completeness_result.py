@@ -1,7 +1,7 @@
 """
 Completeness result value objects
 
-Following Sandi Metz patterns - immutable dataclasses, no primitive obsession.
+Design patterns: immutable dataclasses, no primitive obsession.
 """
 from dataclasses import dataclass
 from enum import Enum
@@ -28,7 +28,7 @@ class Severity(Enum):
 class CompletenessResult:
     """Result of a single completeness check
 
-    Immutable value object following Sandi Metz patterns.
+    Immutable value object - encapsulation pattern.
     """
     is_complete: bool
     issue: Optional[CompletenessIssue] = None

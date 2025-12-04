@@ -169,7 +169,7 @@ class TestEmbeddingService:
 class TestBatchEncoder:
     """Test BatchEncoder - extracts batch encoding responsibility from EmbeddingService.
 
-    Following Sandi Metz: Single Responsibility - only handles batch encoding logic.
+    Single Responsibility Principle: Only handles batch encoding logic.
     Following Kent Beck TDD: Red-Green-Refactor cycle.
     """
 

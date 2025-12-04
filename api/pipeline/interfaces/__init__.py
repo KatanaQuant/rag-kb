@@ -6,7 +6,7 @@ Provides abstract base classes for pipeline components:
 - EmbedderInterface: Text embedding generation
 - RerankerInterface: Search result reranking
 
-Following Sandi Metz POODR principles:
+Principles:
 - Depend on abstractions, not concretions
 - Single responsibility per interface
 - Message-based coupling via data contracts

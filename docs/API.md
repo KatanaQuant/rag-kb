@@ -2,7 +2,7 @@
 
 Complete guide to managing and monitoring your RAG-KB instance via API endpoints.
 
-**Version**: v1.10.1
+**Version**: v2.2.0-beta
 
 ---
 
@@ -479,7 +479,7 @@ Scan files for malware using ClamAV, YARA rules, and hash blacklists.
 
 ### Start Security Scan
 
-Scan all files in knowledge_base for security threats. Runs in background with parallel workers (8x faster than sequential).
+Scan all files in kb/ for security threats. Runs in background with parallel workers (8x faster than sequential).
 
 **Endpoint**: `POST /api/security/scan`
 
@@ -932,7 +932,7 @@ curl http://localhost:8000/health
 
 ### Query Knowledge Base
 
-Semantic search across indexed documents.
+Semantic search across indexed documents with optional query decomposition for complex queries.
 
 **Endpoint**: `POST /query`
 
@@ -941,7 +941,8 @@ Semantic search across indexed documents.
 {
   "text": "How do I optimize database queries?",
   "top_k": 5,
-  "threshold": 0.5
+  "threshold": 0.5,
+  "decompose": true
 }
 ```
 
@@ -949,6 +950,19 @@ Semantic search across indexed documents.
 - `text`: Search query (required)
 - `top_k`: Number of results to return (default: 5)
 - `threshold`: Minimum similarity score (default: 0.0, range: 0.0-1.0)
+- `decompose`: Auto-decompose compound queries (default: true)
+
+**Query Decomposition (v2)**:
+When `decompose=true` (default), the API automatically detects compound queries containing:
+- Conjunctions: "X and Y", "X or Y"
+- Comparisons: "X vs Y", "X versus Y", "compare X with Y"
+- Multiple questions: "What is X? How does Y work?"
+
+For compound queries, each sub-query is searched independently and results are merged/deduplicated. This improves recall for multi-topic queries by ~2-6% (benchmark: +5.6% top score improvement).
+
+**Performance**: Decomposition adds ~80% latency overhead (e.g., ~100ms → ~180ms) due to 2x embedding + 2x search operations. This is acceptable with vectorlite's ~10ms search times.
+
+Set `decompose=false` to treat the query as a single unit (useful when "and"/"or" are part of the search term itself).
 
 **Example**:
 ```bash
@@ -971,21 +985,57 @@ curl -X POST http://localhost:8000/query \
       "content": "AsyncIO provides cooperative multitasking...",
       "source": "books/python-cookbook.pdf",
       "page": 142,
-      "score": 0.89
+      "score": 0.89,
+      "rerank_score": 0.94
     },
     {
       "content": "Event loops are the core of async programming...",
       "source": "notes/async-guide.md",
       "page": 1,
-      "score": 0.82
+      "score": 0.82,
+      "rerank_score": 0.88
     },
     {
       "content": "Async context managers using __aenter__...",
       "source": "code/examples/async_patterns.py",
       "page": 1,
-      "score": 0.75
+      "score": 0.75,
+      "rerank_score": 0.79
     }
-  ]
+  ],
+  "suggestions": ["more about asyncio", "more about event", "more about async"],
+  "decomposition": {
+    "applied": false,
+    "sub_queries": []
+  }
+}
+```
+
+**Response Fields**:
+- `results[].score`: Vector similarity score (0.0-1.0)
+- `results[].rerank_score`: Cross-encoder rerank score when reranking enabled (null otherwise)
+- `suggestions`: Follow-up query suggestions based on result content
+- `decomposition.applied`: Whether query was decomposed
+- `decomposition.sub_queries`: Detected sub-queries (if compound query)
+
+**Example with Compound Query**:
+```bash
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"text": "position sizing and risk management", "top_k": 5}'
+```
+
+**Response**:
+```json
+{
+  "query": "position sizing and risk management",
+  "total_results": 5,
+  "results": [...],
+  "suggestions": ["more about kelly", "more about volatility"],
+  "decomposition": {
+    "applied": true,
+    "sub_queries": ["position sizing", "risk management"]
+  }
 }
 ```
 

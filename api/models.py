@@ -5,18 +5,29 @@ class QueryRequest(BaseModel):
     text: str = Field(..., description="The query text to search for")
     top_k: int = Field(default=5, ge=1, le=50, description="Number of results to return")
     threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Minimum similarity score")
+    decompose: bool = Field(default=True, description="Auto-decompose compound queries")
+
+
+class DecompositionInfo(BaseModel):
+    """Metadata about query decomposition"""
+    applied: bool = False
+    sub_queries: List[str] = []
+
 
 class SearchResult(BaseModel):
     content: str
     source: str
     page: Optional[int] = None
     score: float
+    rerank_score: Optional[float] = None
     metadata: Optional[dict] = None
 
 class QueryResponse(BaseModel):
     results: List[SearchResult]
     query: str
     total_results: int
+    suggestions: List[str] = []
+    decomposition: DecompositionInfo = DecompositionInfo()
 
 class HealthResponse(BaseModel):
     status: str

@@ -62,7 +62,7 @@ class AppState:
     Benefits:
     - Easier to test individual components
     - Clear separation of concerns
-    - Follows Sandi Metz < 4 instance variables rule
+    - Follows <4 instance variables principle
     - Delegation methods hide internal structure (Law of Demeter)
     """
 

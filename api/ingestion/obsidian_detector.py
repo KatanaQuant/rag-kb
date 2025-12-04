@@ -10,7 +10,7 @@ import re
 class ObsidianDetector:
     """Detects Obsidian vaults and notes
 
-    Small, focused class following Sandi Metz principles.
+    Small, focused class with clear responsibilities.
     """
 
     def __init__(self):

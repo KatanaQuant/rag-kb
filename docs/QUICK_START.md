@@ -15,7 +15,7 @@ git clone https://github.com/KatanaQuant/rag-kb.git
 cd rag-kb
 
 # Checkout latest stable release
-git checkout v1.9.1  # or v1.10.0-beta.1 for beta
+git checkout v2.1.5-beta  # or latest release tag
 
 # Optional: Change port if 8000 is in use
 echo "RAG_PORT=8001" > .env

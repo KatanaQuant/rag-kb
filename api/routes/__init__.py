@@ -1,4 +1,4 @@
-"""Route handlers following Sandi Metz SRP principle
+"""Route handlers following Single Responsibility Principle
 
 Each router module handles a single resource/concept:
 - query_routes: Query/search operations

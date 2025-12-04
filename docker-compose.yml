@@ -16,6 +16,7 @@ services:
       - ./kb:/app/kb
       - ./data:/app/data
       - ./tests:/app/tests  # Mount tests directory for test execution
+      - ./api:/app  # Mount api code for development (hot reload)
       - ./api/migrations:/app/migrations  # Migration scripts
       - ./config:/app/yara_config  # Mount config directory for YARA rules
       - ./.cache/deepsearch_glm:/app/.cache/deepsearch_glm  # DeepSearch GLM cache
@@ -41,6 +42,8 @@ services:
       - MKL_NUM_THREADS=${MKL_NUM_THREADS:-2}  # MKL threads
       - OPENBLAS_NUM_THREADS=${OMP_NUM_THREADS:-2}  # OpenBLAS threads (follows OMP)
       - NUMEXPR_NUM_THREADS=${OMP_NUM_THREADS:-2}  # NumExpr threads (follows OMP)
+      # Reranking (⚠️ REQUIRES GPU - disabled by default for CPU builds)
+      - RERANKING_ENABLED=${RERANKING_ENABLED:-false}  # Enable only with GPU (100x slower on CPU)
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

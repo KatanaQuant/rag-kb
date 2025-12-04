@@ -130,6 +130,38 @@ For dedicated indexing:
 
 ---
 
+## CPU vs GPU Builds
+
+### CPU-Only (Default)
+
+```bash
+# .env
+RERANKING_ENABLED=false  # Default - reranking disabled
+```
+
+**What you get**:
+- Fast queries: 1-3 seconds
+- Good retrieval quality (vector similarity)
+- Works on any hardware
+
+### GPU Build
+
+```bash
+# .env
+RERANKING_ENABLED=true  # Enable only with NVIDIA GPU
+```
+
+**What you get**:
+- Fast queries: 1-2 seconds (with GPU)
+- Excellent retrieval: +20-30% improvement via cross-encoder reranking
+- Required for: Production multi-agent deployments
+
+> **Warning**: Reranking on CPU takes ~20 seconds per query (20x slower). Only enable with GPU.
+
+See [PIPELINE.md](PIPELINE.md) for detailed hardware profile configurations.
+
+---
+
 ## Environment Variables Reference
 
 ### Core

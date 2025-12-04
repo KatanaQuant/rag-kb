@@ -11,7 +11,7 @@ Security Concerns Addressed:
 - Suspicious file extension mismatches
 - Files with executable permissions
 
-Following Sandi Metz patterns:
+Principles:
 - Strategy Pattern for composable checks
 - Single Responsibility per strategy
 - Tell, Don't Ask principle
@@ -82,7 +82,7 @@ class FileSizeStrategy:
         # Soft limit - warn but allow
         if file_size > self.warn_size_bytes:
             size_mb = file_size / (1024 * 1024)
-            print(f"  ⚠️  Large file warning: {file_path.name} ({size_mb:.1f} MB)")
+            print(f"  [WARNING] Large file warning: {file_path.name} ({size_mb:.1f} MB)")
 
         return ValidationResult(
             is_valid=True,

@@ -1,9 +1,6 @@
-# Copyright (c) 2024 RAG-KB Contributors
-# SPDX-License-Identifier: MIT
-
 """Batch encoder for efficient embedding generation.
 
-Follows Sandi Metz OOP principles:
+Principles:
 - Single Responsibility: Only handles batch encoding logic
 - Small class: Under 100 lines
 - Dependency Injection: Model injected via constructor

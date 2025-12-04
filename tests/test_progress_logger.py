@@ -3,7 +3,7 @@
 
 """Tests for ProgressLogger - TDD approach
 
-Following Sandi Metz POODR principles:
+Principles:
 - Single Responsibility: Progress logging only
 - Duck typing: Works with any stage
 - Small, focused tests

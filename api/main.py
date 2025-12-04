@@ -82,7 +82,7 @@ app.include_router(security_router)
 app.include_router(maintenance_router)
 app.include_router(mcp_router)
 
-# All routes extracted to routes/ modules following POODR principles
+# All routes extracted to routes/ modules for modular architecture
 # - routes/health.py: Health and info endpoints
 # - routes/query.py: Query operations
 # - routes/indexing.py: Indexing operations (6 endpoints)

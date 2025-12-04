@@ -5,7 +5,7 @@ import os
 class Sanitizer:
     """Sanitizes database before indexing
 
-    Sandi Metz compliance:
+    Design principles:
     - Single responsibility: database sanitization
     - Small methods (< 5 lines each)
     - Clear method names

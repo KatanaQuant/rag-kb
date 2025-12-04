@@ -4,7 +4,7 @@ Async repository classes for non-blocking database operations.
 These classes mirror the synchronous repositories from document_repository.py,
 chunk_repository.py, and search_repository.py but use aiosqlite for async I/O.
 
-Following POODR principles:
+Principles:
 - Single Responsibility: Each repository handles one table/concern
 - Dependency Injection: Accept connection in constructor
 - Interface Segregation: Separate repositories for different operations
@@ -319,17 +319,22 @@ class AsyncVectorChunkRepository:
     """CRUD operations for vector embeddings (async version).
 
     Single Responsibility: Manage vector embeddings for chunks.
-    Mirrors VectorChunkRepository from chunk_repository.py
+    Uses vectorlite HNSW index for fast approximate nearest neighbor search.
+
+    Note: vectorlite uses 'rowid' as the primary key, which we map to chunk_id.
     """
 
     def __init__(self, conn: aiosqlite.Connection):
         self.conn = conn
 
     async def add(self, chunk_id: int, embedding: List[float]):
-        """Insert vector embedding for a chunk"""
+        """Insert vector embedding for a chunk
+
+        vectorlite requires explicit rowid - we use chunk_id as rowid.
+        """
         blob = self._to_blob(embedding)
         await self.conn.execute(
-            "INSERT INTO vec_chunks (chunk_id, embedding) VALUES (?, ?)",
+            "INSERT INTO vec_chunks (rowid, embedding) VALUES (?, ?)",
             (chunk_id, blob)
         )
 
@@ -341,7 +346,7 @@ class AsyncVectorChunkRepository:
     async def delete_by_chunk(self, chunk_id: int):
         """Delete vector for a chunk"""
         await self.conn.execute(
-            "DELETE FROM vec_chunks WHERE chunk_id = ?",
+            "DELETE FROM vec_chunks WHERE rowid = ?",
             (chunk_id,)
         )
 
@@ -392,30 +397,61 @@ class AsyncSearchRepository:
     """Vector and hybrid search operations (async version).
 
     Single Responsibility: Execute search queries only.
-    Mirrors SearchRepository from search_repository.py
+    Uses vectorlite knn_search for fast HNSW-based approximate nearest neighbor.
     """
 
     def __init__(self, conn: aiosqlite.Connection):
         self.conn = conn
 
     async def vector_search(self, embedding: List[float], top_k: int, threshold: float = None) -> List[Dict]:
-        """Search for similar vectors using cosine similarity"""
+        """Search for similar vectors using vectorlite HNSW index
+
+        Uses knn_search() for O(log n) approximate nearest neighbor search.
+        """
         blob = self._to_blob(embedding)
         results = await self._execute_vector_search(blob, top_k)
         return self._format_results(results, threshold)
 
     async def _execute_vector_search(self, blob: bytes, top_k: int):
-        """Execute vector similarity query"""
+        """Execute vectorlite knn_search query
+
+        vectorlite knn_search returns (rowid, distance) pairs.
+        We then JOIN with chunks/documents to get metadata.
+        ef parameter controls search quality (higher = more accurate but slower).
+        """
+        # First get the k nearest neighbors from vectorlite
         cursor = await self.conn.execute("""
-            SELECT c.content, d.file_path, c.page,
-                   vec_distance_cosine(v.embedding, ?) as dist
+            SELECT v.rowid, v.distance
             FROM vec_chunks v
-            JOIN chunks c ON v.chunk_id = c.id
-            JOIN documents d ON c.document_id = d.id
-            ORDER BY dist ASC
-            LIMIT ?
+            WHERE knn_search(v.embedding, knn_param(?, ?))
         """, (blob, top_k))
-        return await cursor.fetchall()
+        vector_results = await cursor.fetchall()
+
+        if not vector_results:
+            return []
+
+        # Then fetch metadata for those chunk IDs
+        chunk_ids = [r[0] for r in vector_results]
+        distances = {r[0]: r[1] for r in vector_results}
+
+        placeholders = ','.join('?' * len(chunk_ids))
+        cursor = await self.conn.execute(f"""
+            SELECT c.id, c.content, d.file_path, c.page
+            FROM chunks c
+            JOIN documents d ON c.document_id = d.id
+            WHERE c.id IN ({placeholders})
+        """, chunk_ids)
+        metadata_results = await cursor.fetchall()
+
+        # Combine results with distances, preserving order by distance
+        combined = []
+        for row in metadata_results:
+            chunk_id = row[0]
+            combined.append((row[1], row[2], row[3], distances[chunk_id]))
+
+        # Sort by distance (ascending)
+        combined.sort(key=lambda x: x[3])
+        return combined
 
     def _format_results(self, rows, threshold: float) -> List[Dict]:
         """Format search results and apply threshold"""

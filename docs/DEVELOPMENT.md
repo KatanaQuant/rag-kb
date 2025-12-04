@@ -30,7 +30,7 @@ api/
 │   └── file_watcher.py          # Auto-sync file monitoring
 ├── startup/                  # Application lifecycle
 │   └── manager.py            # StartupManager
-└── tests/                    # Test suite (735 tests)
+└── tests/                    # Test suite (896 tests)
     ├── test_config.py
     ├── test_ingestion.py
     ├── test_main.py

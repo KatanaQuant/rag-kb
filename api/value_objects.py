@@ -1,10 +1,7 @@
-# Copyright (c) 2024 RAG-KB Contributors
-# SPDX-License-Identifier: MIT
-
 """
 Value objects for the RAG system.
 
-Following Sandi Metz principles:
+Principles:
 - Immutable data structures
 - Named instead of primitive types (no Primitive Obsession)
 - Small, focused classes with single responsibility

@@ -1,6 +1,6 @@
 """Pipeline factory for creating pipeline components from configuration.
 
-Follows Sandi Metz principles:
+Follows established principles:
 - Dependency injection via constructor
 - Factory creates components from config
 - Single responsibility: component creation

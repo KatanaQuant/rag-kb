@@ -1,4 +1,4 @@
-"""Tests for FileFilterPolicy - TDD for Sandi Metz refactoring"""
+"""Tests for FileFilterPolicy - Test-Driven Development"""
 import pytest
 from pathlib import Path
 from ingestion.file_filter import FileFilterPolicy

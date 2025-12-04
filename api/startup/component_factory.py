@@ -8,7 +8,7 @@ from query_cache import QueryCache
 class ComponentFactory:
     """Creates application components
 
-    Sandi Metz compliance:
+    Design principles:
     - Single responsibility: object creation
     - Small methods (< 5 lines each)
     - Dependency injection pattern

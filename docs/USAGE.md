@@ -27,7 +27,7 @@ The RAG service automatically indexes files in `kb/` on startup. Supported forma
 - **Jupyter Notebooks** (`.ipynb`): Cell-aware chunking with AST parsing for 160+ languages
 - **Obsidian Vaults**: Full knowledge graph support with bidirectional linking
 
-**Why HybridChunker?** PDF/DOCX get advanced structure-aware chunking that preserves document semantics (tables, code blocks, sections) while filling chunks closer to the embedding model's token capacity (512 tokens). This provides 4x better token utilization and 40% fewer chunks compared to fixed-size chunking. See [WHY_HYBRIDCHUNKER.md](WHY_HYBRIDCHUNKER.md) for technical details.
+**Why HybridChunker?** PDF/DOCX get advanced structure-aware chunking that preserves document semantics (tables, code blocks, sections) while filling chunks closer to the embedding model's token capacity (512 tokens). This provides 4x better token utilization and 40% fewer chunks compared to fixed-size chunking.
 
 ### Simple Workflow
 

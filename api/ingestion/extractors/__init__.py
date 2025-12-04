@@ -1,7 +1,7 @@
 """
 Extractors package
 
-Modularized extractors following Sandi Metz principles:
+Modularized extractors following best practices:
 - Each extractor in its own file (< 200 lines)
 - Single Responsibility Principle
 - Easy to test and maintain

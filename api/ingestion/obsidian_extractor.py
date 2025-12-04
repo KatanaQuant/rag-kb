@@ -7,7 +7,7 @@ Combines:
 - Knowledge graph construction (NetworkX)
 - Graph-aware metadata enrichment
 
-Follows Sandi Metz principles: small methods, single responsibility, <10 lines each.
+Follows design principles: small methods, single responsibility, <10 lines each.
 
 v1.7.2: Switched from SemanticChunker to Docling HybridChunker to fix
 oversized chunks (252K+ chars) from files with very long single lines.

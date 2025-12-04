@@ -5,7 +5,7 @@ from ingestion.file_filter import FileFilterPolicy
 class FileWalker:
     """Walks knowledge base directory
 
-    Refactored following Sandi Metz principles:
+    Refactored following design principles:
     - Dependency Injection: filter_policy injected vs. hardcoded
     - Single Responsibility: Only handles directory walking
     - Small class: Reduced from ~70 lines to ~20 lines

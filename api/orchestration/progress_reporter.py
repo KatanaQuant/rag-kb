@@ -3,7 +3,7 @@
 class ProgressReporter:
     """Reports indexing progress at milestone points
 
-    Sandi Metz compliance:
+    Design principles:
     - Single responsibility: progress reporting
     - Small methods (< 5 lines each)
     - Low complexity

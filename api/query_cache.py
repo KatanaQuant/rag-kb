@@ -14,20 +14,29 @@ class QueryCache:
         self.cache: Dict[str, List[Dict]] = {}
         self.access_order: List[str] = []
 
-    def get(self, query: str, top_k: int, threshold: Optional[float]) -> Optional[List[Dict]]:
+    def get(
+        self, query: str, top_k: int, threshold: Optional[float], decompose: bool = True
+    ) -> Optional[List[Dict]]:
         """Get cached results if available"""
-        key = self._make_key(query, top_k, threshold)
+        key = self._make_key(query, top_k, threshold, decompose)
         if key in self.cache:
             self._update_access(key)
             return self.cache[key]
         return None
 
-    def put(self, query: str, top_k: int, threshold: Optional[float], results: List[Dict]):
+    def put(
+        self,
+        query: str,
+        top_k: int,
+        threshold: Optional[float],
+        results: List[Dict],
+        decompose: bool = True,
+    ):
         """Cache query results"""
         if self.max_size <= 0:
             return
 
-        key = self._make_key(query, top_k, threshold)
+        key = self._make_key(query, top_k, threshold, decompose)
         self._evict_if_needed()
         self.cache[key] = results
         self._update_access(key)
@@ -37,12 +46,15 @@ class QueryCache:
         self.cache.clear()
         self.access_order.clear()
 
-    def _make_key(self, query: str, top_k: int, threshold: Optional[float]) -> str:
+    def _make_key(
+        self, query: str, top_k: int, threshold: Optional[float], decompose: bool = True
+    ) -> str:
         """Generate cache key"""
         data = {
-            'q': query.strip().lower(),
-            'k': top_k,
-            't': threshold
+            "q": query.strip().lower(),
+            "k": top_k,
+            "t": threshold,
+            "d": decompose,
         }
         content = json.dumps(data, sort_keys=True)
         return hashlib.md5(content.encode()).hexdigest()

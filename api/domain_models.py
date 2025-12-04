@@ -26,7 +26,7 @@ class ChunkData:
 class DocumentFile:
     """Represents a document file with its hash
 
-    Following Sandi Metz 'Tell, Don't Ask': This class knows how to create
+    Encapsulation principle: This class knows how to create
     itself from a path, encapsulating the hash calculation logic.
     """
     path: Path
@@ -36,7 +36,7 @@ class DocumentFile:
     def from_path(cls, path: Path) -> 'DocumentFile':
         """Factory method to create DocumentFile from path
 
-        Following Sandi Metz principles:
+        Principles:
         - Feature Envy Fix: DocumentFile knows how to hash itself
         - Single Responsibility: Encapsulates document file creation
         - Dependency Injection: Can be overridden for testing

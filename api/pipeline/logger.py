@@ -1,6 +1,3 @@
-# Copyright (c) 2024 RAG-KB Contributors
-# SPDX-License-Identifier: MIT
-
 """
 Logger service - provides structured logging with levels.
 

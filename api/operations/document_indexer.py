@@ -35,7 +35,7 @@ class DocumentIndexer:
     def _do_index(self, path: Path) -> int:
         """Perform indexing
 
-        Following Sandi Metz 'Tell, Don't Ask': Let DocumentFile create itself
+        Using encapsulation principle: Let DocumentFile create itself
         """
         print(f"[DEBUG] _do_index: stage_callback is {'SET' if self.stage_callback else 'NONE'}")
         if self.stage_callback:

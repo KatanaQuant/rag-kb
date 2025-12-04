@@ -1,6 +1,3 @@
-# Copyright (c) 2024 RAG-KB Contributors
-# SPDX-License-Identifier: MIT
-
 """Embedding service for managing concurrent embedding operations."""
 
 import time

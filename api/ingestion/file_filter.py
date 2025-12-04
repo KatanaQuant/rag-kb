@@ -1,6 +1,6 @@
 """File filtering policy - extracted from FileWalker for SRP compliance
 
-Following Sandi Metz principles:
+Principles:
 - Single Responsibility: Only handles file exclusion logic
 - Small methods: Each method under 5 lines where possible
 - Tell, Don't Ask: Policy makes decisions, doesn't expose internals
@@ -11,7 +11,7 @@ from typing import Set
 class FileFilterPolicy:
     """Determines which files should be excluded from processing
 
-    Follows Sandi Metz SRP: This class has one reason to change -
+    Single Responsibility Principle: This class has one reason to change -
     when exclusion rules need to be updated.
     """
 
@@ -50,7 +50,7 @@ class FileFilterPolicy:
     def should_exclude(self, path: Path) -> bool:
         """Determine if file should be excluded
 
-        Following Sandi Metz: Public interface is simple, implementation hidden.
+        Public interface is simple, implementation hidden.
         Returns boolean - caller doesn't need to know WHY file is excluded.
         """
         return (
@@ -96,7 +96,7 @@ class FileFilterPolicy:
     def _pattern_matches(self, filename: str, pattern: str) -> bool:
         """Check if filename matches pattern
 
-        Following Sandi Metz: Small, focused method doing one thing.
+        Small, focused method doing one thing.
         """
         if pattern.startswith('*'):
             return filename.endswith(pattern[1:])

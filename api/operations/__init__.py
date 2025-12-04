@@ -1,6 +1,3 @@
-# Copyright (c) 2024 RAG-KB Contributors
-# SPDX-License-Identifier: MIT
-
 """Operations layer for RAG system.
 
 This package handles API-facing operations:
@@ -11,7 +8,7 @@ This package handles API-facing operations:
 - Integrity analysis (CompletenessAnalyzer, CompletenessReporter)
 - Orphan detection (OrphanDetector)
 
-Following Sandi Metz principles:
+Principles:
 - Single Responsibility Principle
 - Dependency Injection
 """

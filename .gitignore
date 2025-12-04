@@ -51,4 +51,4 @@ core.*
 
 # E2E testing
 *.log
-up-next/
+up-next/benchmarks/

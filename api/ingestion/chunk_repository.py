@@ -113,16 +113,22 @@ class VectorChunkRepository:
 
     Single Responsibility: Manage vector embeddings for chunks.
     Separated from ChunkRepository to follow Interface Segregation.
+
+    Uses vectorlite HNSW index for O(log n) approximate nearest neighbor search.
+    Note: vectorlite uses 'rowid' as the primary key, which we map to chunk_id.
     """
 
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
 
     def add(self, chunk_id: int, embedding: List[float]):
-        """Insert vector embedding for a chunk"""
+        """Insert vector embedding for a chunk
+
+        vectorlite requires explicit rowid - we use chunk_id as rowid.
+        """
         blob = self._to_blob(embedding)
         self.conn.execute(
-            "INSERT INTO vec_chunks (chunk_id, embedding) VALUES (?, ?)",
+            "INSERT INTO vec_chunks (rowid, embedding) VALUES (?, ?)",
             (chunk_id, blob)
         )
 
@@ -134,7 +140,7 @@ class VectorChunkRepository:
     def delete_by_chunk(self, chunk_id: int):
         """Delete vector for a chunk"""
         self.conn.execute(
-            "DELETE FROM vec_chunks WHERE chunk_id = ?",
+            "DELETE FROM vec_chunks WHERE rowid = ?",
             (chunk_id,)
         )
 

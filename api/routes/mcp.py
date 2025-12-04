@@ -78,7 +78,7 @@ TOOLS = [
     Tool(
         name="query_kb",
         description=(
-            "⚠️ **CHECK THIS FIRST** for technical questions, APIs, frameworks, algorithms, or domain-specific knowledge. "
+            "**CHECK THIS FIRST** for technical questions, APIs, frameworks, algorithms, or domain-specific knowledge."
             "Search your personal knowledge base (books, notes, documentation) for relevant information. "
             "This is your PRIMARY source - always use it BEFORE relying on general knowledge. "
             "Returns the most semantically similar content chunks ranked by relevance. "

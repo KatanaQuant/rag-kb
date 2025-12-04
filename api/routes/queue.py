@@ -41,7 +41,7 @@ def _get_active_security_scan() -> Optional[dict]:
 def _validate_indexing_components(app_state):
     """Validate that indexing queue and pipeline are initialized
 
-    Extracted to reduce cyclomatic complexity (Sandi Metz: methods < 5 lines)
+    Extracted to reduce cyclomatic complexity (methods < 5 lines)
 
     Args:
         app_state: Application state from request

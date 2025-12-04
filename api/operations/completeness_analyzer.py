@@ -3,7 +3,7 @@ Completeness Analyzer Service
 
 Analyzes document completeness in knowledge base.
 
-Following Sandi Metz patterns:
+Principles:
 - Single Responsibility: Analyze completeness only
 - Dependency Injection: Receive repositories
 - Tell, Don't Ask: Delegate to strategies

@@ -1,9 +1,6 @@
-# Copyright (c) 2024 RAG-KB Contributors
-# SPDX-License-Identifier: MIT
-
 """Pipeline workers for concurrent processing stages.
 
-Follows Sandi Metz OOP principles:
+Principles:
 - Single Responsibility: Each worker handles one pipeline stage
 - Dependency Injection: Queues and processing functions injected
 - Small classes: < 100 lines each
