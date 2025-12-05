@@ -309,5 +309,100 @@ async def refresh(self):
     await self.initialize()
 ```
 
-**Status**: Testing with 3 sequential documents. If fails, will implement Option C
-(route all vector queries through sync store - single HNSW = no race conditions).
+### Fix 4 Verification (Final)
+
+Tested with 3 sequential documents:
+```
+=== HNSW Verification (POST-RESTART) ===
+PASS: High Output Management: 263/263
+PASS: Side Hustle: 317/317
+PASS: 24 Assets: 172/172
+ALL BOOKS PERSISTED! FIX 4 WORKS!
+```
+
+**Status**: RESOLVED in v2.2.1 (commit 2bc933b)
+
+---
+
+## UPDATE: Third Bug Found (Dec 5, 16:00)
+
+### Discovery
+
+During release verification, queries for test books returned trading content instead of book content. Investigation revealed:
+
+- knn_search returns "NO CHUNK" entries (rowids exist in vec_chunks but not in chunks table)
+- Same content appears multiple times with different chunk IDs (duplicate indexing)
+- HNSW searches return distance=0 matches to orphan embeddings
+
+### Root Cause: Delete Cascade Bug
+
+`AsyncVectorStore.delete_document()` does NOT clean up vec_chunks or fts_chunks:
+
+```python
+# api/ingestion/async_database.py lines 299-302
+async def _delete_document_data(self, doc_id: int):
+    """Delete chunks and document record"""
+    await self.conn.execute("DELETE FROM chunks WHERE document_id = ?", (doc_id,))
+    await self.conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+    # MISSING: DELETE FROM vec_chunks WHERE rowid IN (chunk IDs)
+    # MISSING: DELETE FROM fts_chunks WHERE chunk_id IN (chunk IDs)
+```
+
+### Impact Assessment
+
+| Metric | Value |
+|--------|-------|
+| Total chunks | 54,657 |
+| Max chunk ID | 75,051 |
+| Gap in IDs | 20,394 (27% deleted) |
+| Orphan chunks (invalid doc_id) | 3,113 |
+| Missing documents | 94 |
+
+When documents are deleted:
+1. `documents` row deleted ✓
+2. `chunks` rows deleted ✓
+3. `vec_chunks` entries remain ✗ (stale embeddings)
+4. `fts_chunks` entries remain ✗ (stale FTS)
+
+### Effect on Queries
+
+- HNSW knn_search finds stale embeddings first (distance=0 to duplicate content)
+- JOIN to chunks table fails (chunk deleted)
+- Results show "NO CHUNK" or wrong content
+- Hybrid search partially compensated via BM25 keyword matches
+
+### Example: Tidy First Indexed 4 Times
+
+| Chunk ID | Doc ID | Status |
+|----------|--------|--------|
+| 55871 | 1970 | ORPHAN |
+| 64566 | 2384 | ORPHAN |
+| 64770 | 2393 | ORPHAN |
+| 70500 | 2464 | VALID |
+
+Three previous indexing attempts left orphan embeddings in vec_chunks.
+
+### Resolution
+
+**v2.2.1**: Ships with HNSW persistence fix (prevents future data loss)
+**v2.2.2**: Will fix delete cascade bug and provide cleanup scripts
+
+---
+
+## Future Considerations
+
+### Known Limitations (v2.2.1)
+- `_old_connections` list grows unbounded (minor memory leak)
+- DELETE API endpoint broken (async store is read-only)
+- **Pre-existing orphan data** from delete cascade bug
+
+### v2.2.2 Tasks
+1. Fix `_delete_document_data()` to cascade to vec_chunks and fts_chunks
+2. Provide `cleanup_orphans.py` maintenance script
+3. Consider HNSW index rebuild for affected databases
+
+### Recommended Architecture (P2)
+Option C: Route all vector queries through sync VectorStore
+- Single HNSW index = no race conditions
+- Eliminates refresh complexity entirely
+- ~30 min refactor for cleaner long-term solution
