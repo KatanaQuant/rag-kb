@@ -1,0 +1,1149 @@
+{
+  "version": "v2.2.1-baseline",
+  "timestamp": "2025-12-05T20:17:20.770343",
+  "api_url": "http://localhost:8000",
+  "summary": {
+    "total": 26,
+    "correct": 14,
+    "acceptable": 5,
+    "wrong": 7,
+    "in_top_5": 21,
+    "accuracy": 0.5384615384615384,
+    "usable_rate": 0.7307692307692307,
+    "top_5_rate": 0.8076923076923077,
+    "avg_latency_ms": 239.0360740514902
+  },
+  "category_stats": {
+    "business_books": {
+      "total": 8,
+      "correct": 6,
+      "acceptable": 0,
+      "wrong": 2,
+      "in_top_5": 7,
+      "accuracy": 0.75,
+      "usable_rate": 0.75,
+      "top_5_rate": 0.875,
+      "avg_latency_ms": 247.26060032844543
+    },
+    "programming_books": {
+      "total": 7,
+      "correct": 4,
+      "acceptable": 2,
+      "wrong": 1,
+      "in_top_5": 7,
+      "accuracy": 0.5714285714285714,
+      "usable_rate": 0.8571428571428571,
+      "top_5_rate": 1.0,
+      "avg_latency_ms": 214.84248978751046
+    },
+    "trading_content": {
+      "total": 5,
+      "correct": 2,
+      "acceptable": 1,
+      "wrong": 2,
+      "in_top_5": 5,
+      "accuracy": 0.4,
+      "usable_rate": 0.6,
+      "top_5_rate": 1.0,
+      "avg_latency_ms": 246.6390609741211
+    },
+    "code_files": {
+      "total": 3,
+      "correct": 0,
+      "acceptable": 2,
+      "wrong": 1,
+      "in_top_5": 0,
+      "accuracy": 0.0,
+      "usable_rate": 0.6666666666666666,
+      "top_5_rate": 0.0,
+      "avg_latency_ms": 238.19287618001303
+    },
+    "known_problematic": {
+      "total": 3,
+      "correct": 2,
+      "acceptable": 0,
+      "wrong": 1,
+      "in_top_5": 2,
+      "accuracy": 0.6666666666666666,
+      "usable_rate": 0.6666666666666666,
+      "top_5_rate": 0.6666666666666666,
+      "avg_latency_ms": 261.727253595988
+    }
+  },
+  "results": [
+    {
+      "query": "24 Assets intangible intellectual property",
+      "expected": "24 Assets",
+      "acceptable_alt": [],
+      "category": "business",
+      "style": "keyword",
+      "note": "",
+      "latency_ms": 316.85686111450195,
+      "grade": "correct",
+      "correct": true,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 1,
+      "top_result": "24 Assets - Daniel Priestley.pdf",
+      "top_score": 0.5226151347160339,
+      "expected_score": 0.5226151347160339,
+      "all_results": [
+        {
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.5226151347160339
+        },
+        {
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.48710811138153076
+        },
+        {
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.4801473617553711
+        },
+        {
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.4607374668121338
+        },
+        {
+          "source": "Web Scraping with Python - Ryan Mitchell.pdf",
+          "score": 0.44240182638168335
+        }
+      ]
+    },
+    {
+      "query": "seven types of assets for entrepreneurs",
+      "expected": "24 Assets",
+      "acceptable_alt": [],
+      "category": "business",
+      "style": "semantic",
+      "note": "",
+      "latency_ms": 227.30231285095215,
+      "grade": "correct",
+      "correct": true,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 1,
+      "top_result": "24 Assets - Daniel Priestley.pdf",
+      "top_score": 0.5918220281600952,
+      "expected_score": 0.5918220281600952,
+      "all_results": [
+        {
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.5918220281600952
+        },
+        {
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.577294647693634
+        },
+        {
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.5457401275634766
+        },
+        {
+          "source": "Smart Portfolios - Robert Carver.pdf",
+          "score": 0.5437749624252319
+        },
+        {
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.5179502964019775
+        }
+      ]
+    },
+    {
+      "query": "side hustle business ideas",
+      "expected": "Side Hustle",
+      "acceptable_alt": [],
+      "category": "business",
+      "style": "keyword",
+      "note": "",
+      "latency_ms": 231.25720024108887,
+      "grade": "correct",
+      "correct": true,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 1,
+      "top_result": "Side Hustle - Chris Guillebeau.pdf",
+      "top_score": 0.7197045087814331,
+      "expected_score": 0.7197045087814331,
+      "all_results": [
+        {
+          "source": "Side Hustle - Chris Guillebeau.pdf",
+          "score": 0.7197045087814331
+        },
+        {
+          "source": "Side Hustle - Chris Guillebeau.pdf",
+          "score": 0.6576378345489502
+        },
+        {
+          "source": "Side Hustle - Chris Guillebeau.pdf",
+          "score": 0.6312793493270874
+        },
+        {
+          "source": "Side Hustle - Chris Guillebeau.pdf",
+          "score": 0.62657630443573
+        },
+        {
+          "source": "Side Hustle - Chris Guillebeau.pdf",
+          "score": 0.6256736516952515
+        }
+      ]
+    },
+    {
+      "query": "27 days launch business",
+      "expected": "Side Hustle",
+      "acceptable_alt": [],
+      "category": "business",
+      "style": "keyword",
+      "note": "",
+      "latency_ms": 221.23408317565918,
+      "grade": "wrong",
+      "correct": false,
+      "acceptable": false,
+      "in_top_5": false,
+      "position": -1,
+      "top_result": "2024-02-19_how-to-model-features-as-expected-returns.md",
+      "top_score": 0.3117969036102295,
+      "expected_score": 0,
+      "all_results": [
+        {
+          "source": "2024-02-19_how-to-model-features-as-expected-returns.md",
+          "score": 0.3117969036102295
+        },
+        {
+          "source": "2025-11-19_navigating-tradeoffs-with-convex-optimisation.md",
+          "score": 0.3018471598625183
+        },
+        {
+          "source": "2025-11-17_navigating-tradeoffs-with-convex-optimisation.md",
+          "score": 0.28897637128829956
+        },
+        {
+          "source": "2024-02-13_a-simple-effective-way-to-manage-turnover-and-not-get-killed-by-costs.md",
+          "score": 0.2841165065765381
+        },
+        {
+          "source": "xs_carry_kris.ipynb",
+          "score": 0.27464812994003296
+        }
+      ]
+    },
+    {
+      "query": "High Output Management leverage",
+      "expected": "High Output Management",
+      "acceptable_alt": [],
+      "category": "business",
+      "style": "keyword",
+      "note": "",
+      "latency_ms": 231.2178611755371,
+      "grade": "correct",
+      "correct": true,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 1,
+      "top_result": "High Output Management - Grove, Andrew .pdf",
+      "top_score": 0.5707595348358154,
+      "expected_score": 0.5707595348358154,
+      "all_results": [
+        {
+          "source": "High Output Management - Grove, Andrew .pdf",
+          "score": 0.5707595348358154
+        },
+        {
+          "source": "High Output Management - Grove, Andrew .pdf",
+          "score": 0.5482944250106812
+        },
+        {
+          "source": "High Output Management - Grove, Andrew .pdf",
+          "score": 0.5438029170036316
+        },
+        {
+          "source": "Smart Portfolios - Robert Carver.pdf",
+          "score": 0.5368728637695312
+        },
+        {
+          "source": "High Output Management - Grove, Andrew .pdf",
+          "score": 0.5290236473083496
+        }
+      ]
+    },
+    {
+      "query": "output indicators manager productivity",
+      "expected": "High Output Management",
+      "acceptable_alt": [],
+      "category": "business",
+      "style": "semantic",
+      "note": "",
+      "latency_ms": 246.76132202148438,
+      "grade": "correct",
+      "correct": true,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 1,
+      "top_result": "High Output Management - Grove, Andrew .pdf",
+      "top_score": 0.5744140148162842,
+      "expected_score": 0.5744140148162842,
+      "all_results": [
+        {
+          "source": "High Output Management - Grove, Andrew .pdf",
+          "score": 0.5744140148162842
+        },
+        {
+          "source": "High Output Management - Grove, Andrew .pdf",
+          "score": 0.5634551048278809
+        },
+        {
+          "source": "High Output Management - Grove, Andrew .pdf",
+          "score": 0.5575661659240723
+        },
+        {
+          "source": "High Output Management - Grove, Andrew .pdf",
+          "score": 0.5514264702796936
+        },
+        {
+          "source": "High Output Management - Grove, Andrew .pdf",
+          "score": 0.5490473508834839
+        }
+      ]
+    },
+    {
+      "query": "MAKE Pieter Levels ship startup",
+      "expected": "MAKE",
+      "acceptable_alt": [],
+      "category": "business",
+      "style": "keyword",
+      "note": "",
+      "latency_ms": 238.0518913269043,
+      "grade": "wrong",
+      "correct": false,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 2,
+      "top_result": "2025-11-17_so-you-want-to-start-a-trading-business.md",
+      "top_score": 0.35161763429641724,
+      "expected_score": 0.34938693046569824,
+      "all_results": [
+        {
+          "source": "2025-11-17_so-you-want-to-start-a-trading-business.md",
+          "score": 0.35161763429641724
+        },
+        {
+          "source": "2025-11-19_dont-over-engineer-your-trading-business-make-money-instead.md",
+          "score": 0.34938693046569824
+        },
+        {
+          "source": "2025-11-17_dont-over-engineer-your-trading-business-make-money-instead.md",
+          "score": 0.33837729692459106
+        },
+        {
+          "source": "2025-11-19_dont-over-engineer-your-trading-business-make-money-instead.md",
+          "score": 0.3332783579826355
+        },
+        {
+          "source": "2025-11-19_a-quants-approach-to-drawdown.md",
+          "score": 0.3316330909729004
+        }
+      ]
+    },
+    {
+      "query": "indie maker blueprint bootstrapping",
+      "expected": "MAKE",
+      "acceptable_alt": [],
+      "category": "business",
+      "style": "semantic",
+      "note": "",
+      "latency_ms": 265.40327072143555,
+      "grade": "correct",
+      "correct": true,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 1,
+      "top_result": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+      "top_score": 0.6206682324409485,
+      "expected_score": 0.6206682324409485,
+      "all_results": [
+        {
+          "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+          "score": 0.6206682324409485
+        },
+        {
+          "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+          "score": 0.5337074995040894
+        },
+        {
+          "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+          "score": 0.5281411409378052
+        },
+        {
+          "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+          "score": 0.5094376802444458
+        },
+        {
+          "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+          "score": 0.47144901752471924
+        }
+      ]
+    },
+    {
+      "query": "tidy first refactoring Kent Beck",
+      "expected": "Tidy First",
+      "acceptable_alt": [
+        "99bottles",
+        "refactoring"
+      ],
+      "category": "programming",
+      "style": "keyword",
+      "note": "",
+      "latency_ms": 6.032705307006836,
+      "grade": "correct",
+      "correct": true,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 1,
+      "top_result": "Tidy First - Kent Beck.pdf",
+      "top_score": 0.7413214445114136,
+      "expected_score": 0.7413214445114136,
+      "all_results": [
+        {
+          "source": "Tidy First - Kent Beck.pdf",
+          "score": 0.7413214445114136
+        },
+        {
+          "source": "Refactoring - Martin Fowler.pdf",
+          "score": 0.5998010635375977
+        },
+        {
+          "source": "Refactoring - Martin Fowler.pdf",
+          "score": 0.5871638059616089
+        },
+        {
+          "source": "Tidy First - Kent Beck.pdf",
+          "score": 0.5749193429946899
+        },
+        {
+          "source": "Tidy First - Kent Beck.pdf",
+          "score": 0.5709189176559448
+        }
+      ]
+    },
+    {
+      "query": "code cleanup before feature",
+      "expected": "Tidy First",
+      "acceptable_alt": [
+        "99bottles",
+        "refactoring"
+      ],
+      "category": "programming",
+      "style": "semantic",
+      "note": "",
+      "latency_ms": 248.41666221618652,
+      "grade": "acceptable",
+      "correct": false,
+      "acceptable": true,
+      "in_top_5": true,
+      "position": 3,
+      "top_result": "99Bottles_beer_python - Sandi Metz.pdf",
+      "top_score": 0.6113673448562622,
+      "expected_score": 0.5207961201667786,
+      "all_results": [
+        {
+          "source": "99Bottles_beer_python - Sandi Metz.pdf",
+          "score": 0.6113673448562622
+        },
+        {
+          "source": "Refactoring to Patterns - Joshua Kerievsky.pdf",
+          "score": 0.5484691858291626
+        },
+        {
+          "source": "Tidy First - Kent Beck.pdf",
+          "score": 0.5207961201667786
+        },
+        {
+          "source": "Tidy First - Kent Beck.pdf",
+          "score": 0.5166776180267334
+        },
+        {
+          "source": "Refactoring - Martin Fowler.pdf",
+          "score": 0.5061811208724976
+        }
+      ]
+    },
+    {
+      "query": "Go programming basics Karl Seguin",
+      "expected": "Little Go Book",
+      "acceptable_alt": [
+        "lets-go",
+        ".go",
+        "golang"
+      ],
+      "category": "programming",
+      "style": "keyword",
+      "note": "",
+      "latency_ms": 237.52951622009277,
+      "grade": "wrong",
+      "correct": false,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 3,
+      "top_result": "Learning Go- An Idiomatic Approach  - Jon Bodner.pdf",
+      "top_score": 0.6716910600662231,
+      "expected_score": 0.6183685064315796,
+      "all_results": [
+        {
+          "source": "Learning Go- An Idiomatic Approach  - Jon Bodner.pdf",
+          "score": 0.6716910600662231
+        },
+        {
+          "source": "lets-go-professional-package.pdf",
+          "score": 0.6634010672569275
+        },
+        {
+          "source": "The Little Go Book - Karl Seguin.pdf",
+          "score": 0.6183685064315796
+        },
+        {
+          "source": "Learning Go- An Idiomatic Approach  - Jon Bodner.pdf",
+          "score": 0.6058911085128784
+        },
+        {
+          "source": "Writing An Interpreter In Go - Thorsten Ball.pdf",
+          "score": 0.6039037704467773
+        }
+      ]
+    },
+    {
+      "query": "domain driven design bounded context",
+      "expected": "Domain-Driven Design",
+      "acceptable_alt": [
+        "domain-driven",
+        "ddd"
+      ],
+      "category": "programming",
+      "style": "keyword",
+      "note": "",
+      "latency_ms": 233.57725143432617,
+      "grade": "correct",
+      "correct": true,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 1,
+      "top_result": "Domain-Driven Design with Golang - Matthew Boyle.pdf",
+      "top_score": 0.6614289283752441,
+      "expected_score": 0.6614289283752441,
+      "all_results": [
+        {
+          "source": "Domain-Driven Design with Golang - Matthew Boyle.pdf",
+          "score": 0.6614289283752441
+        },
+        {
+          "source": "Building microservices - Samuel Newman.pdf",
+          "score": 0.6240330934524536
+        },
+        {
+          "source": "Refactoring to Patterns - Joshua Kerievsky.pdf",
+          "score": 0.6174143552780151
+        },
+        {
+          "source": "Domain-Driven Design with Golang - Matthew Boyle.pdf",
+          "score": 0.6124157905578613
+        },
+        {
+          "source": "Building microservices - Samuel Newman.pdf",
+          "score": 0.609270453453064
+        }
+      ]
+    },
+    {
+      "query": "aggregate root entity value object",
+      "expected": "Domain-Driven Design",
+      "acceptable_alt": [
+        "domain-driven",
+        "ddd"
+      ],
+      "category": "programming",
+      "style": "semantic",
+      "note": "",
+      "latency_ms": 297.7144718170166,
+      "grade": "correct",
+      "correct": true,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 1,
+      "top_result": "Domain-Driven Design - Eric Evans.pdf",
+      "top_score": 0.5745139718055725,
+      "expected_score": 0.5745139718055725,
+      "all_results": [
+        {
+          "source": "Domain-Driven Design - Eric Evans.pdf",
+          "score": 0.5745139718055725
+        },
+        {
+          "source": "Domain-Driven Design - Eric Evans.pdf",
+          "score": 0.5617584586143494
+        },
+        {
+          "source": "Architecture Patterns with Python - Harry JW Percival.pdf",
+          "score": 0.5567901134490967
+        },
+        {
+          "source": "Domain-Driven Design with Golang - Matthew Boyle.pdf",
+          "score": 0.5508362650871277
+        },
+        {
+          "source": "Building microservices - Samuel Newman.pdf",
+          "score": 0.5350315570831299
+        }
+      ]
+    },
+    {
+      "query": "refactoring Martin Fowler code smells",
+      "expected": "Refactoring",
+      "acceptable_alt": [
+        "99bottles",
+        "tidy first"
+      ],
+      "category": "programming",
+      "style": "keyword",
+      "note": "",
+      "latency_ms": 245.01824378967285,
+      "grade": "acceptable",
+      "correct": false,
+      "acceptable": true,
+      "in_top_5": true,
+      "position": 5,
+      "top_result": "99Bottles_beer_python - Sandi Metz.pdf",
+      "top_score": 0.7674947381019592,
+      "expected_score": 0.7238107919692993,
+      "all_results": [
+        {
+          "source": "99Bottles_beer_python - Sandi Metz.pdf",
+          "score": 0.7674947381019592
+        },
+        {
+          "source": "99Bottles_beer_php.pdf",
+          "score": 0.744529128074646
+        },
+        {
+          "source": "99Bottles_beer_python - Sandi Metz.pdf",
+          "score": 0.7335697412490845
+        },
+        {
+          "source": "99Bottles_beer_php.pdf",
+          "score": 0.7335697412490845
+        },
+        {
+          "source": "Refactoring to Patterns - Joshua Kerievsky.pdf",
+          "score": 0.7238107919692993
+        }
+      ]
+    },
+    {
+      "query": "TDD test driven development Kent Beck",
+      "expected": "Test-Driven Development",
+      "acceptable_alt": [],
+      "category": "programming",
+      "style": "keyword",
+      "note": "",
+      "latency_ms": 235.60857772827148,
+      "grade": "correct",
+      "correct": true,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 1,
+      "top_result": "Test-Driven Development By Example - Kent Beck.pdf",
+      "top_score": 0.7976200580596924,
+      "expected_score": 0.7976200580596924,
+      "all_results": [
+        {
+          "source": "Test-Driven Development By Example - Kent Beck.pdf",
+          "score": 0.7976200580596924
+        },
+        {
+          "source": "Refactoring to Patterns - Joshua Kerievsky.pdf",
+          "score": 0.7823517918586731
+        },
+        {
+          "source": "99Bottles_beer_python - Sandi Metz.pdf",
+          "score": 0.6944162249565125
+        },
+        {
+          "source": "99Bottles_beer_php.pdf",
+          "score": 0.6842416524887085
+        },
+        {
+          "source": "Test-Driven Development By Example - Kent Beck.pdf",
+          "score": 0.6753554344177246
+        }
+      ]
+    },
+    {
+      "query": "Smart Portfolios Robert Carver",
+      "expected": "Smart Portfolios",
+      "acceptable_alt": [
+        "carver",
+        "smart-portfolios",
+        "portfolio"
+      ],
+      "category": "trading",
+      "style": "keyword",
+      "note": "",
+      "latency_ms": 243.3154582977295,
+      "grade": "acceptable",
+      "correct": false,
+      "acceptable": true,
+      "in_top_5": true,
+      "position": 4,
+      "top_result": "2017-08-14_my-new-book-smart-portfolios.md",
+      "top_score": 0.7681877017021179,
+      "expected_score": 0.6557274460792542,
+      "all_results": [
+        {
+          "source": "2017-08-14_my-new-book-smart-portfolios.md",
+          "score": 0.7681877017021179
+        },
+        {
+          "source": "Leveraged Trading - Robert Carver.pdf",
+          "score": 0.6846519708633423
+        },
+        {
+          "source": "2017-09-04_smart-portfolios-post-about-book-nn.md",
+          "score": 0.6653890609741211
+        },
+        {
+          "source": "Smart Portfolios - Robert Carver.pdf",
+          "score": 0.6557274460792542
+        },
+        {
+          "source": "Advanced Futures Trading Strategies - Robert Carver.pdf",
+          "score": 0.6547272801399231
+        }
+      ]
+    },
+    {
+      "query": "portfolio optimization asset allocation",
+      "expected": "Smart Portfolios",
+      "acceptable_alt": [
+        "portfolio",
+        "asset allocation",
+        "carver"
+      ],
+      "category": "trading",
+      "style": "semantic",
+      "note": "",
+      "latency_ms": 238.59357833862305,
+      "grade": "correct",
+      "correct": true,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 1,
+      "top_result": "Smart Portfolios - Robert Carver.pdf",
+      "top_score": 0.7693796157836914,
+      "expected_score": 0.7693796157836914,
+      "all_results": [
+        {
+          "source": "Smart Portfolios - Robert Carver.pdf",
+          "score": 0.7693796157836914
+        },
+        {
+          "source": "Portfolio Optimization.md",
+          "score": 0.7032907009124756
+        },
+        {
+          "source": "Smart Portfolios - Robert Carver.pdf",
+          "score": 0.6835454702377319
+        },
+        {
+          "source": "Smart Portfolios - Robert Carver.pdf",
+          "score": 0.6536399722099304
+        },
+        {
+          "source": "2021-06-07_optimising-my-way-out-of-small-fund.md",
+          "score": 0.6517192125320435
+        }
+      ]
+    },
+    {
+      "query": "Efficiently Inefficient hedge fund strategies",
+      "expected": "Efficiently Inefficient",
+      "acceptable_alt": [
+        "hedge fund",
+        "pedersen",
+        "efficiently"
+      ],
+      "category": "trading",
+      "style": "keyword",
+      "note": "",
+      "latency_ms": 277.94671058654785,
+      "grade": "wrong",
+      "correct": false,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 3,
+      "top_result": "Smart Portfolios - Robert Carver.pdf",
+      "top_score": 0.6305069923400879,
+      "expected_score": 0.6089800596237183,
+      "all_results": [
+        {
+          "source": "Smart Portfolios - Robert Carver.pdf",
+          "score": 0.6305069923400879
+        },
+        {
+          "source": "Expected Returns An Investor's Guide to Harvesting Market - Ilmanen, Antti.pdf",
+          "score": 0.616762101650238
+        },
+        {
+          "source": "Efficiently Inefficient - Pedersen, Lasse Heje.pdf",
+          "score": 0.6089800596237183
+        },
+        {
+          "source": "Efficiently Inefficient - Pedersen, Lasse Heje.pdf",
+          "score": 0.6070957779884338
+        },
+        {
+          "source": "Efficiently Inefficient - Pedersen, Lasse Heje.pdf",
+          "score": 0.577224612236023
+        }
+      ]
+    },
+    {
+      "query": "volatility risk premium VIX trading",
+      "expected": "vix",
+      "acceptable_alt": [
+        "volatility",
+        "vrp",
+        "risk premium"
+      ],
+      "category": "trading",
+      "style": "semantic",
+      "note": "",
+      "latency_ms": 236.94157600402832,
+      "grade": "wrong",
+      "correct": false,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 4,
+      "top_result": "2025-11-17_so-you-want-to-start-a-trading-business.md",
+      "top_score": 0.7156980633735657,
+      "expected_score": 0.6675376892089844,
+      "all_results": [
+        {
+          "source": "2025-11-17_so-you-want-to-start-a-trading-business.md",
+          "score": 0.7156980633735657
+        },
+        {
+          "source": "2025-11-19_so-you-want-to-start-a-trading-business.md",
+          "score": 0.7095595002174377
+        },
+        {
+          "source": "2025-11-19_so-you-want-to-start-a-trading-business.md",
+          "score": 0.7035336494445801
+        },
+        {
+          "source": "2020-05-05_the-vix-futures-basis.md",
+          "score": 0.6675376892089844
+        },
+        {
+          "source": "2025-11-17_the-volatility-risk-premium-in-a-tumultuous-market.md",
+          "score": 0.6643633246421814
+        }
+      ]
+    },
+    {
+      "query": "backtesting trading strategy simulation",
+      "expected": "backtest",
+      "acceptable_alt": [
+        "trading",
+        "strategy",
+        "simulation"
+      ],
+      "category": "trading",
+      "style": "semantic",
+      "note": "",
+      "latency_ms": 236.39798164367676,
+      "grade": "correct",
+      "correct": true,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 1,
+      "top_result": "2017-05-01_back-basics-part-3-backtesting-algorithmic-trading.md",
+      "top_score": 0.7412298917770386,
+      "expected_score": 0.7412298917770386,
+      "all_results": [
+        {
+          "source": "2017-05-01_back-basics-part-3-backtesting-algorithmic-trading.md",
+          "score": 0.7412298917770386
+        },
+        {
+          "source": "Efficiently Inefficient - Pedersen, Lasse Heje.pdf",
+          "score": 0.7410886287689209
+        },
+        {
+          "source": "2017-05-01_back-basics-part-3-backtesting-algorithmic-trading.md",
+          "score": 0.7321729063987732
+        },
+        {
+          "source": "2019-06-04_backtesting-bias-feels-good-until-you-blow-up.md",
+          "score": 0.7270176410675049
+        },
+        {
+          "source": "2019-06-04_backtesting-bias-feels-good-until-you-blow-up.md",
+          "score": 0.7117017507553101
+        }
+      ]
+    },
+    {
+      "query": "Python trading system random price",
+      "expected": "randompriceexample.py",
+      "acceptable_alt": [
+        ".py",
+        "trading",
+        "pysystemtrade"
+      ],
+      "category": "code",
+      "style": "keyword",
+      "note": "",
+      "latency_ms": 227.51736640930176,
+      "grade": "wrong",
+      "correct": false,
+      "acceptable": false,
+      "in_top_5": false,
+      "position": -1,
+      "top_result": "2025-05-05_can-i-build-scalping-bot-blogpost-with.md",
+      "top_score": 0.5693365931510925,
+      "expected_score": 0,
+      "all_results": [
+        {
+          "source": "2025-05-05_can-i-build-scalping-bot-blogpost-with.md",
+          "score": 0.5693365931510925
+        },
+        {
+          "source": "README.md",
+          "score": 0.567363977432251
+        },
+        {
+          "source": "README.md",
+          "score": 0.5653159618377686
+        },
+        {
+          "source": "2015-12-18_pysystemtrade.md",
+          "score": 0.552486777305603
+        },
+        {
+          "source": "CHANGELOG.md",
+          "score": 0.5517898201942444
+        }
+      ]
+    },
+    {
+      "query": "Go context middleware web",
+      "expected": "context.go",
+      "acceptable_alt": [
+        ".go",
+        "lets-go",
+        "middleware"
+      ],
+      "category": "code",
+      "style": "keyword",
+      "note": "",
+      "latency_ms": 260.7123851776123,
+      "grade": "acceptable",
+      "correct": false,
+      "acceptable": true,
+      "in_top_5": false,
+      "position": -1,
+      "top_result": "lets-go-professional-package.pdf",
+      "top_score": 0.6234869956970215,
+      "expected_score": 0,
+      "all_results": [
+        {
+          "source": "lets-go-professional-package.pdf",
+          "score": 0.6234869956970215
+        },
+        {
+          "source": "lets-go-professional-package.pdf",
+          "score": 0.5639557838439941
+        },
+        {
+          "source": "lets-go-professional-package.pdf",
+          "score": 0.5406784415245056
+        },
+        {
+          "source": "lets-go-professional-package.pdf",
+          "score": 0.537307858467102
+        },
+        {
+          "source": "lets-go-further.pdf",
+          "score": 0.5312823057174683
+        }
+      ]
+    },
+    {
+      "query": "Jupyter notebook trading rule",
+      "expected": "asimpletradingrule.ipynb",
+      "acceptable_alt": [
+        ".ipynb",
+        "trading",
+        "notebook"
+      ],
+      "category": "code",
+      "style": "keyword",
+      "note": "",
+      "latency_ms": 226.348876953125,
+      "grade": "acceptable",
+      "correct": false,
+      "acceptable": true,
+      "in_top_5": false,
+      "position": -1,
+      "top_result": "trading_rules.py",
+      "top_score": 0.57871013879776,
+      "expected_score": 0,
+      "all_results": [
+        {
+          "source": "trading_rules.py",
+          "score": 0.57871013879776
+        },
+        {
+          "source": "2017-06-22_some-more-trading-rules.md",
+          "score": 0.564723789691925
+        },
+        {
+          "source": "introduction.md",
+          "score": 0.5422861576080322
+        },
+        {
+          "source": "test_forecasts.py",
+          "score": 0.5405725240707397
+        },
+        {
+          "source": "Systematic Trading - Robert Carver.pdf",
+          "score": 0.535372793674469
+        }
+      ]
+    },
+    {
+      "query": "24 Assets Daniel Priestley categories types business building progression",
+      "expected": "24 Assets",
+      "acceptable_alt": [
+        "priestley",
+        "entrepreneur",
+        "business"
+      ],
+      "category": "business",
+      "style": "long_semantic",
+      "note": "KNOWN ISSUE: Long queries dilute BM25 matching",
+      "latency_ms": 326.15160942077637,
+      "grade": "wrong",
+      "correct": false,
+      "acceptable": false,
+      "in_top_5": false,
+      "position": -1,
+      "top_result": "2025-11-17_rw-pro-weekly-update-29-march-2024-trade-sizing-and-rebalancing-trend-following-on-spy.md",
+      "top_score": 0.33919334411621094,
+      "expected_score": 0,
+      "all_results": [
+        {
+          "source": "2025-11-17_rw-pro-weekly-update-29-march-2024-trade-sizing-and-rebalancing-trend-following-on-spy.md",
+          "score": 0.33919334411621094
+        },
+        {
+          "source": "2025-11-17_rw-pro-weekly-update-29-march-2024-trade-sizing-and-rebalancing-trend-following-on-spy.md",
+          "score": 0.33735930919647217
+        },
+        {
+          "source": "2017-04-11_investment-and-trading-performance-year.md",
+          "score": 0.3350871801376343
+        },
+        {
+          "source": "2025-11-19_rw-pro-webinar-28-mar-2024-trade-sizing-and-rebalancing-trend-following-on-spy.md",
+          "score": 0.3307607173919678
+        },
+        {
+          "source": "2025-11-19_rw-pro-webinar-28-mar-2024-trade-sizing-and-rebalancing-trend-following-on-spy.md",
+          "score": 0.3287245035171509
+        }
+      ]
+    },
+    {
+      "query": "24 Assets seven categories",
+      "expected": "24 Assets",
+      "acceptable_alt": [],
+      "category": "business",
+      "style": "short",
+      "note": "KNOWN ISSUE: Previously returned Smart Portfolios",
+      "latency_ms": 228.53946685791016,
+      "grade": "correct",
+      "correct": true,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 1,
+      "top_result": "24 Assets - Daniel Priestley.pdf",
+      "top_score": 0.5716798305511475,
+      "expected_score": 0.5716798305511475,
+      "all_results": [
+        {
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.5716798305511475
+        },
+        {
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.49868011474609375
+        },
+        {
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.4867405891418457
+        },
+        {
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.4859023094177246
+        },
+        {
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.47941768169403076
+        }
+      ]
+    },
+    {
+      "query": "MAKE exit strategy sell company",
+      "expected": "MAKE",
+      "acceptable_alt": [
+        "startup",
+        "business",
+        "exit",
+        "indie"
+      ],
+      "category": "business",
+      "style": "semantic",
+      "note": "KNOWN ISSUE: Previously returned Naming Things",
+      "latency_ms": 230.49068450927734,
+      "grade": "correct",
+      "correct": true,
+      "acceptable": false,
+      "in_top_5": true,
+      "position": 1,
+      "top_result": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+      "top_score": 0.6494671106338501,
+      "expected_score": 0.6494671106338501,
+      "all_results": [
+        {
+          "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+          "score": 0.6494671106338501
+        },
+        {
+          "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+          "score": 0.5285949110984802
+        },
+        {
+          "source": "Smart Portfolios - Robert Carver.pdf",
+          "score": 0.5257463455200195
+        },
+        {
+          "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+          "score": 0.4966909885406494
+        },
+        {
+          "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+          "score": 0.4826536774635315
+        }
+      ]
+    }
+  ]
+}
