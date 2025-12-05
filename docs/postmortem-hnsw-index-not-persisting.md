@@ -453,3 +453,69 @@ v2.2.2 fixes are complete:
 - ✅ Data cleaned (chunks, FTS, HNSW all aligned)
 
 Query accuracy (73.1%) is a separate issue unrelated to the HNSW bugs - requires query pipeline investigation.
+
+---
+
+## UPDATE: Fourth Bug Found (Dec 5, 20:00) - FTS5 Keyword Search Broken
+
+### Discovery
+
+While investigating why accuracy remained at 73.1% after HNSW cleanup, discovered that FTS5 keyword search (BM25) was completely non-functional.
+
+### Root Cause
+
+FTS5 contentless tables (`content=''`) don't store UNINDEXED column values - they're always NULL when read back. The `hybrid_search.py` JOIN condition used `fts.chunk_id` which was always NULL, returning 0 keyword matches.
+
+```python
+# BROKEN - fts.chunk_id is ALWAYS NULL in contentless FTS5
+JOIN chunks c ON fts.chunk_id = c.id
+
+# FIXED - fts.rowid is the actual row identifier
+JOIN chunks c ON fts.rowid = c.id
+```
+
+Additionally, FTS INSERT statements weren't setting `rowid = chunk_id`, causing new chunks to get auto-increment rowids that didn't match the chunk table.
+
+### Impact
+
+- Hybrid search = Vector + BM25. With BM25 broken, only vector search worked.
+- The 73.1% accuracy was achieved with HALF the pipeline disabled.
+- All queries relied solely on semantic similarity, no keyword boosting.
+- "Tidy First" and other book-specific queries returned 0 results despite being indexed.
+
+### Files Fixed
+
+| File | Change |
+|------|--------|
+| `api/hybrid_search.py:20` | Changed JOIN from `fts.chunk_id` → `fts.rowid` |
+| `api/ingestion/chunk_repository.py:175` | Added explicit `rowid = chunk_id` in INSERT |
+| `api/ingestion/async_repositories.py:384` | Added explicit `rowid = chunk_id` in INSERT |
+| `scripts/rebuild_fts.py:88` | Added explicit `rowid = chunk_id` in INSERT |
+
+### Additional Tuning Applied
+
+| Change | File | Before | After |
+|--------|------|--------|-------|
+| RRF k parameter | `api/hybrid_search.py:31` | k=60 | k=20 |
+| Keyword fetch multiplier | `api/hybrid_search.py:99` | 2x | 4x |
+| fetch_k calculation | `api/operations/query_executor.py:68` | max(top_k, 20) | max(top_k * 2, 40) |
+
+### Data Rebuilt
+
+- FTS index: Rebuilt with correct `rowid = chunk_id` mapping
+- HNSW index: Already rebuilt in Session 3 (7,233 orphans removed)
+
+### Verification
+
+- "Tidy First" query now returns correct results (was returning nothing before)
+- Benchmark still 73.1% - this is now the TRUE hybrid search accuracy (not bug-inflated)
+
+### Lesson Learned
+
+FTS5 contentless tables are tricky:
+- They save space by not storing content
+- UNINDEXED columns are stored at INSERT time but return NULL when read
+- Must use `rowid` for JOINs, not custom UNINDEXED columns
+- Must explicitly set `rowid` in INSERT to match foreign keys
+
+**Status**: RESOLVED in v2.2.2
