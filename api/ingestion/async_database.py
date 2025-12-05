@@ -297,7 +297,32 @@ class AsyncVectorStore:
         return result[0]
 
     async def _delete_document_data(self, doc_id: int):
-        """Delete chunks and document record"""
+        """Delete chunks and document record, cascading to vec_chunks and fts_chunks.
+
+        Order matters: get chunk IDs first, then delete from derived tables,
+        then delete chunks, then delete document.
+        """
+        # Get chunk IDs before deletion
+        cursor = await self.conn.execute(
+            "SELECT id FROM chunks WHERE document_id = ?", (doc_id,)
+        )
+        rows = await cursor.fetchall()
+        chunk_ids = [row[0] for row in rows]
+
+        if chunk_ids:
+            # Delete from vec_chunks (HNSW index) - uses rowid = chunk.id
+            placeholders = ','.join('?' * len(chunk_ids))
+            await self.conn.execute(
+                f"DELETE FROM vec_chunks WHERE rowid IN ({placeholders})",
+                chunk_ids
+            )
+            # Delete from fts_chunks (full-text search)
+            await self.conn.execute(
+                f"DELETE FROM fts_chunks WHERE chunk_id IN ({placeholders})",
+                chunk_ids
+            )
+
+        # Now delete the source records
         await self.conn.execute("DELETE FROM chunks WHERE document_id = ?", (doc_id,))
         await self.conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
 
