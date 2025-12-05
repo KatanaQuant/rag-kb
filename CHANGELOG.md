@@ -11,6 +11,50 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.2.2] - 2025-12-05
+
+Critical bugfix for hybrid search (FTS5 was completely broken).
+
+### Fixed
+- **FTS JOIN bug** - Keyword search returned nothing for most queries
+  - Root cause: FTS5 contentless tables don't store UNINDEXED column values
+  - `fts.chunk_id` was always NULL, breaking the JOIN condition
+  - Fix: Changed JOIN to use `fts.rowid` instead of `fts.chunk_id`
+- **FTS INSERT bug** - New chunks weren't searchable via keywords
+  - INSERT didn't set `rowid = chunk_id`, causing rowid mismatch
+  - Fix: Explicit `INSERT INTO fts_chunks(rowid, chunk_id, content)`
+  - Updated: chunk_repository.py, async_repositories.py, rebuild_fts.py
+- **Delete cascade** - Deleting documents left orphan embeddings in HNSW
+  - v2.2.2-beta commit (8b523cf) fixed the cascade
+  - This release includes HNSW health check at startup
+
+### Added
+- **HNSW health check** - Detects orphan embeddings at startup (detection only)
+- **rebuild_hnsw_index.py** - Fast HNSW rebuild script (~55s)
+- **rebuild_fts_inline.py** - FTS rebuild helper script
+
+### Changed (Query Tuning)
+- RRF k=60 → k=20 (better top-result differentiation)
+- Keyword fetch multiplier 2x → 4x (more BM25 candidates)
+- Fixed fetch_k calculation for reranking scenarios
+
+### Validation
+- Benchmark: 73.1% accuracy (same %, but results now CORRECT)
+- "Tidy First" query now works (was completely broken before)
+- Zero orphan embeddings after cleanup
+
+### If You're Affected
+If keyword searches aren't working correctly:
+```bash
+# Rebuild FTS index (inside container or via temp container)
+docker exec rag-api python /app/scripts/rebuild_fts_inline.py /app/data/rag.db
+
+# Rebuild HNSW index if orphans exist
+docker exec rag-api python /app/scripts/rebuild_hnsw_index.py /app/data/rag.db
+```
+
+---
+
 ## [2.2.1] - 2025-12-05
 
 Critical bugfix release for HNSW index persistence.
