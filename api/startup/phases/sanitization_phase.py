@@ -40,6 +40,7 @@ class SanitizationPhase:
         self.resume_incomplete_files()
         self.repair_orphaned_files()
         self.run_self_healing()
+        self._check_hnsw_health()
         print("=== Sanitization Complete ===\n")
 
     def run_self_healing(self):
@@ -111,3 +112,63 @@ class SanitizationPhase:
         detector = OrphanDetector(self.state.core.progress_tracker, self.state.core.vector_store)
         detector.repair_orphans(self.state.indexing.queue)
         print("Orphans queued for reindexing")
+
+    def _check_hnsw_health(self):
+        """Check HNSW index for orphan embeddings.
+
+        HNSW orphans are embeddings in vec_chunks with no matching chunk.
+        These cause query pollution - HNSW finds orphan embeddings but
+        the JOIN to chunks returns nothing or wrong content.
+
+        This is a DETECTION-ONLY check. Full rebuild required to remove
+        orphans (vectorlite limitation - no efficient deletion).
+
+        Run rebuild with:
+            docker exec rag-api python /app/scripts/rebuild_hnsw_index.py /app/data/rag.db
+        """
+        if not self._is_hnsw_check_enabled():
+            return
+
+        import sqlite3
+        import vectorlite_py
+
+        try:
+            db_path = self.state.core.vector_store.config.path
+            conn = sqlite3.connect(db_path)
+            conn.enable_load_extension(True)
+            conn.load_extension(vectorlite_py.vectorlite_path())
+
+            # Get valid chunk IDs
+            valid_ids = set(row[0] for row in conn.execute('SELECT id FROM chunks').fetchall())
+            total_chunks = len(valid_ids)
+
+            # Vectorlite doesn't support COUNT(*) - use knn_search to enumerate
+            # Use zero vector with high top_k to get all rowids
+            embedding_dim = 1024
+            zero_vec = b'\x00' * (embedding_dim * 4)
+
+            all_rowids = conn.execute('''
+                SELECT v.rowid FROM vec_chunks v
+                WHERE knn_search(v.embedding, knn_param(?, 200000))
+            ''', (zero_vec,)).fetchall()
+            all_rowids = set(row[0] for row in all_rowids)
+
+            total_vec = len(all_rowids)
+            orphan_count = len(all_rowids - valid_ids)
+
+            conn.close()
+
+            if orphan_count > 0:
+                pct = (orphan_count / total_vec * 100) if total_vec > 0 else 0
+                print(f"[HNSW Health] WARNING: {orphan_count:,} orphan embeddings ({pct:.1f}%)")
+                print(f"[HNSW Health] vec_chunks: {total_vec:,}, chunks: {total_chunks:,}")
+                print("[HNSW Health] Fix: docker exec rag-api python /app/scripts/rebuild_hnsw_index.py /app/data/rag.db")
+            else:
+                print(f"[HNSW Health] OK - {total_vec:,} embeddings, 0 orphans")
+
+        except Exception as e:
+            print(f"[HNSW Health] Check failed: {e}")
+
+    def _is_hnsw_check_enabled(self) -> bool:
+        """Check if HNSW health check is enabled."""
+        return os.getenv('CHECK_HNSW_HEALTH', 'true').lower() == 'true'

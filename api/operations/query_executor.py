@@ -64,8 +64,8 @@ class QueryExecutor:
         # Determine how many candidates to fetch
         fetch_k = request.top_k
         if self.reranker and self.reranker.is_enabled:
-            # Fetch more candidates for reranking (default: 20)
-            fetch_k = max(request.top_k, getattr(self.reranker, 'top_n', 20))
+            # Fetch more candidates for reranking (ensures enough for larger top_k)
+            fetch_k = max(request.top_k * 2, 40)
 
         # Search vector store
         results = await self.store.search(
@@ -95,7 +95,7 @@ class QueryExecutor:
         # Determine fetch size per sub-query
         fetch_k = request.top_k
         if self.reranker and self.reranker.is_enabled:
-            fetch_k = max(request.top_k, getattr(self.reranker, 'top_n', 20))
+            fetch_k = max(request.top_k * 2, 40)
 
         # Search each sub-query
         for sub_query in sub_queries:

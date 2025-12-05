@@ -84,9 +84,10 @@ def rebuild_fts(db_path: str, batch_size: int = 1000) -> dict:
 
         try:
             for chunk_id, content in batch:
+                # rowid must equal chunk_id for JOIN in hybrid_search.py to work
                 conn.execute(
-                    "INSERT INTO fts_chunks (chunk_id, content) VALUES (?, ?)",
-                    (chunk_id, content)
+                    "INSERT INTO fts_chunks (rowid, chunk_id, content) VALUES (?, ?, ?)",
+                    (chunk_id, chunk_id, content)
                 )
             conn.commit()
             stats['chunks_processed'] += len(batch)

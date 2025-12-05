@@ -378,11 +378,15 @@ class AsyncFTSChunkRepository:
         self.conn = conn
 
     async def add(self, chunk_id: int, content: str):
-        """Insert chunk into FTS5 index"""
+        """Insert chunk into FTS5 index.
+
+        Note: rowid must equal chunk_id for JOIN in hybrid_search.py to work.
+        FTS5 contentless tables don't store UNINDEXED column values.
+        """
         try:
             await self.conn.execute(
-                "INSERT INTO fts_chunks (chunk_id, content) VALUES (?, ?)",
-                (chunk_id, content)
+                "INSERT INTO fts_chunks (rowid, chunk_id, content) VALUES (?, ?, ?)",
+                (chunk_id, chunk_id, content)
             )
         except Exception:
             pass  # FTS errors are non-fatal

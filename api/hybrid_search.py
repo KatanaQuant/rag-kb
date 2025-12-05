@@ -17,7 +17,7 @@ class KeywordSearcher:
             SELECT c.id, c.content, d.file_path, c.page,
                    fts.rank as score
             FROM fts_chunks fts
-            JOIN chunks c ON fts.chunk_id = c.id
+            JOIN chunks c ON fts.rowid = c.id
             JOIN documents d ON c.document_id = d.id
             WHERE fts_chunks MATCH ?
             ORDER BY fts.rank DESC
@@ -28,7 +28,7 @@ class KeywordSearcher:
 class RankFusion:
     """Reciprocal Rank Fusion algorithm"""
 
-    def __init__(self, k: int = 60):
+    def __init__(self, k: int = 20):
         self.k = k
 
     def fuse(self, vector_results: List[Dict],
@@ -96,7 +96,7 @@ class HybridSearcher:
               top_k: int) -> List[Dict]:
         """Execute hybrid search"""
         try:
-            keyword_results = self.keyword.search(query, top_k * 2)
+            keyword_results = self.keyword.search(query, top_k * 4)
             fused = self.fusion.fuse(vector_results, keyword_results)
             return fused[:top_k]
         except Exception:

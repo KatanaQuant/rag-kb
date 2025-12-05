@@ -406,3 +406,50 @@ Option C: Route all vector queries through sync VectorStore
 - Single HNSW index = no race conditions
 - Eliminates refresh complexity entirely
 - ~30 min refactor for cleaner long-term solution
+
+---
+
+## UPDATE: v2.2.2 Session 3 Results (Dec 5, 18:15)
+
+### What Was Done
+
+1. **Created `rebuild_hnsw_index.py`** - Fast mode script that copies valid embeddings without re-running the embedding model (~55 sec vs ~30 min)
+2. **Added `_check_hnsw_health()`** to sanitization_phase.py - Auto-detects orphan embeddings on startup
+3. **Ran HNSW rebuild** - Removed 7,233 orphan embeddings (58,616 → 51,364)
+4. **Ran benchmark** - 73.1% usable (UNCHANGED from baseline)
+
+### HNSW Rebuild Results
+
+| Metric | Before | After |
+|--------|--------|-------|
+| Total embeddings | 58,616 | 51,364 |
+| Orphan embeddings | 7,233 | 0 |
+| Index file size | 250.5 MB | 208.0 MB |
+
+### Benchmark Results
+
+| Metric | Baseline | Post-Rebuild |
+|--------|----------|--------------|
+| Correct | 14/26 (53.8%) | 14/26 (53.8%) |
+| Acceptable | 5/26 (19.2%) | 5/26 (19.2%) |
+| Wrong | 7/26 (26.9%) | 7/26 (26.9%) |
+| **Usable** | **73.1%** | **73.1%** |
+
+### Key Finding
+
+**Orphan cleanup did NOT improve query accuracy.** The 73.1% usable rate is the system's actual capability, not a bug caused by orphan pollution.
+
+The 7 failing queries fail due to:
+- Query pipeline characteristics (BM25 tuning, long query dilution)
+- Content type confusion (books vs articles, code vs articles)
+- Missing content (some expected documents not fully indexed)
+
+### Conclusion
+
+v2.2.2 fixes are complete:
+- ✅ Delete cascade bug fixed
+- ✅ Maintenance scripts created
+- ✅ HNSW health check added
+- ✅ Data cleaned (chunks, FTS, HNSW all aligned)
+
+Query accuracy (73.1%) is a separate issue unrelated to the HNSW bugs - requires query pipeline investigation.
