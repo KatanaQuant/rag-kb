@@ -11,6 +11,37 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.2.1] - 2025-12-05
+
+Critical bugfix release for HNSW index persistence.
+
+### Fixed
+- **HNSW index not persisting** - Documents indexed after v2.2.0-beta upgrade were lost on container restart
+  - Root cause 1: vectorlite only saves HNSW index when database connection closes
+  - Root cause 2: AsyncVectorStore refresh() triggered garbage collection, overwriting valid index
+  - Fix: Added `_flush_hnsw_index()` to force persistence after each document
+  - Fix: Keep old connections alive to prevent GC overwrite
+
+### Known Issues
+- `_old_connections` list grows unbounded (minor memory leak, ~1 connection per document)
+- DELETE API endpoint may not work correctly (async store connection issues)
+- Pre-existing orphan data from delete cascade bug (to be fixed in v2.2.2)
+
+### Documentation
+- Added detailed postmortem: `docs/postmortem-hnsw-index-not-persisting.md`
+
+### If You're Affected
+If you upgraded to v2.2.0-beta and indexed documents that aren't searchable:
+```bash
+# Force reindex affected documents
+curl -X POST "http://localhost:8000/documents/{path}/reindex?force=true"
+
+# Or re-run migration for full rebuild
+docker exec rag-api python /app/ingestion/vector_migration.py /app/data/rag.db 1024
+```
+
+---
+
 ## [2.2.0-beta] - 2025-12-04
 
 Performance release: 200x faster queries with persistent vector index.
