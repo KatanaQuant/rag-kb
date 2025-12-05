@@ -28,6 +28,7 @@ data/
 internal_planning/
 kb/*
 !kb/.gitkeep
+up-next/
 
 # Agent session files
 .agent/

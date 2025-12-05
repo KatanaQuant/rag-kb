@@ -30,9 +30,17 @@ class AsyncDatabaseConnection:
         return self.conn
 
     async def _create_connection(self) -> aiosqlite.Connection:
-        """Create async SQLite connection"""
+        """Create async SQLite connection in read-only mode.
+
+        CRITICAL: Must be read-only to prevent vectorlite from saving
+        stale HNSW index data when connection closes during refresh.
+        The async store is only used for queries (reads), so read-only
+        is semantically correct and prevents race conditions with the
+        sync store that handles writes.
+        """
         return await aiosqlite.connect(
-            self.config.path,
+            f"file:{self.config.path}?mode=ro",
+            uri=True,
             check_same_thread=False  # aiosqlite handles threading
         )
 

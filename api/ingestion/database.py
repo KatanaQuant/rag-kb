@@ -417,6 +417,7 @@ class VectorRepository:
             chunk_id = self.chunks.add(doc_id, chunk['content'], chunk.get('page'), idx)
             self.vectors.add(chunk_id, emb)
             self.fts.add(chunk_id, chunk['content'])
+        print(f"[HNSW] Indexed {len(chunks)} chunks for doc_id={doc_id}")
 
     def search(self, embedding: List, top_k: int,
               threshold: float = None) -> List[Dict]:
@@ -453,6 +454,18 @@ class VectorStore:
                     chunks: List[Dict], embeddings: List):
         """Add document to store"""
         self.repo.add_document(file_path, file_hash, chunks, embeddings)
+        self._flush_hnsw_index()
+
+    def _flush_hnsw_index(self):
+        """Force HNSW index to persist by closing and reopening connection.
+
+        vectorlite only saves the HNSW index to disk when the connection closes.
+        Without this, inserts go to in-memory index but are lost on restart.
+        """
+        self.conn.close()
+        self.conn = self.db_conn.connect()
+        self.repo = VectorRepository(self.conn)
+        self.hybrid = HybridSearcher(self.conn)
 
     def search(self, query_embedding: List, top_k: int = 5,
               threshold: float = None, query_text: Optional[str] = None,

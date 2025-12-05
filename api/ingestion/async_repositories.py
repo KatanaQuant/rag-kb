@@ -11,9 +11,12 @@ Principles:
 """
 
 import aiosqlite
+import logging
 from pathlib import Path
 from typing import Optional, List, Dict
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class AsyncDocumentRepository:
@@ -333,15 +336,22 @@ class AsyncVectorChunkRepository:
         vectorlite requires explicit rowid - we use chunk_id as rowid.
         """
         blob = self._to_blob(embedding)
-        await self.conn.execute(
-            "INSERT INTO vec_chunks (rowid, embedding) VALUES (?, ?)",
-            (chunk_id, blob)
-        )
+        try:
+            await self.conn.execute(
+                "INSERT INTO vec_chunks (rowid, embedding) VALUES (?, ?)",
+                (chunk_id, blob)
+            )
+            logger.info(f"[HNSW] Indexed chunk_id={chunk_id}")
+        except Exception as e:
+            logger.error(f"[HNSW] Failed to insert chunk_id={chunk_id}: {e}")
+            raise
 
     async def add_batch(self, chunk_ids: List[int], embeddings: List[List[float]]):
         """Insert multiple vector embeddings"""
+        logger.info(f"[HNSW] Indexing batch of {len(chunk_ids)} chunks")
         for chunk_id, embedding in zip(chunk_ids, embeddings):
             await self.add(chunk_id, embedding)
+        logger.info(f"[HNSW] Batch complete: {len(chunk_ids)} chunks indexed")
 
     async def delete_by_chunk(self, chunk_id: int):
         """Delete vector for a chunk"""

@@ -164,6 +164,9 @@ class AsyncVectorStore:
     neighbor search. Index persists on disk - no memory loading required.
     Startup: ~1s (was 42s with NumPy workaround)
     Query: ~0.3s (same as NumPy, but without memory overhead)
+
+    Auto-refresh: Detects when sync VectorStore has modified the HNSW index
+    and reconnects to load the updated index before queries.
     """
 
     def __init__(self, config=default_config.database):
@@ -172,6 +175,36 @@ class AsyncVectorStore:
         self.conn = None
         self.repo = None
         self.hybrid = None
+        self._index_mtime = None  # Track index file modification time
+        self._old_connections = []  # Keep old connections alive to prevent GC close
+
+    def _get_index_path(self) -> str:
+        """Get path to the HNSW index file"""
+        import os
+        db_dir = os.path.dirname(self.config.path)
+        return os.path.join(db_dir, "vec_chunks.idx")
+
+    def _get_index_mtime(self) -> float:
+        """Get modification time of index file, or 0 if not exists"""
+        import os
+        index_path = self._get_index_path()
+        try:
+            return os.path.getmtime(index_path)
+        except OSError:
+            return 0
+
+    async def _refresh_if_index_changed(self):
+        """Refresh connection if HNSW index file was modified.
+
+        The sync VectorStore writes new embeddings to the index file.
+        We detect this by checking the file's mtime and reconnect to
+        reload the updated index into memory.
+        """
+        current_mtime = self._get_index_mtime()
+        if self._index_mtime is not None and current_mtime > self._index_mtime:
+            print(f"[AsyncVectorStore] Index file changed, refreshing connection...")
+            await self.refresh()
+        self._index_mtime = current_mtime
 
     async def initialize(self):
         """Initialize async connections and repositories.
@@ -183,6 +216,7 @@ class AsyncVectorStore:
         self.conn = await self.db_conn.connect()
         await self._init_schema()
         self.repo = AsyncVectorRepository(self.conn)
+        self._index_mtime = self._get_index_mtime()  # Record initial mtime
         # Note: HybridSearcher needs async version too
         # self.hybrid = AsyncHybridSearcher(self.conn)
 
@@ -206,7 +240,9 @@ class AsyncVectorStore:
         """Search for similar chunks using vectorlite HNSW index.
 
         Performance: ~0.3s per query with O(log n) approximate nearest neighbor.
+        Auto-refreshes if sync store has modified the index file.
         """
+        await self._refresh_if_index_changed()
         return await self.repo.search(query_embedding, top_k, threshold)
 
     async def get_stats(self) -> Dict:
@@ -292,3 +328,24 @@ class AsyncVectorStore:
         """Close connection"""
         if self.db_conn:
             await self.db_conn.close()
+            self.db_conn = None
+            self.conn = None
+            self.repo = None
+
+    async def refresh(self):
+        """Refresh connection to reload HNSW index from disk.
+
+        Call this after sync VectorStore commits new embeddings so that
+        queries see the updated index. Vectorlite loads the HNSW index
+        into memory at connection time, so we need to reconnect.
+
+        CRITICAL: Do NOT close the old connection - keep it alive!
+        Closing triggers vectorlite to save its in-memory HNSW index to disk,
+        which would overwrite the sync store's valid data with stale data.
+        We keep old connections in a list to prevent garbage collection from
+        closing them and triggering HNSW save.
+        """
+        # Keep old connection alive - GC would close it and save stale HNSW!
+        if self.db_conn:
+            self._old_connections.append(self.db_conn)
+        await self.initialize()

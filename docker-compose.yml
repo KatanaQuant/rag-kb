@@ -15,8 +15,8 @@ services:
     volumes:
       - ./kb:/app/kb
       - ./data:/app/data
-      - ./tests:/app/tests  # Mount tests directory for test execution
-      - ./api:/app  # Mount api code for development (hot reload)
+      - ./tests:/app/tests  # DEBUGGING: Mount tests for test execution
+      - ./api:/app  # DEBUGGING: Hot reload for debugging
       - ./api/migrations:/app/migrations  # Migration scripts
       - ./config:/app/yara_config  # Mount config directory for YARA rules
       - ./.cache/deepsearch_glm:/app/.cache/deepsearch_glm  # DeepSearch GLM cache

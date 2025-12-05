@@ -224,6 +224,88 @@ class TestAsyncVectorStore:
             await store.close()
 
 
+class TestAsyncVectorStoreIndexRefresh:
+    """Test that AsyncVectorStore auto-refreshes when index file changes"""
+
+    async def test_refresh_detects_index_mtime_change(self):
+        """AsyncVectorStore should refresh when index file mtime changes"""
+        import os
+        import time
+        from ingestion.async_database import AsyncVectorStore
+        from config import DatabaseConfig
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            index_path = Path(tmpdir) / "vec_chunks.idx"
+            config = DatabaseConfig(path=str(db_path), require_vec_extension=False)
+
+            store = AsyncVectorStore(config)
+            await store.initialize()
+
+            # Record initial mtime
+            initial_mtime = store._index_mtime
+
+            # Simulate sync store modifying the index file
+            # (In real scenario, sync VectorStore would do this)
+            index_path.write_bytes(b"dummy index data")
+            time.sleep(0.01)  # Ensure mtime is different
+
+            # Verify mtime is different now
+            new_mtime = os.path.getmtime(str(index_path))
+            assert new_mtime > (initial_mtime or 0), "Index file mtime should have changed"
+
+            # Create a flag to track if refresh was called
+            refresh_called = False
+            original_refresh = store.refresh
+
+            async def mock_refresh():
+                nonlocal refresh_called
+                refresh_called = True
+                await original_refresh()
+
+            store.refresh = mock_refresh
+
+            # Call search - should detect mtime change and refresh
+            # Note: search will fail without vectorlite, but refresh should still trigger
+            try:
+                await store._refresh_if_index_changed()
+            except Exception:
+                pass  # Expected without vectorlite
+
+            assert refresh_called, "Refresh should be called when index mtime changes"
+
+            await store.close()
+
+    async def test_no_refresh_when_index_unchanged(self):
+        """AsyncVectorStore should NOT refresh if index file unchanged"""
+        from ingestion.async_database import AsyncVectorStore
+        from config import DatabaseConfig
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "test.db"
+            config = DatabaseConfig(path=str(db_path), require_vec_extension=False)
+
+            store = AsyncVectorStore(config)
+            await store.initialize()
+
+            refresh_called = False
+            original_refresh = store.refresh
+
+            async def mock_refresh():
+                nonlocal refresh_called
+                refresh_called = True
+                await original_refresh()
+
+            store.refresh = mock_refresh
+
+            # Call _refresh_if_index_changed without any file changes
+            await store._refresh_if_index_changed()
+
+            assert not refresh_called, "Refresh should NOT be called when index unchanged"
+
+            await store.close()
+
+
 class TestAsyncPerformance:
     """Test that async operations don't block"""
 

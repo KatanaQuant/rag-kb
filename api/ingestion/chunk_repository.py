@@ -1,6 +1,9 @@
 import sqlite3
+import logging
 from typing import List, Dict, Optional
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 class ChunkRepository:
     """CRUD operations for chunks table.
@@ -127,15 +130,21 @@ class VectorChunkRepository:
         vectorlite requires explicit rowid - we use chunk_id as rowid.
         """
         blob = self._to_blob(embedding)
-        self.conn.execute(
-            "INSERT INTO vec_chunks (rowid, embedding) VALUES (?, ?)",
-            (chunk_id, blob)
-        )
+        try:
+            self.conn.execute(
+                "INSERT INTO vec_chunks (rowid, embedding) VALUES (?, ?)",
+                (chunk_id, blob)
+            )
+        except Exception as e:
+            print(f"[HNSW] FAILED chunk_id={chunk_id}: {e}")
+            raise
 
     def add_batch(self, chunk_ids: List[int], embeddings: List[List[float]]):
         """Insert multiple vector embeddings"""
+        logger.info(f"[HNSW] Indexing batch of {len(chunk_ids)} chunks")
         for chunk_id, embedding in zip(chunk_ids, embeddings):
             self.add(chunk_id, embedding)
+        logger.info(f"[HNSW] Batch complete: {len(chunk_ids)} chunks indexed")
 
     def delete_by_chunk(self, chunk_id: int):
         """Delete vector for a chunk"""
