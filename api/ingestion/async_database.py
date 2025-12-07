@@ -12,6 +12,8 @@ neighbor search. No in-memory loading required - index persists on disk.
 """
 
 import aiosqlite
+import asyncio
+import sqlite3
 from pathlib import Path
 from typing import List, Dict, Optional
 import numpy as np
@@ -21,6 +23,7 @@ from config import default_config
 from domain_models import ChunkData, DocumentFile, ExtractionResult
 from .async_connection import AsyncDatabaseConnection
 from .async_schema import AsyncSchemaManager
+from hybrid_search import HybridSearcher
 
 # Centralized logging configuration - import triggers suppression
 from . import logging_config  # noqa: F401
@@ -217,8 +220,12 @@ class AsyncVectorStore:
         await self._init_schema()
         self.repo = AsyncVectorRepository(self.conn)
         self._index_mtime = self._get_index_mtime()  # Record initial mtime
-        # Note: HybridSearcher needs async version too
-        # self.hybrid = AsyncHybridSearcher(self.conn)
+
+        # Initialize hybrid search with sync connection
+        # HybridSearcher uses BM25 which needs sync sqlite3 connection
+        self._sync_conn = sqlite3.connect(self.config.path)
+        self.hybrid = HybridSearcher(self._sync_conn)
+        print("[AsyncVectorStore] Hybrid search enabled with BM25")
 
     async def _init_schema(self):
         """Initialize database schema"""
@@ -237,13 +244,29 @@ class AsyncVectorStore:
     async def search(self, query_embedding: List, top_k: int = 5,
                     threshold: float = None, query_text: Optional[str] = None,
                     use_hybrid: bool = True) -> List[Dict]:
-        """Search for similar chunks using vectorlite HNSW index.
+        """Search for similar chunks using vectorlite HNSW index + optional BM25.
+
+        Hybrid search combines vector similarity with BM25 keyword matching using
+        Reciprocal Rank Fusion (RRF). This rescues queries where HNSW returns
+        wrong vectors but BM25 finds the correct content via keywords.
 
         Performance: ~0.3s per query with O(log n) approximate nearest neighbor.
         Auto-refreshes if sync store has modified the index file.
         """
         await self._refresh_if_index_changed()
-        return await self.repo.search(query_embedding, top_k, threshold)
+        vector_results = await self.repo.search(query_embedding, top_k, threshold)
+
+        # Check if hybrid search is enabled via env var (for permutation testing)
+        import os
+        hybrid_enabled = os.getenv("HYBRID_SEARCH_ENABLED", "true").lower() == "true"
+
+        if use_hybrid and hybrid_enabled and query_text and self.hybrid:
+            # Run BM25 in thread pool (it's CPU-bound sync code)
+            loop = asyncio.get_event_loop()
+            return await loop.run_in_executor(
+                None, self.hybrid.search, query_text, vector_results, top_k
+            )
+        return vector_results
 
     async def get_stats(self) -> Dict:
         """Get statistics"""

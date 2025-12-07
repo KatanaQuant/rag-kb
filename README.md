@@ -6,13 +6,13 @@
 
 **Personal knowledge base with semantic search.** Index books, code, and notes—query with natural language. 100% local.
 
-**Current Version**: v2.2.0-beta ([Changelog](docs/RELEASES/)) | **Latest Stable**: [v1.9.1](https://github.com/KatanaQuant/rag-kb/releases/tag/v1.9.1)
+**Current Version**: v2.2.4-beta ([Changelog](docs/RELEASES/)) | **Latest Stable**: [v2.2.4-beta](https://github.com/KatanaQuant/rag-kb/releases/tag/v2.2.4-beta)
 
 > **BREAKING CHANGES in v2.x** - Migration required from v1.x. See [Migration Guide](docs/RELEASES/v2.1.5-beta.md).
 > - Directory renamed: `knowledge_base/` → `kb/`
 > - MCP stdio removed (HTTP transport only)
 >
-> **Note**: GPU support was originally planned for v2.0. Breaking changes in the kb/ rename and MCP simplification triggered the major version bump early. This beta polishes the foundation before GPU support arrives.
+> **Note**: v2.2.4-beta fixes all critical issues from the v2.2.0-beta vectorlite migration. See [postmortem](docs/postmortem-vectorlite-hnsw-complete.md) for details. GPU support planned for v2.3.0.
 
 ---
 
@@ -33,7 +33,7 @@
 ```bash
 # Clone and start
 git clone https://github.com/KatanaQuant/rag-kb.git
-cd rag-kb && git checkout v2.2.0-beta
+cd rag-kb && git checkout v2.2.4-beta
 
 # Add your content
 cp ~/Documents/*.pdf kb/books/
@@ -108,7 +108,7 @@ See [docs/USAGE.md](docs/USAGE.md) for all query methods and [docs/API.md](docs/
 
 ```bash
 docker-compose down
-git fetch --tags && git checkout v2.2.0-beta
+git fetch --tags && git checkout v2.2.4-beta
 docker-compose build --no-cache
 docker-compose up -d
 ```

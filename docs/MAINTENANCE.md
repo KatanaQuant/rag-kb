@@ -197,18 +197,107 @@ conn.commit()
 
 ## Maintenance REST API
 
-For manual repairs, use these endpoints:
+All maintenance operations are available via REST API. Use `dry_run: true` to preview changes before executing.
+
+### Quick Reference
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/maintenance/verify-integrity` | GET | Check database consistency |
+| `/api/maintenance/cleanup-orphans` | POST | Remove orphan chunks/embeddings |
+| `/api/maintenance/rebuild-hnsw` | POST | Rebuild HNSW vector index |
+| `/api/maintenance/rebuild-fts` | POST | Rebuild FTS keyword index |
+| `/api/maintenance/repair-indexes` | POST | Rebuild both HNSW + FTS |
+| `/api/maintenance/reindex-path` | POST | Re-index specific file/directory |
+| `/api/maintenance/rebuild-embeddings` | POST | Full re-embed all documents |
+| `/api/maintenance/partial-rebuild` | POST | Re-embed chunks by ID range |
+
+### Verify Database Integrity
 
 ```bash
-# Reindex orphaned files (completed but missing from DB)
-curl -X POST http://localhost:8000/api/maintenance/reindex-orphaned-files
+# Check overall health
+curl http://localhost:8000/api/maintenance/verify-integrity | jq
+```
 
-# Delete empty document records (dry-run first)
+Returns:
+```json
+{
+  "healthy": true,
+  "issues": [],
+  "checks": [
+    {"name": "Referential Integrity", "passed": true, "details": "..."},
+    {"name": "HNSW Index Consistency", "passed": true, "details": "..."},
+    {"name": "FTS Index Consistency", "passed": true, "details": "..."}
+  ],
+  "table_counts": {"documents": 1636, "chunks": 51544, "vec_chunks": 51544}
+}
+```
+
+### Clean Up Orphans
+
+```bash
+# Preview what would be deleted
+curl -X POST http://localhost:8000/api/maintenance/cleanup-orphans \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
+
+# Execute cleanup
+curl -X POST http://localhost:8000/api/maintenance/cleanup-orphans \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false}'
+```
+
+### Rebuild HNSW Index (Critical for Recovery)
+
+Use this after HNSW index corruption or write errors. See [HNSW Index Issues](#hnsw-index-issues) below.
+
+```bash
+# Preview
+curl -X POST http://localhost:8000/api/maintenance/rebuild-hnsw \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
+
+# Execute (rebuilds from existing embeddings, no re-embedding)
+curl -X POST http://localhost:8000/api/maintenance/rebuild-hnsw \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false}'
+```
+
+### Repair Both Indexes
+
+Convenience endpoint that runs HNSW + FTS rebuild together:
+
+```bash
+curl -X POST http://localhost:8000/api/maintenance/repair-indexes \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false}'
+```
+
+### Re-index Specific Files
+
+```bash
+# Re-index a single file
+curl -X POST http://localhost:8000/api/maintenance/reindex-path \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/app/kb/documents/report.pdf", "dry_run": false}'
+
+# Re-index entire directory
+curl -X POST http://localhost:8000/api/maintenance/reindex-path \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/app/kb/golang/", "dry_run": false}'
+```
+
+### Legacy Endpoints
+
+These older endpoints are still available:
+
+```bash
+# Delete empty document records
 curl -X POST http://localhost:8000/api/maintenance/delete-empty-documents \
   -H "Content-Type: application/json" \
   -d '{"dry_run": true}'
 
-# Backfill chunk counts (dry-run first)
+# Backfill chunk counts
 curl -X POST http://localhost:8000/api/maintenance/backfill-chunk-counts \
   -H "Content-Type: application/json" \
   -d '{"dry_run": true}'
@@ -220,6 +309,48 @@ curl -X POST http://localhost:8000/api/maintenance/reindex-failed-documents \
 ```
 
 See [API.md](API.md#system-maintenance) for full endpoint documentation.
+
+---
+
+## HNSW Index Issues
+
+The HNSW vector index can become corrupted or inconsistent. This section covers diagnosis and recovery.
+
+### Symptoms
+
+- Search returns no results for queries that should match
+- Newly indexed documents don't appear in search
+- `verify-integrity` shows HNSW/chunks count mismatch
+- Logs show "HNSW write error" or similar
+
+### Causes
+
+1. **Container restart during indexing** - HNSW only persists on connection close
+2. **Disk full during write** - Partial index file
+3. **Concurrent write conflicts** - Multiple processes writing
+
+### Recovery Procedure
+
+```bash
+# 1. Check integrity
+curl http://localhost:8000/api/maintenance/verify-integrity | jq '.checks'
+
+# 2. If HNSW count doesn't match chunks, rebuild:
+curl -X POST http://localhost:8000/api/maintenance/rebuild-hnsw \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false}'
+
+# 3. Verify fix
+curl http://localhost:8000/api/maintenance/verify-integrity | jq '.healthy'
+```
+
+### Prevention
+
+- Don't kill containers during active indexing
+- Monitor disk space
+- Use `docker-compose stop` (graceful) instead of `docker-compose kill`
+
+For the full postmortem on the HNSW persistence issue, see [postmortem-hnsw-index-not-persisting.md](postmortem-hnsw-index-not-persisting.md).
 
 ---
 

@@ -31,7 +31,7 @@ def vec0_available():
         sqlite_vec.load(conn)
         conn.close()
         return True
-    except:
+    except (ImportError, sqlite3.Error, AttributeError):
         return False
 
 

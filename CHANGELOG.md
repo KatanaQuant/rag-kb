@@ -7,11 +7,71 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
-## [Unreleased]
+## [2.2.4-beta] - 2025-12-07
+
+**This release fixes all critical issues from the v2.2.0-beta vectorlite migration.**
+
+If you're on v2.2.0-beta, v2.2.1, or v2.2.2 - upgrade immediately.
+
+See [Postmortem](docs/postmortem-vectorlite-hnsw-complete.md) for full technical analysis.
+
+### Highlights
+- **92.3% search accuracy** (was 73.1% in v2.2.0-beta)
+- **All 5 HNSW bugs fixed** - data loss, race conditions, index corruption
+- **Comprehensive Maintenance API** - 8 new endpoints
+- **Stable under concurrent operations** - no more index corruption
+
+### Fixed (Critical)
+- **Bug 1: HNSW index not persisting** - Data lost on container restart
+- **Bug 2: Race condition** - Documents overwriting each other
+- **Bug 3: Delete cascade missing** - Orphan embeddings polluting search
+- **Bug 4: Default ef=10** - Only 31% recall (now ef=150 = 95% recall)
+- **Bug 5: Per-write flush corruption** - 0-byte index during concurrent ops
+
+### Fixed (Query Accuracy)
+- HNSW ef_search=150 (was 10) - 95% recall vs 31%
+- Title boosting for book queries
+- rank_bm25 replaces FTS5 boolean matching
+- RRF k=20 for better top-result differentiation
+
+### Added
+- **Comprehensive Maintenance API** - 8 new endpoints:
+  - `GET /api/maintenance/verify-integrity` - Check database health
+  - `POST /api/maintenance/cleanup-orphans` - Remove orphan embeddings
+  - `POST /api/maintenance/rebuild-hnsw` - Rebuild HNSW index (~55s)
+  - `POST /api/maintenance/rebuild-fts` - Rebuild FTS5 index
+  - `POST /api/maintenance/repair-indexes` - Rebuild both indexes
+  - `POST /api/maintenance/rebuild-embeddings` - Full re-embed
+  - `POST /api/maintenance/partial-rebuild` - Re-embed by ID range
+  - `POST /api/maintenance/reindex-path` - Re-index specific path
+- **Thread-safe VectorStore** - RLock on all public methods
+- **Periodic HNSW flush** - Every 5 minutes (crash recovery)
+- **Graceful shutdown persistence** - Data saved on container stop
+
+### Changed
+- Unified dual-store to single VectorStore architecture
+- Moved dev-only scripts to `.local-scripts/` (untracked)
+
+### Documentation
+- Comprehensive postmortem with 5-bug analysis
+- Updated MAINTENANCE.md, TROUBLESHOOTING.md, API.md
+- Updated ROADMAP.md with v2.3.0 plans (pgvector, GPU)
+
+### Migration from v2.2.0-beta
+No code changes required. After upgrading:
+```bash
+# Rebuild HNSW index (recommended)
+curl -X POST http://localhost:8000/api/maintenance/rebuild-hnsw
+
+# Verify integrity
+curl http://localhost:8000/api/maintenance/verify-integrity
+```
 
 ---
 
 ## [2.2.2] - 2025-12-05
+
+> **DEPRECATED**: This release has accuracy issues (ef=10 default). Upgrade to v2.2.4-beta.
 
 Critical bugfix for hybrid search (FTS5 was completely broken).
 
@@ -57,6 +117,8 @@ docker exec rag-api python /app/scripts/rebuild_hnsw_index.py /app/data/rag.db
 
 ## [2.2.1] - 2025-12-05
 
+> **DEPRECATED**: This release has accuracy issues (ef=10 default). Upgrade to v2.2.4-beta.
+
 Critical bugfix release for HNSW index persistence.
 
 ### Fixed
@@ -87,6 +149,8 @@ docker exec rag-api python /app/ingestion/vector_migration.py /app/data/rag.db 1
 ---
 
 ## [2.2.0-beta] - 2025-12-04
+
+> **DEPRECATED**: This release has critical bugs (data loss, race conditions, 31% recall). Upgrade to v2.2.4-beta.
 
 Performance release: 200x faster queries with persistent vector index.
 

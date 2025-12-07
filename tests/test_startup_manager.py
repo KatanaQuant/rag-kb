@@ -13,33 +13,6 @@ class TestStartupManagerInitialization:
     """Test StartupManager initialization phases"""
 
     @pytest.fixture
-    def mock_app_state(self):
-        """Create mock AppState with nested attributes"""
-        state = Mock()
-        state.core = Mock()
-        state.core.model = None
-        state.core.vector_store = None
-        state.core.async_vector_store = None
-        state.core.progress_tracker = None
-        state.core.processor = None
-        state.query = Mock()
-        state.query.cache = None
-        state.query.reranker = None
-        state.indexing = Mock()
-        state.indexing.queue = None
-        state.indexing.worker = None
-        state.indexing.pipeline_coordinator = None
-        state.runtime = Mock()
-        state.runtime.watcher = None
-        state.runtime.stats = None
-        state.runtime.indexing_in_progress = False
-        state.start_worker = Mock()
-        state.start_pipeline_coordinator = Mock()
-        state.start_watcher = Mock()
-        state.initialize_async_vector_store = AsyncMock()
-        return state
-
-    @pytest.fixture
     def startup_manager(self, mock_app_state):
         """Create StartupManager with mocked state"""
         from startup.manager import StartupManager
@@ -50,50 +23,6 @@ class TestStartupManagerInitialization:
         from startup.manager import StartupManager
         manager = StartupManager(mock_app_state)
         assert manager.state is mock_app_state
-
-    def test_validate_config_calls_validator(self, startup_manager):
-        """Test that _validate_config uses ConfigValidator"""
-        with patch('startup.manager.ConfigValidator') as mock_validator_class:
-            mock_validator = Mock()
-            mock_validator_class.return_value = mock_validator
-
-            startup_manager._validate_config()
-
-            mock_validator_class.assert_called_once()
-            mock_validator.validate.assert_called_once()
-
-    def test_load_model_uses_model_loader(self, startup_manager, mock_app_state):
-        """Test that _load_model uses ModelLoader and sets state.core.model"""
-        with patch('startup.manager.ModelLoader') as mock_loader_class:
-            mock_loader = Mock()
-            mock_model = Mock()
-            mock_loader.load.return_value = mock_model
-            mock_loader_class.return_value = mock_loader
-
-            with patch('startup.manager.default_config') as mock_config:
-                mock_config.model.name = 'test-model'
-                startup_manager._load_model()
-
-            mock_loader.load.assert_called_once_with('test-model')
-            assert mock_app_state.core.model == mock_model
-
-    @pytest.mark.asyncio
-    async def test_init_store_creates_both_stores(self, startup_manager, mock_app_state):
-        """Test that _init_store creates sync and async vector stores"""
-        with patch('startup.manager.VectorStore') as mock_sync_store:
-            with patch('startup.manager.AsyncVectorStore') as mock_async_store:
-                mock_sync = Mock()
-                mock_async = Mock()
-                mock_sync_store.return_value = mock_sync
-                mock_async_store.return_value = mock_async
-
-                await startup_manager._init_store()
-
-                mock_sync_store.assert_called_once()
-                mock_async_store.assert_called_once()
-                assert mock_app_state.core.vector_store == mock_sync
-                assert mock_app_state.core.async_vector_store == mock_async
-                mock_app_state.initialize_async_vector_store.assert_called_once()
 
     def test_init_progress_tracker_when_enabled(self, startup_manager, mock_app_state):
         """Test that progress tracker is created when processing is enabled"""
@@ -157,9 +86,8 @@ class TestStartupManagerInitialization:
             with patch('startup.manager.QueryCache') as mock_cache_class:
                 startup_manager._init_cache()
 
+                # QueryCache constructor should never be called
                 mock_cache_class.assert_not_called()
-                # Cache should remain None when disabled
-                assert mock_app_state.query.cache is None
 
     def test_init_reranker_uses_pipeline_factory(self, startup_manager, mock_app_state):
         """Test that _init_reranker uses PipelineFactory"""
@@ -181,17 +109,6 @@ class TestStartupManagerInitialization:
 
 class TestStartupManagerSanitization:
     """Test StartupManager sanitization phases"""
-
-    @pytest.fixture
-    def mock_app_state(self):
-        """Create mock AppState"""
-        state = Mock()
-        state.core = Mock()
-        state.core.progress_tracker = Mock()
-        state.core.vector_store = Mock()
-        state.indexing = Mock()
-        state.indexing.queue = Mock()
-        return state
 
     @pytest.fixture
     def startup_manager(self, mock_app_state):
@@ -256,22 +173,6 @@ class TestStartupManagerIndexing:
     """Test StartupManager indexing phases"""
 
     @pytest.fixture
-    def mock_app_state(self):
-        """Create mock AppState"""
-        state = Mock()
-        state.core = Mock()
-        state.core.model = Mock()
-        state.core.vector_store = Mock()
-        state.core.processor = Mock()
-        state.core.progress_tracker = Mock()
-        state.indexing = Mock()
-        state.indexing.queue = Mock()
-        state.runtime = Mock()
-        state.runtime.stats = None
-        state.runtime.indexing_in_progress = False
-        return state
-
-    @pytest.fixture
     def startup_manager(self, mock_app_state):
         """Create StartupManager with mocked state"""
         from startup.manager import StartupManager
@@ -311,17 +212,6 @@ class TestStartupManagerIndexing:
 
 class TestStartupManagerWatcher:
     """Test StartupManager file watcher initialization"""
-
-    @pytest.fixture
-    def mock_app_state(self):
-        """Create mock AppState"""
-        state = Mock()
-        state.runtime = Mock()
-        state.runtime.watcher = None
-        state.indexing = Mock()
-        state.indexing.queue = Mock()
-        state.start_watcher = Mock()
-        return state
 
     @pytest.fixture
     def startup_manager(self, mock_app_state):

@@ -16,34 +16,6 @@ def client():
     return TestClient(app)
 
 
-@pytest.fixture
-def mock_app_state():
-    """Mock AppState for testing."""
-    mock = Mock()
-
-    # Mock model
-    mock_model = Mock()
-    mock.get_model.return_value = mock_model
-
-    # Mock async vector store
-    mock_vector_store = AsyncMock()
-    mock.get_async_vector_store.return_value = mock_vector_store
-
-    # Mock query cache
-    mock_cache = Mock()
-    mock.get_query_cache.return_value = mock_cache
-
-    # Mock vector store stats
-    async def mock_stats():
-        return {
-            "indexed_documents": 100,
-            "total_chunks": 5000,
-        }
-    mock.get_vector_store_stats = mock_stats
-
-    return mock
-
-
 class TestMCPInfoEndpoint:
     """Test GET /mcp endpoint (server info)."""
 

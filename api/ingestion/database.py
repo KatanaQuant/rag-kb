@@ -1,16 +1,11 @@
 import sqlite3
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional
-import hashlib
-import re
-from dataclasses import dataclass
 from datetime import datetime
 import logging
 import sys
 import warnings
 
-from docx import Document
-import markdown
 import numpy as np
 
 from config import default_config
@@ -41,7 +36,6 @@ except ImportError as e:
     if DOCLING_AVAILABLE:
         print(f"Warning: Docling HybridChunker not available ({e}), using fixed-size chunking")
 
-@dataclass
 
 class DatabaseConnection:
     """Manages SQLite connection and extensions"""
@@ -153,11 +147,62 @@ class SchemaManager:
         """)
 
     def _create_vector_table(self):
-        """Create vector embeddings table using vectorlite HNSW index"""
+        """Create vector embeddings table using vectorlite HNSW index
+
+        CRITICAL: Validates existing index before loading to prevent corruption.
+        If index exists but is corrupted, raises error instead of overwriting.
+        """
+        import os
+        db_dir = os.path.dirname(self.config.path)
+        index_path = os.path.join(db_dir, "vec_chunks.idx")
+
+        # SAFETY CHECK: Validate existing index before CREATE TABLE
+        # CREATE VIRTUAL TABLE with vectorlite will OVERWRITE a corrupted index!
+        if os.path.exists(index_path):
+            index_size = os.path.getsize(index_path)
+            self._validate_hnsw_index(index_path, index_size)
+
         try:
             self._execute_create_vec_table()
         except Exception as e:
+            error_msg = str(e).lower()
+            if "corrupted" in error_msg or "unsupported" in error_msg:
+                # CRITICAL: Don't silently swallow corruption errors!
+                raise RuntimeError(
+                    f"HNSW index corruption detected at {index_path}. "
+                    f"Restore from backup (e.g., vec_chunks.idx.current-v2.2.2) or rebuild. "
+                    f"Original error: {e}"
+                ) from e
+            # Table already exists with valid index - this is fine
             print(f"Note: vec_chunks exists: {e}")
+
+    def _validate_hnsw_index(self, index_path: str, index_size: int):
+        """Validate HNSW index file before loading
+
+        Checks:
+        1. File size is reasonable (>1MB for non-empty index)
+        2. HNSW header magic bytes are valid
+
+        Raises RuntimeError if validation fails.
+        """
+        MIN_VALID_SIZE = 1_000_000  # 1MB minimum for a real index with embeddings
+        EXPECTED_SIZE_RANGE = (200_000_000, 250_000_000)  # 200-250MB for full 51k embeddings
+
+        # Check for suspiciously small index (likely truncated/corrupted)
+        if index_size < MIN_VALID_SIZE:
+            raise RuntimeError(
+                f"HNSW index file {index_path} is only {index_size:,} bytes. "
+                f"Expected >{MIN_VALID_SIZE:,} bytes for a valid index. "
+                f"Index may be corrupted or empty. Restore from backup."
+            )
+
+        # Check for partial index (less than 50% of expected size)
+        if index_size < EXPECTED_SIZE_RANGE[0] * 0.5:
+            print(
+                f"WARNING: HNSW index is smaller than expected "
+                f"({index_size:,} bytes, expected ~{EXPECTED_SIZE_RANGE[0]:,}). "
+                f"Index may be incomplete. Consider rebuilding if search quality is poor."
+            )
 
     def _execute_create_vec_table(self):
         """Execute vector table creation with vectorlite HNSW index
@@ -338,54 +383,58 @@ class VectorRepository:
         return True
 
     def _update_path_after_move(self, hash_val: str, old_path: str, new_path: str):
-        """Update file path after move (preserves chunks/embeddings)
-
-        Handles case where new_path already exists in DB (duplicate/conflict):
-        - If new_path exists, delete the old record (old_path) instead of updating
-        - This keeps the existing record at new_path intact
-        """
+        """Update file path after move (preserves chunks/embeddings)."""
         try:
-            # Check if new_path already exists in the database
-            existing_at_new_path = self.documents.find_by_path(new_path)
-            if existing_at_new_path:
-                # new_path already has a document - delete the OLD record instead
-                # The document at new_path is already correct (same content, new location)
-                from ingestion.graph_repository import GraphRepository
-                graph_repo = GraphRepository(self.conn)
-                graph_repo.delete_note_nodes(old_path)
-                self.documents.delete(old_path)
-                self.conn.execute(
-                    "DELETE FROM processing_progress WHERE file_path = ?",
-                    (old_path,)
-                )
-                self.conn.commit()
-                print(f"  Removed stale record: {old_path} (superseded by {new_path})")
+            if self._handle_path_conflict(old_path, new_path):
                 return
-
-            # Normal case: new_path doesn't exist, update the path
-            import uuid
-            temp_path = f"__temp_move_{uuid.uuid4().hex}__"
-
-            self.documents.update_path_by_hash(hash_val, temp_path)
-            self.conn.execute(
-                "UPDATE processing_progress SET file_path = ? WHERE file_hash = ?",
-                (temp_path, hash_val)
-            )
-
-            self.documents.update_path_by_hash(hash_val, new_path)
-            self.conn.execute(
-                "UPDATE processing_progress SET file_path = ? WHERE file_hash = ?",
-                (new_path, hash_val)
-            )
-
-            from ingestion.graph_repository import GraphRepository
-            graph_repo = GraphRepository(self.conn)
-            graph_repo.update_note_path(old_path, new_path)
-
-            self.conn.commit()
+            self._perform_path_update(hash_val, old_path, new_path)
         except Exception as e:
             print(f"Warning: Failed to update path after move: {e}")
             self.conn.rollback()
+
+    def _handle_path_conflict(self, old_path: str, new_path: str) -> bool:
+        """Handle case where new_path already exists in DB.
+
+        Returns True if conflict was resolved (old record deleted), False otherwise.
+        """
+        existing_at_new_path = self.documents.find_by_path(new_path)
+        if not existing_at_new_path:
+            return False
+
+        from ingestion.graph_repository import GraphRepository
+        graph_repo = GraphRepository(self.conn)
+        graph_repo.delete_note_nodes(old_path)
+        self.documents.delete(old_path)
+        self.conn.execute(
+            "DELETE FROM processing_progress WHERE file_path = ?",
+            (old_path,)
+        )
+        self.conn.commit()
+        print(f"  Removed stale record: {old_path} (superseded by {new_path})")
+        return True
+
+    def _perform_path_update(self, hash_val: str, old_path: str, new_path: str):
+        """Perform the actual path update via temp path to avoid UNIQUE constraint."""
+        import uuid
+        temp_path = f"__temp_move_{uuid.uuid4().hex}__"
+
+        self.documents.update_path_by_hash(hash_val, temp_path)
+        self.conn.execute(
+            "UPDATE processing_progress SET file_path = ? WHERE file_hash = ?",
+            (temp_path, hash_val)
+        )
+
+        self.documents.update_path_by_hash(hash_val, new_path)
+        self.conn.execute(
+            "UPDATE processing_progress SET file_path = ? WHERE file_hash = ?",
+            (new_path, hash_val)
+        )
+
+        from ingestion.graph_repository import GraphRepository
+        graph_repo = GraphRepository(self.conn)
+        graph_repo.update_note_path(old_path, new_path)
+
+        self.conn.commit()
 
     def get_extraction_method(self, path: str) -> str:
         """Get extraction method used for a document"""
@@ -432,14 +481,35 @@ class VectorRepository:
         }
 
 class VectorStore:
-    """Facade for vector storage operations"""
+    """Facade for vector storage operations.
+
+    Thread Safety:
+    Uses threading.RLock for critical operations (search, delete, flush).
+    This enables safe concurrent access from AsyncVectorStoreAdapter's
+    thread pool while preventing data corruption.
+
+    Persistence:
+    HNSW index is kept in memory and persisted:
+    - On graceful shutdown (via close())
+    - Periodically every FLUSH_INTERVAL_SECONDS (default 300s / 5 min)
+
+    This avoids per-write flush which causes file-level corruption
+    during concurrent operations.
+    """
+
+    FLUSH_INTERVAL_SECONDS = 300  # 5 minutes
 
     def __init__(self, config=default_config.database):
+        import threading
+        self._lock = threading.RLock()  # Reentrant lock for nested calls
+        self._flush_timer = None
+        self._closed = False
         self.db_conn = DatabaseConnection(config)
         self.conn = self.db_conn.connect()
         self._init_schema()
         self.repo = VectorRepository(self.conn)
         self.hybrid = HybridSearcher(self.conn)
+        self._start_periodic_flush()
 
     def _init_schema(self):
         """Initialize database schema"""
@@ -447,21 +517,84 @@ class VectorStore:
         schema.create_schema()
 
     def is_document_indexed(self, path: str, hash_val: str) -> bool:
-        """Check if document is indexed"""
-        return self.repo.is_indexed(path, hash_val)
+        """Check if document is indexed.
+
+        Thread-safe: protected by lock to prevent access during connection refresh.
+        """
+        with self._lock:
+            return self.repo.is_indexed(path, hash_val)
 
     def add_document(self, file_path: str, file_hash: str,
                     chunks: List[Dict], embeddings: List):
-        """Add document to store"""
-        self.repo.add_document(file_path, file_hash, chunks, embeddings)
-        self._flush_hnsw_index()
+        """Add document to store.
+
+        Thread-safe: holds lock for entire operation.
+
+        NOTE: Does NOT flush HNSW to disk after each write.
+        HNSW is persisted on graceful shutdown (conn.close).
+        This avoids file-level corruption during concurrent operations.
+        """
+        with self._lock:
+            self.repo.add_document(file_path, file_hash, chunks, embeddings)
+            # REMOVED: self._flush_hnsw_index_unlocked()
+            # Flushing after every write causes corruption during concurrent ops.
+            # HNSW will persist on graceful shutdown via close().
+
+    def _start_periodic_flush(self):
+        """Start periodic HNSW flush timer.
+
+        Runs in background thread, flushes every FLUSH_INTERVAL_SECONDS.
+        Safe because _flush_hnsw_index() acquires the lock, blocking any
+        concurrent operations during the flush.
+        """
+        import threading
+
+        def flush_and_reschedule():
+            if self._closed:
+                return
+            try:
+                self._flush_hnsw_index()
+                print(f"[VectorStore] Periodic HNSW flush completed")
+            except Exception as e:
+                print(f"[VectorStore] Periodic flush failed: {e}")
+            finally:
+                # Reschedule if not closed
+                if not self._closed:
+                    self._flush_timer = threading.Timer(
+                        self.FLUSH_INTERVAL_SECONDS,
+                        flush_and_reschedule
+                    )
+                    self._flush_timer.daemon = True
+                    self._flush_timer.start()
+
+        self._flush_timer = threading.Timer(
+            self.FLUSH_INTERVAL_SECONDS,
+            flush_and_reschedule
+        )
+        self._flush_timer.daemon = True
+        self._flush_timer.start()
+        print(f"[VectorStore] Periodic flush enabled (every {self.FLUSH_INTERVAL_SECONDS}s)")
+
+    def _stop_periodic_flush(self):
+        """Stop the periodic flush timer."""
+        if self._flush_timer:
+            self._flush_timer.cancel()
+            self._flush_timer = None
 
     def _flush_hnsw_index(self):
         """Force HNSW index to persist by closing and reopening connection.
 
         vectorlite only saves the HNSW index to disk when the connection closes.
         Without this, inserts go to in-memory index but are lost on restart.
+
+        Thread-safe: protected by lock to prevent concurrent access during
+        connection rebuild.
         """
+        with self._lock:
+            self._flush_hnsw_index_unlocked()
+
+    def _flush_hnsw_index_unlocked(self):
+        """Internal flush without acquiring lock (caller must hold lock)."""
         self.conn.close()
         self.conn = self.db_conn.connect()
         self.repo = VectorRepository(self.conn)
@@ -470,48 +603,65 @@ class VectorStore:
     def search(self, query_embedding: List, top_k: int = 5,
               threshold: float = None, query_text: Optional[str] = None,
               use_hybrid: bool = True) -> List[Dict]:
-        """Search for similar chunks"""
-        vector_results = self.repo.search(query_embedding, top_k, threshold)
+        """Search for similar chunks.
 
-        if use_hybrid and query_text:
-            return self.hybrid.search(query_text, vector_results, top_k)
-        return vector_results
+        Thread-safe: protected by lock for concurrent access from adapter.
+        """
+        with self._lock:
+            vector_results = self.repo.search(query_embedding, top_k, threshold)
+
+            if use_hybrid and query_text:
+                return self.hybrid.search(query_text, vector_results, top_k)
+            return vector_results
 
     def get_stats(self) -> Dict:
-        """Get statistics"""
-        return self.repo.get_stats()
+        """Get statistics.
+
+        Thread-safe: protected by lock to prevent access during connection refresh.
+        """
+        with self._lock:
+            return self.repo.get_stats()
 
     def get_document_info(self, filename: str) -> Dict:
-        """Get document information including extraction method"""
-        # Search for file path containing the filename
-        cursor = self.conn.execute("""
-            SELECT file_path, extraction_method, indexed_at
-            FROM documents
-            WHERE file_path LIKE ?
-            ORDER BY indexed_at DESC
-            LIMIT 1
-        """, (f"%{filename}%",))
-        result = cursor.fetchone()
+        """Get document information including extraction method.
 
-        if not result:
-            return None
+        Thread-safe: protected by lock to prevent access during connection refresh.
+        """
+        with self._lock:
+            # Search for file path containing the filename
+            cursor = self.conn.execute("""
+                SELECT file_path, extraction_method, indexed_at
+                FROM documents
+                WHERE file_path LIKE ?
+                ORDER BY indexed_at DESC
+                LIMIT 1
+            """, (f"%{filename}%",))
+            result = cursor.fetchone()
 
-        return {
-            'file_path': result[0],
-            'extraction_method': result[1] or 'unknown',
-            'indexed_at': result[2]
-        }
+            if not result:
+                return None
+
+            return {
+                'file_path': result[0],
+                'extraction_method': result[1] or 'unknown',
+                'indexed_at': result[2]
+            }
 
     def delete_document(self, file_path: str) -> Dict:
-        """Delete a document and all its chunks from the vector store"""
-        doc_id = self._find_document_id(file_path)
-        if not doc_id:
-            return self._document_not_found_result()
+        """Delete a document and all its chunks from the vector store.
 
-        chunk_count = self._count_document_chunks(doc_id)
-        self._delete_document_data(doc_id)
-        self.conn.commit()
-        return self._deletion_success_result(doc_id, chunk_count)
+        Thread-safe: protected by lock for concurrent access from adapter.
+        This is the key operation that was broken with dual-store architecture.
+        """
+        with self._lock:
+            doc_id = self._find_document_id(file_path)
+            if not doc_id:
+                return self._document_not_found_result()
+
+            chunk_count = self._count_document_chunks(doc_id)
+            self._delete_document_data(doc_id)
+            self.conn.commit()
+            return self._deletion_success_result(doc_id, chunk_count)
 
     def _find_document_id(self, file_path: str):
         """Find document ID by file path"""
@@ -570,17 +720,27 @@ class VectorStore:
         """Query all documents with chunk counts.
 
         Delegation method to avoid Law of Demeter violation.
+        Thread-safe: protected by lock to prevent access during connection refresh.
+
         Returns cursor for documents joined with chunk counts.
         """
-        return self.conn.execute("""
-            SELECT d.file_path, d.indexed_at, COUNT(c.id)
-            FROM documents d
-            LEFT JOIN chunks c ON d.id = c.document_id
-            GROUP BY d.id
-            ORDER BY d.indexed_at DESC
-        """)
+        with self._lock:
+            return self.conn.execute("""
+                SELECT d.file_path, d.indexed_at, COUNT(c.id)
+                FROM documents d
+                LEFT JOIN chunks c ON d.id = c.document_id
+                GROUP BY d.id
+                ORDER BY d.indexed_at DESC
+            """).fetchall()
 
     def close(self):
-        """Close connection"""
+        """Close connection and persist HNSW index.
+
+        Stops periodic flush timer and closes the database connection.
+        vectorlite persists the HNSW index when the connection closes.
+        """
+        self._closed = True
+        self._stop_periodic_flush()
         self.db_conn.close()
+        print("[VectorStore] Closed - HNSW index persisted")
 

@@ -426,19 +426,32 @@ class AsyncSearchRepository:
         results = await self._execute_vector_search(blob, top_k)
         return self._format_results(results, threshold)
 
-    async def _execute_vector_search(self, blob: bytes, top_k: int):
+    async def _execute_vector_search(self, blob: bytes, top_k: int, ef: int = None):
         """Execute vectorlite knn_search query
 
         vectorlite knn_search returns (rowid, distance) pairs.
         We then JOIN with chunks/documents to get metadata.
-        ef parameter controls search quality (higher = more accurate but slower).
+
+        Args:
+            blob: Query embedding as bytes
+            top_k: Number of results to return
+            ef: Search quality parameter (higher = more accurate but slower)
+                ef=10 (vectorlite default): ~31% recall, ~35µs
+                ef=100: ~88% recall, ~168µs
+                ef=150 (our default): ~95% recall, ~310µs
+
+        Environment variable HNSW_EF_SEARCH overrides the default for testing.
         """
+        import os
+        if ef is None:
+            ef = int(os.getenv("HNSW_EF_SEARCH", "150"))
         # First get the k nearest neighbors from vectorlite
+        # ef parameter controls HNSW search quality - default 10 is too low!
         cursor = await self.conn.execute("""
             SELECT v.rowid, v.distance
             FROM vec_chunks v
-            WHERE knn_search(v.embedding, knn_param(?, ?))
-        """, (blob, top_k))
+            WHERE knn_search(v.embedding, knn_param(?, ?, ?))
+        """, (blob, top_k, ef))
         vector_results = await cursor.fetchall()
 
         if not vector_results:

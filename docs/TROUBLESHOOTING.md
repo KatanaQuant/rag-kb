@@ -113,6 +113,126 @@ docker-compose up -d
 
 ---
 
+## Search & Index Issues
+
+### Search Returns No Results (or Wrong Results)
+
+**Symptom**: Query returns no results or irrelevant results for content you know exists.
+
+**Check 1: HNSW Index Health**
+```bash
+# Verify indexes are consistent
+curl http://localhost:8000/api/maintenance/verify-integrity | jq
+
+# Look for:
+# - "healthy": true/false
+# - HNSW vs chunks count match
+# - FTS vs chunks count match
+```
+
+**Check 2: Document is Indexed**
+```bash
+# Search for the document
+curl "http://localhost:8000/documents/search?pattern=*mybook*"
+
+# Check if chunks exist
+curl http://localhost:8000/documents/integrity | jq '.issues'
+```
+
+**Check 3: Orphan Embeddings**
+```bash
+# Check for orphans (chunks without documents)
+curl http://localhost:8000/api/maintenance/verify-integrity | jq '.checks'
+
+# Clean up orphans
+curl -X POST http://localhost:8000/api/maintenance/cleanup-orphans \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false}'
+```
+
+### HNSW Index Corruption
+
+**Symptom**:
+- Newly indexed documents don't appear in search
+- `verify-integrity` shows HNSW count mismatch
+- Logs show "HNSW write error"
+
+**Cause**: Container restart during indexing, disk full, or concurrent write conflicts. vectorlite only persists HNSW index when connection closes.
+
+**Fix: Rebuild HNSW Index**
+```bash
+# Preview rebuild
+curl -X POST http://localhost:8000/api/maintenance/rebuild-hnsw \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
+
+# Execute rebuild (fast - uses existing embeddings)
+curl -X POST http://localhost:8000/api/maintenance/rebuild-hnsw \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false}'
+```
+
+**Prevention**:
+- Use `docker-compose stop` (graceful) not `docker-compose kill`
+- Don't kill containers during active indexing
+- Monitor disk space
+
+For detailed HNSW postmortem, see [postmortem-hnsw-index-not-persisting.md](postmortem-hnsw-index-not-persisting.md).
+
+### FTS/Keyword Search Not Working
+
+**Symptom**: Exact word matches not found, BM25 scores always zero.
+
+**Fix: Rebuild FTS Index**
+```bash
+# Preview rebuild
+curl -X POST http://localhost:8000/api/maintenance/rebuild-fts \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
+
+# Execute rebuild
+curl -X POST http://localhost:8000/api/maintenance/rebuild-fts \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false}'
+```
+
+### Both Vector and Keyword Search Broken
+
+**Fix: Repair Both Indexes**
+```bash
+# Convenience endpoint that rebuilds HNSW + FTS together
+curl -X POST http://localhost:8000/api/maintenance/repair-indexes \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false}'
+```
+
+### Document Shows as Indexed but Not Searchable
+
+**Symptom**: Document appears in `/documents` but queries don't find its content.
+
+**Diagnose**:
+```bash
+# Check document integrity
+curl "http://localhost:8000/documents/integrity/path/to/file.pdf"
+
+# Look for: zero_chunks, missing_embeddings, chunk_count_mismatch
+```
+
+**Fix: Force Reindex**
+```bash
+# Reindex specific file
+curl -X POST http://localhost:8000/api/maintenance/reindex-path \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/app/kb/path/to/file.pdf", "dry_run": false}'
+
+# Or reindex entire directory
+curl -X POST http://localhost:8000/api/maintenance/reindex-path \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/app/kb/books/", "dry_run": false}'
+```
+
+---
+
 ## Database Issues
 
 ### Database Locked

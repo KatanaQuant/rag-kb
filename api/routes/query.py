@@ -25,7 +25,8 @@ async def query(request_data: QueryRequest, request: Request):
             app_state.get_model(),
             app_state.get_async_vector_store(),
             app_state.get_query_cache(),
-            app_state.get_reranker()
+            app_state.get_reranker(),
+            app_state.get_query_expander()
         )
         return await executor.execute(request_data)
     except Exception as e:

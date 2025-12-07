@@ -270,7 +270,8 @@ class TestAsyncVectorStoreIndexRefresh:
             try:
                 await store._refresh_if_index_changed()
             except Exception:
-                pass  # Expected without vectorlite
+                # May fail without vectorlite extension, but refresh should still be triggered
+                pass
 
             assert refresh_called, "Refresh should be called when index mtime changes"
 

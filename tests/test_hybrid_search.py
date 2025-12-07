@@ -3,12 +3,12 @@ Tests for hybrid search functionality
 """
 import sqlite3
 import pytest
-from hybrid_search import KeywordSearcher, RankFusion, HybridSearcher
+from hybrid_search import KeywordSearcher, BM25Searcher, RankFusion, HybridSearcher
 
 
 @pytest.fixture
 def db_conn():
-    """Create test database"""
+    """Create test database with FTS5 support"""
     conn = sqlite3.connect(":memory:")
     conn.execute("""
         CREATE TABLE documents (
@@ -35,6 +35,34 @@ def db_conn():
     conn.execute("INSERT INTO chunks VALUES (2, 1, 'deep neural networks', 2)")
     conn.execute("INSERT INTO fts_chunks VALUES (1, 'machine learning algorithms')")
     conn.execute("INSERT INTO fts_chunks VALUES (2, 'deep neural networks')")
+    conn.commit()
+    return conn
+
+
+@pytest.fixture
+def db_conn_no_fts():
+    """Create test database without FTS5 (for BM25 testing)"""
+    conn = sqlite3.connect(":memory:")
+    conn.execute("""
+        CREATE TABLE documents (
+            id INTEGER PRIMARY KEY,
+            file_path TEXT,
+            file_hash TEXT
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY,
+            document_id INTEGER,
+            content TEXT,
+            page INTEGER
+        )
+    """)
+
+    conn.execute("INSERT INTO documents VALUES (1, 'test.pdf', 'hash1')")
+    conn.execute("INSERT INTO chunks VALUES (1, 1, 'machine learning algorithms', 1)")
+    conn.execute("INSERT INTO chunks VALUES (2, 1, 'deep neural networks', 2)")
+    conn.execute("INSERT INTO chunks VALUES (3, 1, 'launch your business in 27 days', 3)")
     conn.commit()
     return conn
 
@@ -98,15 +126,23 @@ def test_rank_fusion_boosts_overlap():
 
 
 def test_hybrid_searcher_graceful_fallback(db_conn):
-    """Test hybrid search falls back to vector on error"""
+    """Test hybrid search falls back to vector on BM25 search error
+
+    When BM25 search or fusion fails, HybridSearcher should return
+    the original vector results unchanged.
+    """
+    from unittest.mock import patch
+
     hybrid = HybridSearcher(db_conn)
     vector_results = [
         {'content': 'test', 'source': 'test.pdf', 'page': 1, 'score': 0.9}
     ]
 
-    db_conn.execute("DROP TABLE fts_chunks")
+    # Mock BM25 search to raise an exception
+    with patch.object(hybrid.keyword, 'search', side_effect=Exception("BM25 failure")):
+        results = hybrid.search("test query", vector_results, top_k=5)
 
-    results = hybrid.search("test query", vector_results, top_k=5)
+    # Should fall back to vector results unchanged when BM25 search fails
     assert results == vector_results
 
 

@@ -52,4 +52,7 @@ core.*
 
 # E2E testing
 *.log
-up-next/benchmarks/
+up-next
+
+# Benchmark results (keep run_benchmark.py tracked)
+benchmarks/*.json

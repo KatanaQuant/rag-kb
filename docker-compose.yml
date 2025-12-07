@@ -1,6 +1,25 @@
 version: '3.8'
 
 services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./.cache/ollama:/root/.ollama  # Persist models
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+
   rag-api:
     build:
       context: ./api
@@ -25,6 +44,7 @@ services:
       - ./.cache/easyocr:/home/appuser/.EasyOCR  # EasyOCR model cache (detection models)
       - ./.cache/rapidocr:/opt/venv/lib/python3.13/site-packages/rapidocr/models  # RapidOCR model cache (OCR models)
       - ./.cache/clamav:/var/lib/clamav  # ClamAV virus database cache (persists ~230MB signatures)
+      - ./.cache/query_expansion:/app/data/query_expansion  # Query expansion cache
     environment:
       - PYTHONUNBUFFERED=1
       - MODEL_NAME=${MODEL_NAME:-Snowflake/snowflake-arctic-embed-l-v2.0}
@@ -44,6 +64,16 @@ services:
       - NUMEXPR_NUM_THREADS=${OMP_NUM_THREADS:-2}  # NumExpr threads (follows OMP)
       # Reranking (⚠️ REQUIRES GPU - disabled by default for CPU builds)
       - RERANKING_ENABLED=${RERANKING_ENABLED:-false}  # Enable only with GPU (100x slower on CPU)
+      # LLM Query Expansion via Ollama
+      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
+      - QUERY_EXPANSION_ENABLED=${QUERY_EXPANSION_ENABLED:-false}
+      - QUERY_EXPANSION_MODEL=${QUERY_EXPANSION_MODEL:-qwen2.5:0.5b}
+      # Search tuning (for permutation testing)
+      - HNSW_EF_SEARCH=${HNSW_EF_SEARCH:-150}
+      - HYBRID_SEARCH_ENABLED=${HYBRID_SEARCH_ENABLED:-true}
+      - TITLE_BOOST_ENABLED=${TITLE_BOOST_ENABLED:-true}
+    depends_on:
+      - ollama
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

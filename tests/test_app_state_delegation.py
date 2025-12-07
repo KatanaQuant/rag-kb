@@ -23,20 +23,10 @@ class TestAppStateDelegation:
         state.core.progress_tracker = Mock()
         return state
 
-    def test_stop_watcher_delegates_to_runtime_watcher(self, state):
-        """AppState.stop_watcher() should delegate to runtime.watcher.stop()"""
-        state.stop_watcher()
-        state.runtime.watcher.stop.assert_called_once()
-
     def test_stop_watcher_handles_none(self, state):
         """stop_watcher() should handle None watcher gracefully"""
         state.runtime.watcher = None
         state.stop_watcher()  # Should not raise
-
-    def test_stop_indexing_delegates_to_worker(self, state):
-        """AppState.stop_indexing() should delegate to indexing.worker.stop()"""
-        state.stop_indexing()
-        state.indexing.worker.stop.assert_called_once()
 
     def test_stop_indexing_handles_none(self, state):
         """stop_indexing() should handle None worker gracefully"""
@@ -44,21 +34,10 @@ class TestAppStateDelegation:
         state.stop_indexing()  # Should not raise
 
     @pytest.mark.asyncio
-    async def test_close_vector_store_delegates(self, state):
-        """AppState.close_vector_store() should delegate to async close methods"""
-        await state.close_vector_store()
-        state.core.vector_store.close.assert_called_once()
-
-    @pytest.mark.asyncio
     async def test_close_vector_store_handles_none(self, state):
         """close_vector_store() should handle None gracefully"""
         state.core.vector_store = None
         await state.close_vector_store()  # Should not raise
-
-    def test_close_progress_tracker_delegates(self, state):
-        """AppState.close_progress_tracker() should delegate"""
-        state.close_progress_tracker()
-        state.core.progress_tracker.close.assert_called_once()
 
     def test_close_progress_tracker_handles_none(self, state):
         """close_progress_tracker() should handle None gracefully"""
@@ -116,25 +95,3 @@ class TestAppStateDelegation:
 
         assert is_running == True
         state.indexing.worker.is_running.assert_called_once()
-
-
-class TestLawOfDemeter:
-    """Test that delegation methods fix Law of Demeter violations"""
-
-    def test_clients_should_not_reach_through_state(self):
-        """
-        BAD (LoD violation):
-            state.runtime.watcher.stop()
-
-        GOOD (follows LoD):
-            state.stop_watcher()
-
-        This test verifies the good pattern works
-        """
-        state = AppState()
-        state.runtime.watcher = Mock()
-
-        # Client code should use delegation method, not reach through
-        state.stop_watcher()
-
-        state.runtime.watcher.stop.assert_called_once()

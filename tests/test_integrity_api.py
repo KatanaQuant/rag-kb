@@ -11,15 +11,6 @@ from fastapi.testclient import TestClient
 class TestIntegrityEndpoint:
     """Test /documents/integrity endpoint"""
 
-    @pytest.fixture
-    def mock_app_state(self):
-        """Create mock app state with required components"""
-        app_state = Mock()
-        app_state.core = Mock()
-        app_state.core.progress_tracker = Mock()
-        app_state.core.async_vector_store = Mock()
-        return app_state
-
     def test_returns_completeness_report(self, mock_app_state):
         """Endpoint should return completeness summary"""
         from operations.completeness_reporter import CompletenessReporter

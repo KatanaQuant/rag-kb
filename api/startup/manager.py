@@ -13,7 +13,7 @@ import threading
 
 from sentence_transformers import SentenceTransformer
 from config import default_config
-from ingestion import DocumentProcessor, VectorStore, AsyncVectorStore, ProcessingProgressTracker
+from ingestion import DocumentProcessor, VectorStore, ProcessingProgressTracker
 from watcher import FileWatcherService
 from query_cache import QueryCache
 from value_objects import IndexingStats
@@ -66,6 +66,7 @@ class StartupManager:
         self._init_processor()
         self._init_cache()
         self._init_reranker()
+        self._init_query_expander()
         self._init_queue_and_worker()
         print("RAG system ready! Starting sanitization and indexing...")
         self._start_background_indexing()
@@ -87,24 +88,25 @@ class StartupManager:
         self.state.core.model = loader.load(model_name)
 
     async def _init_store(self):
-        """Initialize both sync and async vector stores
+        """Initialize vector store with unified architecture.
 
-        Hybrid Architecture:
-        - Sync VectorStore: Used by pipeline workers for background writes
-        - Async AsyncVectorStore: Used by API routes for non-blocking reads
+        Unified Architecture (v2.2.3+):
+        - Single sync VectorStore with thread-safe locking
+        - AsyncVectorStoreAdapter created lazily on first access
+        - Eliminates dual-store HNSW corruption issues
+        - DELETE operations now work correctly from API
 
-        Both stores use the same SQLite database with WAL mode for safe concurrent access.
+        The adapter wraps the sync store using asyncio.to_thread() for
+        non-blocking API operations while maintaining thread safety.
         """
-        print("Initializing vector stores...")
+        print("Initializing vector store (unified architecture)...")
 
-        # Initialize sync store for pipeline workers
+        # Initialize single sync store (thread-safe via RLock)
         self.state.core.vector_store = VectorStore()
-        print("Sync vector store initialized (for pipeline workers)")
+        print("Vector store initialized (thread-safe, adapter created lazily)")
 
-        # Initialize async store for API routes
-        self.state.core.async_vector_store = AsyncVectorStore()
-        await self.state.initialize_async_vector_store()
-        print("Async vector store initialized (for API routes)")
+        # Note: async adapter is created lazily via CoreServices.async_vector_store property
+        # No explicit initialization needed - just access state.core.async_vector_store
 
     def _init_progress_tracker(self):
         """Initialize progress tracker"""
@@ -136,6 +138,21 @@ class StartupManager:
             print(f"Reranker enabled: {factory.config.reranking.model} (top_n={factory.reranking_top_n})")
         else:
             print("Reranker disabled")
+
+    def _init_query_expander(self):
+        """Initialize LLM-based query expander using Ollama"""
+        import os
+        from pipeline.query_expander import QueryExpander
+
+        enabled = os.getenv("QUERY_EXPANSION_ENABLED", "false").lower() == "true"
+        self.state.query.query_expander = QueryExpander(enabled=enabled)
+
+        if enabled:
+            model = os.getenv("QUERY_EXPANSION_MODEL", "qwen2.5:0.5b")
+            ollama_url = os.getenv("OLLAMA_URL", "http://ollama:11434")
+            print(f"Query expansion enabled: {model} via {ollama_url}")
+        else:
+            print("Query expansion disabled")
 
     # ============ Pipeline Phase ============
 

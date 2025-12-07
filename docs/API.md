@@ -2,7 +2,7 @@
 
 Complete guide to managing and monitoring your RAG-KB instance via API endpoints.
 
-**Version**: v2.2.0-beta
+**Version**: v2.2.4-dev
 
 ---
 
@@ -681,6 +681,258 @@ curl -X DELETE http://localhost:8000/api/security/cache
 ---
 
 ## System Maintenance
+
+### Verify Database Integrity
+
+Check overall health of database indexes (HNSW, FTS, chunks).
+
+**Endpoint**: `GET /api/maintenance/verify-integrity`
+
+```bash
+curl http://localhost:8000/api/maintenance/verify-integrity | jq
+```
+
+**Response**:
+```json
+{
+  "healthy": true,
+  "issues": [],
+  "checks": [
+    {"name": "Referential Integrity", "passed": true, "details": "All chunks have valid document references"},
+    {"name": "HNSW Index Consistency", "passed": true, "details": "51544 chunks, 51544 in HNSW"},
+    {"name": "FTS Index Consistency", "passed": true, "details": "51544 chunks, 51544 in FTS"}
+  ],
+  "table_counts": {"documents": 1636, "chunks": 51544, "vec_chunks": 51544, "fts_chunks": 51544}
+}
+```
+
+**Use Cases**:
+- Pre-maintenance health check
+- Post-crash verification
+- Diagnosing search issues
+
+---
+
+### Clean Up Orphan Data
+
+Remove orphan chunks (chunks without parent documents) and their embeddings.
+
+**Endpoint**: `POST /api/maintenance/cleanup-orphans`
+
+```bash
+# Preview what would be deleted
+curl -X POST http://localhost:8000/api/maintenance/cleanup-orphans \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
+
+# Execute cleanup
+curl -X POST http://localhost:8000/api/maintenance/cleanup-orphans \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false}'
+```
+
+**Response**:
+```json
+{
+  "orphan_chunks_found": 150,
+  "orphan_chunks_deleted": 150,
+  "vec_chunks_cleaned": 150,
+  "fts_chunks_cleaned": 150,
+  "dry_run": false
+}
+```
+
+---
+
+### Rebuild HNSW Index
+
+Rebuild the HNSW vector index from existing embeddings. **Critical for HNSW recovery after corruption.**
+
+**Endpoint**: `POST /api/maintenance/rebuild-hnsw`
+
+```bash
+# Preview
+curl -X POST http://localhost:8000/api/maintenance/rebuild-hnsw \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
+
+# Execute (fast - uses existing embeddings, no re-embedding)
+curl -X POST http://localhost:8000/api/maintenance/rebuild-hnsw \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false}'
+```
+
+**Response**:
+```json
+{
+  "chunks_processed": 51544,
+  "orphans_removed": 0,
+  "duration_seconds": 55.2,
+  "dry_run": false
+}
+```
+
+**When to Use**:
+- After HNSW write errors
+- `verify-integrity` shows HNSW count mismatch
+- Newly indexed documents not appearing in search
+
+---
+
+### Rebuild FTS Index
+
+Rebuild the FTS5 full-text search index from chunk content.
+
+**Endpoint**: `POST /api/maintenance/rebuild-fts`
+
+```bash
+# Preview
+curl -X POST http://localhost:8000/api/maintenance/rebuild-fts \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
+
+# Execute
+curl -X POST http://localhost:8000/api/maintenance/rebuild-fts \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false}'
+```
+
+**Response**:
+```json
+{
+  "chunks_processed": 51544,
+  "duration_seconds": 12.3,
+  "dry_run": false
+}
+```
+
+**When to Use**:
+- Keyword/BM25 search returns no results
+- `verify-integrity` shows FTS count mismatch
+
+---
+
+### Repair Both Indexes
+
+Convenience endpoint that rebuilds both HNSW and FTS indexes together.
+
+**Endpoint**: `POST /api/maintenance/repair-indexes`
+
+```bash
+curl -X POST http://localhost:8000/api/maintenance/repair-indexes \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false}'
+```
+
+**Response**:
+```json
+{
+  "hnsw": {"chunks_processed": 51544, "orphans_removed": 0, "duration_seconds": 55.2},
+  "fts": {"chunks_processed": 51544, "duration_seconds": 12.3},
+  "total_duration_seconds": 67.5,
+  "dry_run": false
+}
+```
+
+---
+
+### Reindex Specific Path
+
+Delete and re-index a specific file or directory through the full pipeline.
+
+**Endpoint**: `POST /api/maintenance/reindex-path`
+
+```bash
+# Reindex single file
+curl -X POST http://localhost:8000/api/maintenance/reindex-path \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/app/kb/books/mybook.pdf", "dry_run": false}'
+
+# Reindex entire directory
+curl -X POST http://localhost:8000/api/maintenance/reindex-path \
+  -H "Content-Type: application/json" \
+  -d '{"path": "/app/kb/golang/", "dry_run": false}'
+```
+
+**Response**:
+```json
+{
+  "files_found": 5,
+  "files_queued": 5,
+  "documents_deleted": 5,
+  "chunks_deleted": 1250,
+  "dry_run": false
+}
+```
+
+**Use Cases**:
+- Force re-process after pipeline changes
+- Re-index after manual file edits
+- Fix documents with integrity issues
+
+---
+
+### Rebuild All Embeddings
+
+Full re-embed of all documents. **Long-running operation** - use sparingly.
+
+**Endpoint**: `POST /api/maintenance/rebuild-embeddings`
+
+```bash
+# Preview
+curl -X POST http://localhost:8000/api/maintenance/rebuild-embeddings \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
+
+# Execute (may take 30+ minutes for large KBs)
+curl -X POST http://localhost:8000/api/maintenance/rebuild-embeddings \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false, "batch_size": 32}'
+```
+
+**Response**:
+```json
+{
+  "chunks_processed": 51544,
+  "duration_seconds": 1850.5,
+  "dry_run": false
+}
+```
+
+**When to Use**:
+- Embedding model changed
+- Dimension mismatch after migration
+- Complete database rebuild required
+
+---
+
+### Partial Rebuild (Re-embed by ID Range)
+
+Re-embed only specific chunks by ID range. Faster than full rebuild.
+
+**Endpoint**: `POST /api/maintenance/partial-rebuild`
+
+```bash
+curl -X POST http://localhost:8000/api/maintenance/partial-rebuild \
+  -H "Content-Type: application/json" \
+  -d '{"start_id": 70000, "end_id": 72000, "dry_run": false}'
+```
+
+**Response**:
+```json
+{
+  "chunks_found": 2000,
+  "chunks_processed": 2000,
+  "duration_seconds": 45.2,
+  "dry_run": false
+}
+```
+
+**When to Use**:
+- Known range of corrupted embeddings
+- Targeted repair after investigation
+
+---
 
 ### Reindex Orphaned Files
 

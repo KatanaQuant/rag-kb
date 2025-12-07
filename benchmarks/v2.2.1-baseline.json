@@ -1,73 +1,73 @@
 {
   "version": "v2.2.1-baseline",
-  "timestamp": "2025-12-05T20:32:07.088059",
+  "timestamp": "2025-12-07T09:37:04.705449",
   "api_url": "http://localhost:8000",
   "summary": {
     "total": 26,
-    "correct": 14,
-    "acceptable": 5,
-    "wrong": 7,
+    "correct": 18,
+    "acceptable": 6,
+    "wrong": 2,
     "in_top_5": 21,
-    "accuracy": 0.5384615384615384,
-    "usable_rate": 0.7307692307692307,
+    "accuracy": 0.6923076923076923,
+    "usable_rate": 0.9230769230769231,
     "top_5_rate": 0.8076923076923077,
-    "avg_latency_ms": 368.68019287402814
+    "avg_latency_ms": 632.8781384688157
   },
   "category_stats": {
     "business_books": {
       "total": 8,
-      "correct": 6,
+      "correct": 8,
       "acceptable": 0,
-      "wrong": 2,
-      "in_top_5": 7,
-      "accuracy": 0.75,
-      "usable_rate": 0.75,
-      "top_5_rate": 0.875,
-      "avg_latency_ms": 405.0302803516388
+      "wrong": 0,
+      "in_top_5": 8,
+      "accuracy": 1.0,
+      "usable_rate": 1.0,
+      "top_5_rate": 1.0,
+      "avg_latency_ms": 741.0785555839539
     },
     "programming_books": {
       "total": 7,
-      "correct": 4,
+      "correct": 5,
       "acceptable": 2,
-      "wrong": 1,
-      "in_top_5": 7,
-      "accuracy": 0.5714285714285714,
-      "usable_rate": 0.8571428571428571,
-      "top_5_rate": 1.0,
-      "avg_latency_ms": 363.4047167641776
+      "wrong": 0,
+      "in_top_5": 6,
+      "accuracy": 0.7142857142857143,
+      "usable_rate": 1.0,
+      "top_5_rate": 0.8571428571428571,
+      "avg_latency_ms": 560.6813090188163
     },
     "trading_content": {
       "total": 5,
       "correct": 2,
-      "acceptable": 1,
-      "wrong": 2,
-      "in_top_5": 5,
+      "acceptable": 3,
+      "wrong": 0,
+      "in_top_5": 4,
       "accuracy": 0.4,
-      "usable_rate": 0.6,
-      "top_5_rate": 1.0,
-      "avg_latency_ms": 360.7842445373535
+      "usable_rate": 1.0,
+      "top_5_rate": 0.8,
+      "avg_latency_ms": 572.5110054016113
     },
     "code_files": {
       "total": 3,
       "correct": 0,
-      "acceptable": 2,
-      "wrong": 1,
+      "acceptable": 1,
+      "wrong": 2,
       "in_top_5": 0,
       "accuracy": 0.0,
-      "usable_rate": 0.6666666666666666,
+      "usable_rate": 0.3333333333333333,
       "top_5_rate": 0.0,
-      "avg_latency_ms": 311.22612953186035
+      "avg_latency_ms": 631.5755844116211
     },
     "known_problematic": {
       "total": 3,
-      "correct": 2,
+      "correct": 3,
       "acceptable": 0,
-      "wrong": 1,
-      "in_top_5": 2,
-      "accuracy": 0.6666666666666666,
-      "usable_rate": 0.6666666666666666,
-      "top_5_rate": 0.6666666666666666,
-      "avg_latency_ms": 354.67004776000977
+      "wrong": 0,
+      "in_top_5": 3,
+      "accuracy": 1.0,
+      "usable_rate": 1.0,
+      "top_5_rate": 1.0,
+      "avg_latency_ms": 614.7174040476481
     }
   },
   "results": [
@@ -78,35 +78,35 @@
       "category": "business",
       "style": "keyword",
       "note": "",
-      "latency_ms": 824.6500492095947,
+      "latency_ms": 828.2508850097656,
       "grade": "correct",
       "correct": true,
       "acceptable": false,
       "in_top_5": true,
       "position": 1,
       "top_result": "24 Assets - Daniel Priestley.pdf",
-      "top_score": 0.5226151347160339,
-      "expected_score": 0.5226151347160339,
+      "top_score": 0.09523809523809523,
+      "expected_score": 0.09523809523809523,
       "all_results": [
         {
           "source": "24 Assets - Daniel Priestley.pdf",
-          "score": 0.5226151347160339
+          "score": 0.09523809523809523
         },
         {
           "source": "24 Assets - Daniel Priestley.pdf",
-          "score": 0.48710811138153076
+          "score": 0.09090909090909091
         },
         {
           "source": "24 Assets - Daniel Priestley.pdf",
-          "score": 0.4801473617553711
+          "score": 0.08012820512820512
         },
         {
           "source": "24 Assets - Daniel Priestley.pdf",
-          "score": 0.4607374668121338
+          "score": 0.043478260869565216
         },
         {
-          "source": "Web Scraping with Python - Ryan Mitchell.pdf",
-          "score": 0.44240182638168335
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.043478260869565216
         }
       ]
     },
@@ -117,35 +117,35 @@
       "category": "business",
       "style": "semantic",
       "note": "",
-      "latency_ms": 360.66651344299316,
+      "latency_ms": 2082.7577114105225,
       "grade": "correct",
       "correct": true,
       "acceptable": false,
       "in_top_5": true,
       "position": 1,
       "top_result": "24 Assets - Daniel Priestley.pdf",
-      "top_score": 0.5918220281600952,
-      "expected_score": 0.5918220281600952,
+      "top_score": 0.09307359307359307,
+      "expected_score": 0.09307359307359307,
       "all_results": [
         {
           "source": "24 Assets - Daniel Priestley.pdf",
-          "score": 0.5918220281600952
+          "score": 0.09307359307359307
         },
         {
           "source": "24 Assets - Daniel Priestley.pdf",
-          "score": 0.577294647693634
+          "score": 0.06777777777777777
         },
         {
           "source": "24 Assets - Daniel Priestley.pdf",
-          "score": 0.5457401275634766
-        },
-        {
-          "source": "Smart Portfolios - Robert Carver.pdf",
-          "score": 0.5437749624252319
+          "score": 0.047619047619047616
         },
         {
           "source": "24 Assets - Daniel Priestley.pdf",
-          "score": 0.5179502964019775
+          "score": 0.045454545454545456
+        },
+        {
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.043478260869565216
         }
       ]
     },
@@ -156,35 +156,35 @@
       "category": "business",
       "style": "keyword",
       "note": "",
-      "latency_ms": 335.57915687561035,
+      "latency_ms": 474.1976261138916,
       "grade": "correct",
       "correct": true,
       "acceptable": false,
       "in_top_5": true,
       "position": 1,
       "top_result": "Side Hustle - Chris Guillebeau.pdf",
-      "top_score": 0.7197045087814331,
-      "expected_score": 0.7197045087814331,
+      "top_score": 0.17852813852813854,
+      "expected_score": 0.17852813852813854,
       "all_results": [
         {
           "source": "Side Hustle - Chris Guillebeau.pdf",
-          "score": 0.7197045087814331
+          "score": 0.17852813852813854
         },
         {
           "source": "Side Hustle - Chris Guillebeau.pdf",
-          "score": 0.6576378345489502
+          "score": 0.08193979933110368
         },
         {
           "source": "Side Hustle - Chris Guillebeau.pdf",
-          "score": 0.6312793493270874
+          "score": 0.047619047619047616
         },
         {
           "source": "Side Hustle - Chris Guillebeau.pdf",
-          "score": 0.62657630443573
+          "score": 0.043478260869565216
         },
         {
           "source": "Side Hustle - Chris Guillebeau.pdf",
-          "score": 0.6256736516952515
+          "score": 0.041666666666666664
         }
       ]
     },
@@ -195,35 +195,35 @@
       "category": "business",
       "style": "keyword",
       "note": "",
-      "latency_ms": 307.7259063720703,
-      "grade": "wrong",
-      "correct": false,
+      "latency_ms": 492.7523136138916,
+      "grade": "correct",
+      "correct": true,
       "acceptable": false,
-      "in_top_5": false,
-      "position": -1,
-      "top_result": "2024-02-19_how-to-model-features-as-expected-returns.md",
-      "top_score": 0.3117969036102295,
-      "expected_score": 0,
+      "in_top_5": true,
+      "position": 1,
+      "top_result": "Side Hustle - Chris Guillebeau.pdf",
+      "top_score": 0.09307359307359307,
+      "expected_score": 0.09307359307359307,
       "all_results": [
         {
-          "source": "2024-02-19_how-to-model-features-as-expected-returns.md",
-          "score": 0.3117969036102295
+          "source": "Side Hustle - Chris Guillebeau.pdf",
+          "score": 0.09307359307359307
         },
         {
-          "source": "2025-11-19_navigating-tradeoffs-with-convex-optimisation.md",
-          "score": 0.3018471598625183
+          "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+          "score": 0.047619047619047616
         },
         {
-          "source": "2025-11-17_navigating-tradeoffs-with-convex-optimisation.md",
-          "score": 0.28897637128829956
+          "source": "Side Hustle - Chris Guillebeau.pdf",
+          "score": 0.045454545454545456
         },
         {
-          "source": "2024-02-13_a-simple-effective-way-to-manage-turnover-and-not-get-killed-by-costs.md",
-          "score": 0.2841165065765381
+          "source": "Side Hustle - Chris Guillebeau.pdf",
+          "score": 0.043478260869565216
         },
         {
-          "source": "xs_carry_kris.ipynb",
-          "score": 0.27464812994003296
+          "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+          "score": 0.043478260869565216
         }
       ]
     },
@@ -234,35 +234,35 @@
       "category": "business",
       "style": "keyword",
       "note": "",
-      "latency_ms": 371.0784912109375,
+      "latency_ms": 551.544189453125,
       "grade": "correct",
       "correct": true,
       "acceptable": false,
       "in_top_5": true,
       "position": 1,
       "top_result": "High Output Management - Grove, Andrew .pdf",
-      "top_score": 0.5707595348358154,
-      "expected_score": 0.5707595348358154,
+      "top_score": 0.09523809523809523,
+      "expected_score": 0.09523809523809523,
       "all_results": [
         {
           "source": "High Output Management - Grove, Andrew .pdf",
-          "score": 0.5707595348358154
+          "score": 0.09523809523809523
         },
         {
           "source": "High Output Management - Grove, Andrew .pdf",
-          "score": 0.5482944250106812
+          "score": 0.08893280632411067
         },
         {
           "source": "High Output Management - Grove, Andrew .pdf",
-          "score": 0.5438029170036316
+          "score": 0.08893280632411067
+        },
+        {
+          "source": "High Output Management - Grove, Andrew .pdf",
+          "score": 0.08
         },
         {
           "source": "Smart Portfolios - Robert Carver.pdf",
-          "score": 0.5368728637695312
-        },
-        {
-          "source": "High Output Management - Grove, Andrew .pdf",
-          "score": 0.5290236473083496
+          "score": 0.041666666666666664
         }
       ]
     },
@@ -273,35 +273,35 @@
       "category": "business",
       "style": "semantic",
       "note": "",
-      "latency_ms": 318.04370880126953,
+      "latency_ms": 473.58202934265137,
       "grade": "correct",
       "correct": true,
       "acceptable": false,
       "in_top_5": true,
       "position": 1,
       "top_result": "High Output Management - Grove, Andrew .pdf",
-      "top_score": 0.5744140148162842,
-      "expected_score": 0.5744140148162842,
+      "top_score": 0.09307359307359307,
+      "expected_score": 0.09307359307359307,
       "all_results": [
         {
           "source": "High Output Management - Grove, Andrew .pdf",
-          "score": 0.5744140148162842
+          "score": 0.09307359307359307
         },
         {
           "source": "High Output Management - Grove, Andrew .pdf",
-          "score": 0.5634551048278809
+          "score": 0.08928571428571427
         },
         {
           "source": "High Output Management - Grove, Andrew .pdf",
-          "score": 0.5575661659240723
+          "score": 0.08051529790660225
         },
         {
           "source": "High Output Management - Grove, Andrew .pdf",
-          "score": 0.5514264702796936
+          "score": 0.0787878787878788
         },
         {
           "source": "High Output Management - Grove, Andrew .pdf",
-          "score": 0.5490473508834839
+          "score": 0.06777777777777777
         }
       ]
     },
@@ -312,35 +312,35 @@
       "category": "business",
       "style": "keyword",
       "note": "",
-      "latency_ms": 346.2107181549072,
-      "grade": "wrong",
-      "correct": false,
+      "latency_ms": 579.9624919891357,
+      "grade": "correct",
+      "correct": true,
       "acceptable": false,
       "in_top_5": true,
-      "position": 2,
-      "top_result": "2025-11-17_so-you-want-to-start-a-trading-business.md",
-      "top_score": 0.35161763429641724,
-      "expected_score": 0.34938693046569824,
+      "position": 1,
+      "top_result": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+      "top_score": 0.08761904761904762,
+      "expected_score": 0.08761904761904762,
       "all_results": [
         {
-          "source": "2025-11-17_so-you-want-to-start-a-trading-business.md",
-          "score": 0.35161763429641724
+          "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+          "score": 0.08761904761904762
         },
         {
-          "source": "2025-11-19_dont-over-engineer-your-trading-business-make-money-instead.md",
-          "score": 0.34938693046569824
+          "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+          "score": 0.07291666666666666
         },
         {
-          "source": "2025-11-17_dont-over-engineer-your-trading-business-make-money-instead.md",
-          "score": 0.33837729692459106
+          "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+          "score": 0.047619047619047616
         },
         {
-          "source": "2025-11-19_dont-over-engineer-your-trading-business-make-money-instead.md",
-          "score": 0.3332783579826355
+          "source": "Side Hustle - Chris Guillebeau.pdf",
+          "score": 0.045454545454545456
         },
         {
-          "source": "2025-11-19_a-quants-approach-to-drawdown.md",
-          "score": 0.3316330909729004
+          "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+          "score": 0.045454545454545456
         }
       ]
     },
@@ -351,35 +351,35 @@
       "category": "business",
       "style": "semantic",
       "note": "",
-      "latency_ms": 376.28769874572754,
+      "latency_ms": 445.58119773864746,
       "grade": "correct",
       "correct": true,
       "acceptable": false,
       "in_top_5": true,
       "position": 1,
       "top_result": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
-      "top_score": 0.6206682324409485,
-      "expected_score": 0.6206682324409485,
+      "top_score": 0.09523809523809523,
+      "expected_score": 0.09523809523809523,
       "all_results": [
         {
           "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
-          "score": 0.6206682324409485
+          "score": 0.09523809523809523
         },
         {
           "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
-          "score": 0.5337074995040894
+          "score": 0.08712121212121213
         },
         {
           "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
-          "score": 0.5281411409378052
+          "score": 0.08712121212121213
         },
         {
           "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
-          "score": 0.5094376802444458
+          "score": 0.07289002557544758
         },
         {
           "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
-          "score": 0.47144901752471924
+          "score": 0.07225806451612904
         }
       ]
     },
@@ -393,35 +393,35 @@
       "category": "programming",
       "style": "keyword",
       "note": "",
-      "latency_ms": 368.304967880249,
-      "grade": "correct",
-      "correct": true,
-      "acceptable": false,
+      "latency_ms": 526.6094207763672,
+      "grade": "acceptable",
+      "correct": false,
+      "acceptable": true,
       "in_top_5": true,
-      "position": 1,
-      "top_result": "Tidy First - Kent Beck.pdf",
-      "top_score": 0.7413214445114136,
-      "expected_score": 0.7413214445114136,
+      "position": 3,
+      "top_result": "Refactoring - Martin Fowler.pdf",
+      "top_score": 0.07886904761904762,
+      "expected_score": 0.047619047619047616,
       "all_results": [
         {
-          "source": "Tidy First - Kent Beck.pdf",
-          "score": 0.7413214445114136
+          "source": "Refactoring - Martin Fowler.pdf",
+          "score": 0.07886904761904762
         },
         {
           "source": "Refactoring - Martin Fowler.pdf",
-          "score": 0.5998010635375977
-        },
-        {
-          "source": "Refactoring - Martin Fowler.pdf",
-          "score": 0.5871638059616089
+          "score": 0.07248157248157248
         },
         {
           "source": "Tidy First - Kent Beck.pdf",
-          "score": 0.5749193429946899
+          "score": 0.047619047619047616
         },
         {
           "source": "Tidy First - Kent Beck.pdf",
-          "score": 0.5709189176559448
+          "score": 0.045454545454545456
+        },
+        {
+          "source": "Tidy First - Kent Beck.pdf",
+          "score": 0.043478260869565216
         }
       ]
     },
@@ -435,35 +435,35 @@
       "category": "programming",
       "style": "semantic",
       "note": "",
-      "latency_ms": 345.6075191497803,
+      "latency_ms": 585.5255126953125,
       "grade": "acceptable",
       "correct": false,
       "acceptable": true,
-      "in_top_5": true,
-      "position": 3,
+      "in_top_5": false,
+      "position": -1,
       "top_result": "99Bottles_beer_python - Sandi Metz.pdf",
-      "top_score": 0.6113673448562622,
-      "expected_score": 0.5207961201667786,
+      "top_score": 0.09307359307359307,
+      "expected_score": 0,
       "all_results": [
         {
           "source": "99Bottles_beer_python - Sandi Metz.pdf",
-          "score": 0.6113673448562622
-        },
-        {
-          "source": "Refactoring to Patterns - Joshua Kerievsky.pdf",
-          "score": 0.5484691858291626
-        },
-        {
-          "source": "Tidy First - Kent Beck.pdf",
-          "score": 0.5207961201667786
-        },
-        {
-          "source": "Tidy First - Kent Beck.pdf",
-          "score": 0.5166776180267334
+          "score": 0.09307359307359307
         },
         {
           "source": "Refactoring - Martin Fowler.pdf",
-          "score": 0.5061811208724976
+          "score": 0.09109730848861283
+        },
+        {
+          "source": "Refactoring to Patterns - Joshua Kerievsky.pdf",
+          "score": 0.08116883116883117
+        },
+        {
+          "source": "2025-11-17_rw-pro-weekly-update-23-august-2024-aggressor-imbalance-feature-in-crypto-inverse-vol-weighting-for-yolo-carry.md",
+          "score": 0.05643879173290938
+        },
+        {
+          "source": "2025-11-19_rw-pro-weekly-update-23-august-2024-aggressor-imbalance-feature-in-crypto-inverse-vol-weighting-for-yolo-carry.md",
+          "score": 0.05634920634920634
         }
       ]
     },
@@ -478,35 +478,35 @@
       "category": "programming",
       "style": "keyword",
       "note": "",
-      "latency_ms": 344.58231925964355,
-      "grade": "wrong",
-      "correct": false,
+      "latency_ms": 532.4695110321045,
+      "grade": "correct",
+      "correct": true,
       "acceptable": false,
       "in_top_5": true,
-      "position": 3,
-      "top_result": "Learning Go- An Idiomatic Approach  - Jon Bodner.pdf",
-      "top_score": 0.6716910600662231,
-      "expected_score": 0.6183685064315796,
+      "position": 1,
+      "top_result": "The Little Go Book - Karl Seguin.pdf",
+      "top_score": 0.09109730848861283,
+      "expected_score": 0.09109730848861283,
       "all_results": [
         {
-          "source": "Learning Go- An Idiomatic Approach  - Jon Bodner.pdf",
-          "score": 0.6716910600662231
+          "source": "The Little Go Book - Karl Seguin.pdf",
+          "score": 0.09109730848861283
         },
         {
           "source": "lets-go-professional-package.pdf",
-          "score": 0.6634010672569275
-        },
-        {
-          "source": "The Little Go Book - Karl Seguin.pdf",
-          "score": 0.6183685064315796
+          "score": 0.08712121212121213
         },
         {
           "source": "Learning Go- An Idiomatic Approach  - Jon Bodner.pdf",
-          "score": 0.6058911085128784
+          "score": 0.07886904761904762
         },
         {
-          "source": "Writing An Interpreter In Go - Thorsten Ball.pdf",
-          "score": 0.6039037704467773
+          "source": "The Little Go Book - Karl Seguin.pdf",
+          "score": 0.045454545454545456
+        },
+        {
+          "source": "The Little Go Book - Karl Seguin.pdf",
+          "score": 0.043478260869565216
         }
       ]
     },
@@ -520,35 +520,35 @@
       "category": "programming",
       "style": "keyword",
       "note": "",
-      "latency_ms": 366.1613464355469,
+      "latency_ms": 510.16688346862793,
       "grade": "correct",
       "correct": true,
       "acceptable": false,
       "in_top_5": true,
       "position": 1,
       "top_result": "Domain-Driven Design with Golang - Matthew Boyle.pdf",
-      "top_score": 0.6614289283752441,
-      "expected_score": 0.6614289283752441,
+      "top_score": 0.08928571428571427,
+      "expected_score": 0.08928571428571427,
       "all_results": [
         {
           "source": "Domain-Driven Design with Golang - Matthew Boyle.pdf",
-          "score": 0.6614289283752441
-        },
-        {
-          "source": "Building microservices - Samuel Newman.pdf",
-          "score": 0.6240330934524536
-        },
-        {
-          "source": "Refactoring to Patterns - Joshua Kerievsky.pdf",
-          "score": 0.6174143552780151
+          "score": 0.08928571428571427
         },
         {
           "source": "Domain-Driven Design with Golang - Matthew Boyle.pdf",
-          "score": 0.6124157905578613
+          "score": 0.08761904761904762
         },
         {
           "source": "Building microservices - Samuel Newman.pdf",
-          "score": 0.609270453453064
+          "score": 0.045454545454545456
+        },
+        {
+          "source": "Domain-Driven Design with Golang - Matthew Boyle.pdf",
+          "score": 0.045454545454545456
+        },
+        {
+          "source": "Refactoring to Patterns - Joshua Kerievsky.pdf",
+          "score": 0.043478260869565216
         }
       ]
     },
@@ -562,35 +562,35 @@
       "category": "programming",
       "style": "semantic",
       "note": "",
-      "latency_ms": 327.7320861816406,
+      "latency_ms": 646.1484432220459,
       "grade": "correct",
       "correct": true,
       "acceptable": false,
       "in_top_5": true,
       "position": 1,
       "top_result": "Domain-Driven Design - Eric Evans.pdf",
-      "top_score": 0.5745139718055725,
-      "expected_score": 0.5745139718055725,
+      "top_score": 0.09523809523809523,
+      "expected_score": 0.09523809523809523,
       "all_results": [
         {
           "source": "Domain-Driven Design - Eric Evans.pdf",
-          "score": 0.5745139718055725
-        },
-        {
-          "source": "Domain-Driven Design - Eric Evans.pdf",
-          "score": 0.5617584586143494
-        },
-        {
-          "source": "Architecture Patterns with Python - Harry JW Percival.pdf",
-          "score": 0.5567901134490967
+          "score": 0.09523809523809523
         },
         {
           "source": "Domain-Driven Design with Golang - Matthew Boyle.pdf",
-          "score": 0.5508362650871277
+          "score": 0.08166666666666667
+        },
+        {
+          "source": "Architecture Patterns with Python - Harry JW Percival.pdf",
+          "score": 0.07796101949025487
         },
         {
           "source": "Building microservices - Samuel Newman.pdf",
-          "score": 0.5350315570831299
+          "score": 0.06631578947368422
+        },
+        {
+          "source": "Domain-Driven Design - Eric Evans.pdf",
+          "score": 0.045454545454545456
         }
       ]
     },
@@ -604,35 +604,35 @@
       "category": "programming",
       "style": "keyword",
       "note": "",
-      "latency_ms": 406.24237060546875,
-      "grade": "acceptable",
-      "correct": false,
-      "acceptable": true,
+      "latency_ms": 548.5541820526123,
+      "grade": "correct",
+      "correct": true,
+      "acceptable": false,
       "in_top_5": true,
-      "position": 5,
-      "top_result": "99Bottles_beer_python - Sandi Metz.pdf",
-      "top_score": 0.7674947381019592,
-      "expected_score": 0.7238107919692993,
+      "position": 1,
+      "top_result": "Refactoring to Patterns - Joshua Kerievsky.pdf",
+      "top_score": 0.07333333333333333,
+      "expected_score": 0.07333333333333333,
       "all_results": [
         {
-          "source": "99Bottles_beer_python - Sandi Metz.pdf",
-          "score": 0.7674947381019592
-        },
-        {
-          "source": "99Bottles_beer_php.pdf",
-          "score": 0.744529128074646
-        },
-        {
-          "source": "99Bottles_beer_python - Sandi Metz.pdf",
-          "score": 0.7335697412490845
-        },
-        {
-          "source": "99Bottles_beer_php.pdf",
-          "score": 0.7335697412490845
-        },
-        {
           "source": "Refactoring to Patterns - Joshua Kerievsky.pdf",
-          "score": 0.7238107919692993
+          "score": 0.07333333333333333
+        },
+        {
+          "source": "99Bottles_beer_python - Sandi Metz.pdf",
+          "score": 0.047619047619047616
+        },
+        {
+          "source": "Refactoring - Martin Fowler.pdf",
+          "score": 0.047619047619047616
+        },
+        {
+          "source": "99Bottles_beer_php.pdf",
+          "score": 0.045454545454545456
+        },
+        {
+          "source": "Refactoring - Martin Fowler.pdf",
+          "score": 0.045454545454545456
         }
       ]
     },
@@ -643,35 +643,35 @@
       "category": "programming",
       "style": "keyword",
       "note": "",
-      "latency_ms": 385.20240783691406,
+      "latency_ms": 575.2952098846436,
       "grade": "correct",
       "correct": true,
       "acceptable": false,
       "in_top_5": true,
       "position": 1,
       "top_result": "Test-Driven Development By Example - Kent Beck.pdf",
-      "top_score": 0.7976200580596924,
-      "expected_score": 0.7976200580596924,
+      "top_score": 0.09523809523809523,
+      "expected_score": 0.09523809523809523,
       "all_results": [
         {
           "source": "Test-Driven Development By Example - Kent Beck.pdf",
-          "score": 0.7976200580596924
-        },
-        {
-          "source": "Refactoring to Patterns - Joshua Kerievsky.pdf",
-          "score": 0.7823517918586731
-        },
-        {
-          "source": "99Bottles_beer_python - Sandi Metz.pdf",
-          "score": 0.6944162249565125
-        },
-        {
-          "source": "99Bottles_beer_php.pdf",
-          "score": 0.6842416524887085
+          "score": 0.09523809523809523
         },
         {
           "source": "Test-Driven Development By Example - Kent Beck.pdf",
-          "score": 0.6753554344177246
+          "score": 0.07846153846153847
+        },
+        {
+          "source": "Refactoring to Patterns - Joshua Kerievsky.pdf",
+          "score": 0.045454545454545456
+        },
+        {
+          "source": "Test-Driven Development By Example - Kent Beck.pdf",
+          "score": 0.045454545454545456
+        },
+        {
+          "source": "99Bottles_beer_python - Sandi Metz.pdf",
+          "score": 0.043478260869565216
         }
       ]
     },
@@ -686,35 +686,35 @@
       "category": "trading",
       "style": "keyword",
       "note": "",
-      "latency_ms": 374.57919120788574,
+      "latency_ms": 435.8859062194824,
       "grade": "acceptable",
       "correct": false,
       "acceptable": true,
       "in_top_5": true,
-      "position": 4,
+      "position": 3,
       "top_result": "2017-08-14_my-new-book-smart-portfolios.md",
-      "top_score": 0.7681877017021179,
-      "expected_score": 0.6557274460792542,
+      "top_score": 0.09523809523809523,
+      "expected_score": 0.08712121212121213,
       "all_results": [
         {
           "source": "2017-08-14_my-new-book-smart-portfolios.md",
-          "score": 0.7681877017021179
+          "score": 0.09523809523809523
         },
         {
           "source": "Leveraged Trading - Robert Carver.pdf",
-          "score": 0.6846519708633423
-        },
-        {
-          "source": "2017-09-04_smart-portfolios-post-about-book-nn.md",
-          "score": 0.6653890609741211
+          "score": 0.08893280632411067
         },
         {
           "source": "Smart Portfolios - Robert Carver.pdf",
-          "score": 0.6557274460792542
+          "score": 0.08712121212121213
+        },
+        {
+          "source": "2017-09-04_smart-portfolios-post-about-book-nn.md",
+          "score": 0.08347826086956522
         },
         {
           "source": "Advanced Futures Trading Strategies - Robert Carver.pdf",
-          "score": 0.6547272801399231
+          "score": 0.08166666666666667
         }
       ]
     },
@@ -729,35 +729,35 @@
       "category": "trading",
       "style": "semantic",
       "note": "",
-      "latency_ms": 334.84745025634766,
-      "grade": "correct",
-      "correct": true,
-      "acceptable": false,
+      "latency_ms": 512.5429630279541,
+      "grade": "acceptable",
+      "correct": false,
+      "acceptable": true,
       "in_top_5": true,
-      "position": 1,
-      "top_result": "Smart Portfolios - Robert Carver.pdf",
-      "top_score": 0.7693796157836914,
-      "expected_score": 0.7693796157836914,
+      "position": 2,
+      "top_result": "Portfolio Optimization.md",
+      "top_score": 0.08893280632411067,
+      "expected_score": 0.047619047619047616,
       "all_results": [
         {
-          "source": "Smart Portfolios - Robert Carver.pdf",
-          "score": 0.7693796157836914
-        },
-        {
           "source": "Portfolio Optimization.md",
-          "score": 0.7032907009124756
+          "score": 0.08893280632411067
         },
         {
           "source": "Smart Portfolios - Robert Carver.pdf",
-          "score": 0.6835454702377319
+          "score": 0.047619047619047616
+        },
+        {
+          "source": "2022-11-02_optimal-trend-following-allocation.md",
+          "score": 0.047619047619047616
+        },
+        {
+          "source": "2020-06-08_a-curated-etf-list-and-model-portfolio.md",
+          "score": 0.045454545454545456
         },
         {
           "source": "Smart Portfolios - Robert Carver.pdf",
-          "score": 0.6536399722099304
-        },
-        {
-          "source": "2021-06-07_optimising-my-way-out-of-small-fund.md",
-          "score": 0.6517192125320435
+          "score": 0.043478260869565216
         }
       ]
     },
@@ -772,35 +772,35 @@
       "category": "trading",
       "style": "keyword",
       "note": "",
-      "latency_ms": 401.30066871643066,
-      "grade": "wrong",
-      "correct": false,
+      "latency_ms": 562.7257823944092,
+      "grade": "correct",
+      "correct": true,
       "acceptable": false,
       "in_top_5": true,
-      "position": 3,
-      "top_result": "Smart Portfolios - Robert Carver.pdf",
-      "top_score": 0.6305069923400879,
-      "expected_score": 0.6089800596237183,
+      "position": 1,
+      "top_result": "Efficiently Inefficient - Pedersen, Lasse Heje.pdf",
+      "top_score": 0.08333333333333333,
+      "expected_score": 0.08333333333333333,
       "all_results": [
         {
+          "source": "Efficiently Inefficient - Pedersen, Lasse Heje.pdf",
+          "score": 0.08333333333333333
+        },
+        {
           "source": "Smart Portfolios - Robert Carver.pdf",
-          "score": 0.6305069923400879
-        },
-        {
-          "source": "Expected Returns An Investor's Guide to Harvesting Market - Ilmanen, Antti.pdf",
-          "score": 0.616762101650238
+          "score": 0.08210180623973727
         },
         {
           "source": "Efficiently Inefficient - Pedersen, Lasse Heje.pdf",
-          "score": 0.6089800596237183
+          "score": 0.047619047619047616
+        },
+        {
+          "source": "Smart Portfolios - Robert Carver.pdf",
+          "score": 0.045454545454545456
         },
         {
           "source": "Efficiently Inefficient - Pedersen, Lasse Heje.pdf",
-          "score": 0.6070957779884338
-        },
-        {
-          "source": "Efficiently Inefficient - Pedersen, Lasse Heje.pdf",
-          "score": 0.577224612236023
+          "score": 0.045454545454545456
         }
       ]
     },
@@ -815,35 +815,35 @@
       "category": "trading",
       "style": "semantic",
       "note": "",
-      "latency_ms": 370.5565929412842,
-      "grade": "wrong",
+      "latency_ms": 706.7794799804688,
+      "grade": "acceptable",
       "correct": false,
-      "acceptable": false,
-      "in_top_5": true,
-      "position": 4,
-      "top_result": "2025-11-17_so-you-want-to-start-a-trading-business.md",
-      "top_score": 0.7156980633735657,
-      "expected_score": 0.6675376892089844,
+      "acceptable": true,
+      "in_top_5": false,
+      "position": -1,
+      "top_result": "2025-11-17_the-volatility-risk-premium-in-a-tumultuous-market.md",
+      "top_score": 0.08166666666666667,
+      "expected_score": 0,
       "all_results": [
         {
-          "source": "2025-11-17_so-you-want-to-start-a-trading-business.md",
-          "score": 0.7156980633735657
-        },
-        {
-          "source": "2025-11-19_so-you-want-to-start-a-trading-business.md",
-          "score": 0.7095595002174377
-        },
-        {
-          "source": "2025-11-19_so-you-want-to-start-a-trading-business.md",
-          "score": 0.7035336494445801
-        },
-        {
-          "source": "2020-05-05_the-vix-futures-basis.md",
-          "score": 0.6675376892089844
+          "source": "2025-11-17_the-volatility-risk-premium-in-a-tumultuous-market.md",
+          "score": 0.08166666666666667
         },
         {
           "source": "2025-11-17_the-volatility-risk-premium-in-a-tumultuous-market.md",
-          "score": 0.6643633246421814
+          "score": 0.063894523326572
+        },
+        {
+          "source": "2025-11-17_so-you-want-to-start-a-trading-business.md",
+          "score": 0.047619047619047616
+        },
+        {
+          "source": "2025-11-19_the-volatility-risk-premium-in-a-tumultuous-market.md",
+          "score": 0.047619047619047616
+        },
+        {
+          "source": "2025-11-19_so-you-want-to-start-a-trading-business.md",
+          "score": 0.045454545454545456
         }
       ]
     },
@@ -858,35 +858,35 @@
       "category": "trading",
       "style": "semantic",
       "note": "",
-      "latency_ms": 322.63731956481934,
+      "latency_ms": 644.6208953857422,
       "grade": "correct",
       "correct": true,
       "acceptable": false,
       "in_top_5": true,
       "position": 1,
       "top_result": "2017-05-01_back-basics-part-3-backtesting-algorithmic-trading.md",
-      "top_score": 0.7412298917770386,
-      "expected_score": 0.7412298917770386,
+      "top_score": 0.09109730848861283,
+      "expected_score": 0.09109730848861283,
       "all_results": [
         {
           "source": "2017-05-01_back-basics-part-3-backtesting-algorithmic-trading.md",
-          "score": 0.7412298917770386
-        },
-        {
-          "source": "Efficiently Inefficient - Pedersen, Lasse Heje.pdf",
-          "score": 0.7410886287689209
+          "score": 0.09109730848861283
         },
         {
           "source": "2017-05-01_back-basics-part-3-backtesting-algorithmic-trading.md",
-          "score": 0.7321729063987732
+          "score": 0.07886904761904762
         },
         {
-          "source": "2019-06-04_backtesting-bias-feels-good-until-you-blow-up.md",
-          "score": 0.7270176410675049
+          "source": "2017-05-01_back-basics-part-3-backtesting-algorithmic-trading.md",
+          "score": 0.05334281650071124
         },
         {
-          "source": "2019-06-04_backtesting-bias-feels-good-until-you-blow-up.md",
-          "score": 0.7117017507553101
+          "source": "Efficiently Inefficient - Pedersen, Lasse Heje.pdf",
+          "score": 0.045454545454545456
+        },
+        {
+          "source": "2017-05-01_back-basics-part-3-backtesting-algorithmic-trading.md",
+          "score": 0.045454545454545456
         }
       ]
     },
@@ -901,35 +901,35 @@
       "category": "code",
       "style": "keyword",
       "note": "",
-      "latency_ms": 321.8121528625488,
+      "latency_ms": 735.6791496276855,
       "grade": "wrong",
       "correct": false,
       "acceptable": false,
       "in_top_5": false,
       "position": -1,
-      "top_result": "2025-05-05_can-i-build-scalping-bot-blogpost-with.md",
-      "top_score": 0.5693365931510925,
+      "top_result": "2015-11-04_using-random-data.md",
+      "top_score": 0.09523809523809523,
       "expected_score": 0,
       "all_results": [
         {
+          "source": "2015-11-04_using-random-data.md",
+          "score": 0.09523809523809523
+        },
+        {
           "source": "2025-05-05_can-i-build-scalping-bot-blogpost-with.md",
-          "score": 0.5693365931510925
+          "score": 0.045454545454545456
+        },
+        {
+          "source": "2015-11-10_random-data-evaluating-trading-equity.md",
+          "score": 0.045454545454545456
         },
         {
           "source": "README.md",
-          "score": 0.567363977432251
+          "score": 0.043478260869565216
         },
         {
-          "source": "README.md",
-          "score": 0.5653159618377686
-        },
-        {
-          "source": "2015-12-18_pysystemtrade.md",
-          "score": 0.552486777305603
-        },
-        {
-          "source": "CHANGELOG.md",
-          "score": 0.5517898201942444
+          "source": "2015-11-04_using-random-data.md",
+          "score": 0.043478260869565216
         }
       ]
     },
@@ -944,35 +944,35 @@
       "category": "code",
       "style": "keyword",
       "note": "",
-      "latency_ms": 298.04301261901855,
+      "latency_ms": 538.6512279510498,
       "grade": "acceptable",
       "correct": false,
       "acceptable": true,
       "in_top_5": false,
       "position": -1,
       "top_result": "lets-go-professional-package.pdf",
-      "top_score": 0.6234869956970215,
+      "top_score": 0.07614942528735633,
       "expected_score": 0,
       "all_results": [
         {
           "source": "lets-go-professional-package.pdf",
-          "score": 0.6234869956970215
+          "score": 0.07614942528735633
         },
         {
           "source": "lets-go-professional-package.pdf",
-          "score": 0.5639557838439941
+          "score": 0.047619047619047616
         },
         {
           "source": "lets-go-professional-package.pdf",
-          "score": 0.5406784415245056
-        },
-        {
-          "source": "lets-go-professional-package.pdf",
-          "score": 0.537307858467102
+          "score": 0.047619047619047616
         },
         {
           "source": "lets-go-further.pdf",
-          "score": 0.5312823057174683
+          "score": 0.045454545454545456
+        },
+        {
+          "source": "lets-go-professional-package.pdf",
+          "score": 0.045454545454545456
         }
       ]
     },
@@ -987,35 +987,35 @@
       "category": "code",
       "style": "keyword",
       "note": "",
-      "latency_ms": 313.8232231140137,
-      "grade": "acceptable",
+      "latency_ms": 620.3963756561279,
+      "grade": "wrong",
       "correct": false,
-      "acceptable": true,
+      "acceptable": false,
       "in_top_5": false,
       "position": -1,
-      "top_result": "trading_rules.py",
-      "top_score": 0.57871013879776,
+      "top_result": "2022-06-22_how-to-connect-google-colab-to-a-local-jupyter-runtime.md",
+      "top_score": 0.09109730848861283,
       "expected_score": 0,
       "all_results": [
         {
+          "source": "2022-06-22_how-to-connect-google-colab-to-a-local-jupyter-runtime.md",
+          "score": 0.09109730848861283
+        },
+        {
+          "source": "2022-06-22_how-to-connect-google-colab-to-a-local-jupyter-runtime.md",
+          "score": 0.0754985754985755
+        },
+        {
           "source": "trading_rules.py",
-          "score": 0.57871013879776
+          "score": 0.047619047619047616
         },
         {
-          "source": "2017-06-22_some-more-trading-rules.md",
-          "score": 0.564723789691925
+          "source": "introduction_with_fxdata.ipynb",
+          "score": 0.045454545454545456
         },
         {
-          "source": "introduction.md",
-          "score": 0.5422861576080322
-        },
-        {
-          "source": "test_forecasts.py",
-          "score": 0.5405725240707397
-        },
-        {
-          "source": "Systematic Trading - Robert Carver.pdf",
-          "score": 0.535372793674469
+          "source": "2022-06-22_how-to-connect-google-colab-to-a-local-jupyter-runtime.md",
+          "score": 0.045454545454545456
         }
       ]
     },
@@ -1030,35 +1030,35 @@
       "category": "business",
       "style": "long_semantic",
       "note": "KNOWN ISSUE: Long queries dilute BM25 matching",
-      "latency_ms": 364.61949348449707,
-      "grade": "wrong",
-      "correct": false,
+      "latency_ms": 705.6629657745361,
+      "grade": "correct",
+      "correct": true,
       "acceptable": false,
-      "in_top_5": false,
-      "position": -1,
-      "top_result": "2025-11-17_rw-pro-weekly-update-29-march-2024-trade-sizing-and-rebalancing-trend-following-on-spy.md",
-      "top_score": 0.33919334411621094,
-      "expected_score": 0,
+      "in_top_5": true,
+      "position": 1,
+      "top_result": "24 Assets - Daniel Priestley.pdf",
+      "top_score": 0.08761904761904762,
+      "expected_score": 0.08761904761904762,
       "all_results": [
         {
-          "source": "2025-11-17_rw-pro-weekly-update-29-march-2024-trade-sizing-and-rebalancing-trend-following-on-spy.md",
-          "score": 0.33919334411621094
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.08761904761904762
         },
         {
-          "source": "2025-11-17_rw-pro-weekly-update-29-march-2024-trade-sizing-and-rebalancing-trend-following-on-spy.md",
-          "score": 0.33735930919647217
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.08465608465608465
         },
         {
-          "source": "2017-04-11_investment-and-trading-performance-year.md",
-          "score": 0.3350871801376343
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.08012820512820512
         },
         {
-          "source": "2025-11-19_rw-pro-webinar-28-mar-2024-trade-sizing-and-rebalancing-trend-following-on-spy.md",
-          "score": 0.3307607173919678
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.07378129117259552
         },
         {
-          "source": "2025-11-19_rw-pro-webinar-28-mar-2024-trade-sizing-and-rebalancing-trend-following-on-spy.md",
-          "score": 0.3287245035171509
+          "source": "24 Assets - Daniel Priestley.pdf",
+          "score": 0.045454545454545456
         }
       ]
     },
@@ -1069,35 +1069,35 @@
       "category": "business",
       "style": "short",
       "note": "KNOWN ISSUE: Previously returned Smart Portfolios",
-      "latency_ms": 391.85285568237305,
+      "latency_ms": 480.89122772216797,
       "grade": "correct",
       "correct": true,
       "acceptable": false,
       "in_top_5": true,
       "position": 1,
       "top_result": "24 Assets - Daniel Priestley.pdf",
-      "top_score": 0.5716798305511475,
-      "expected_score": 0.5716798305511475,
+      "top_score": 0.09307359307359307,
+      "expected_score": 0.09307359307359307,
       "all_results": [
         {
           "source": "24 Assets - Daniel Priestley.pdf",
-          "score": 0.5716798305511475
+          "score": 0.09307359307359307
         },
         {
           "source": "24 Assets - Daniel Priestley.pdf",
-          "score": 0.49868011474609375
+          "score": 0.08
         },
         {
           "source": "24 Assets - Daniel Priestley.pdf",
-          "score": 0.4867405891418457
+          "score": 0.06911928651059085
         },
         {
           "source": "24 Assets - Daniel Priestley.pdf",
-          "score": 0.4859023094177246
+          "score": 0.047619047619047616
         },
         {
           "source": "24 Assets - Daniel Priestley.pdf",
-          "score": 0.47941768169403076
+          "score": 0.045454545454545456
         }
       ]
     },
@@ -1113,35 +1113,35 @@
       "category": "business",
       "style": "semantic",
       "note": "KNOWN ISSUE: Previously returned Naming Things",
-      "latency_ms": 307.5377941131592,
+      "latency_ms": 657.5980186462402,
       "grade": "correct",
       "correct": true,
       "acceptable": false,
       "in_top_5": true,
       "position": 1,
       "top_result": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
-      "top_score": 0.6494671106338501,
-      "expected_score": 0.6494671106338501,
+      "top_score": 0.09523809523809523,
+      "expected_score": 0.09523809523809523,
       "all_results": [
         {
           "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
-          "score": 0.6494671106338501
+          "score": 0.09523809523809523
         },
         {
           "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
-          "score": 0.5285949110984802
-        },
-        {
-          "source": "Smart Portfolios - Robert Carver.pdf",
-          "score": 0.5257463455200195
+          "score": 0.08893280632411067
         },
         {
           "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
-          "score": 0.4966909885406494
+          "score": 0.08
         },
         {
           "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
-          "score": 0.4826536774635315
+          "score": 0.075
+        },
+        {
+          "source": "MAKE - The indie maker blueprint - Pieter Levels.pdf",
+          "score": 0.045454545454545456
         }
       ]
     }

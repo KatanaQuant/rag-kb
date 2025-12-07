@@ -5,19 +5,23 @@ from models import QueryRequest, QueryResponse, SearchResult, DecompositionInfo
 
 
 class QueryExecutor:
-    """Executes semantic search queries with optional reranking"""
+    """Executes semantic search queries with optional reranking and query expansion"""
 
-    def __init__(self, model, vector_store, cache=None, reranker=None):
+    def __init__(self, model, vector_store, cache=None, reranker=None, query_expander=None):
         self.model = model
         self.store = vector_store
         self.cache = cache
         self.reranker = reranker
+        self.query_expander = query_expander
 
     async def execute(self, request: QueryRequest) -> QueryResponse:
         """Execute search query (async for non-blocking database access)
 
         v2 Decomposition: If a compound query is detected (e.g., "X and Y"),
         searches each sub-query separately and merges results for better recall.
+
+        v3 Query Expansion: If Ollama is available and enabled, expands the query
+        into multiple variants using LLM, then searches all variants and merges.
         """
         self._validate(request.text)
 
@@ -31,8 +35,19 @@ class QueryExecutor:
             if cached:
                 return self._format(cached, request.text, decomposition)
 
+        # v3: Expand query using LLM if enabled
+        if self.query_expander and self.query_expander.is_enabled:
+            expanded_queries = await asyncio.to_thread(
+                self.query_expander.expand, request.text
+            )
+            if len(expanded_queries) > 1:
+                # Search all expanded queries and merge results
+                results = await self._search_expanded(expanded_queries, request)
+            else:
+                embedding = await asyncio.to_thread(self._gen_embedding, request.text)
+                results = await self._search(embedding, request)
         # v2: Execute sub-queries if compound query detected
-        if decomposition.applied and len(decomposition.sub_queries) >= 2:
+        elif decomposition.applied and len(decomposition.sub_queries) >= 2:
             results = await self._search_decomposed(decomposition.sub_queries, request)
         else:
             embedding = await asyncio.to_thread(self._gen_embedding, request.text)
@@ -82,54 +97,53 @@ class QueryExecutor:
 
         return results
 
-    async def _search_decomposed(self, sub_queries: List[str], request) -> List:
-        """Search each sub-query separately and merge results.
+    async def _search_multi_query(self, queries: List[str], request) -> List:
+        """Search multiple queries and merge deduplicated results.
 
-        v2 decomposition: For compound queries like "X and Y", this searches
-        for X and Y independently, then merges and deduplicates results.
-        This improves recall by ensuring both topics are covered.
+        Common logic for both v2 decomposition and v3 query expansion.
+        Searches each query, deduplicates by (source, content_prefix),
+        sorts by score, and optionally reranks against original query.
         """
         all_results = []
-        seen_chunks = set()  # Dedupe by (source, content_prefix)
+        seen_chunks = set()
 
-        # Determine fetch size per sub-query
         fetch_k = request.top_k
         if self.reranker and self.reranker.is_enabled:
             fetch_k = max(request.top_k * 2, 40)
 
-        # Search each sub-query
-        for sub_query in sub_queries:
-            embedding = await asyncio.to_thread(self._gen_embedding, sub_query)
+        for query in queries:
+            embedding = await asyncio.to_thread(self._gen_embedding, query)
             results = await self.store.search(
                 query_embedding=embedding.tolist(),
                 top_k=fetch_k,
                 threshold=request.threshold,
-                query_text=sub_query,
+                query_text=query,
                 use_hybrid=True
             )
-
-            # Add unique results (dedupe by source + content prefix)
             for r in results:
                 chunk_key = (r['source'], r['content'][:100])
                 if chunk_key not in seen_chunks:
                     seen_chunks.add(chunk_key)
                     all_results.append(r)
 
-        # Sort by score (descending) and limit to top_k (before reranking)
         all_results.sort(key=lambda x: x['score'], reverse=True)
 
-        # Rerank merged results if enabled
         if self.reranker and self.reranker.is_enabled and all_results:
-            # Rerank against original compound query for best relevance
             all_results = self.reranker.rerank(
-                request.text,
-                all_results[:fetch_k],  # Limit input to reranker
-                request.top_k
+                request.text, all_results[:fetch_k], request.top_k
             )
         else:
             all_results = all_results[:request.top_k]
 
         return all_results
+
+    async def _search_decomposed(self, sub_queries: List[str], request) -> List:
+        """Search each sub-query separately and merge results (v2 decomposition)."""
+        return await self._search_multi_query(sub_queries, request)
+
+    async def _search_expanded(self, expanded_queries: List[str], request) -> List:
+        """Search each expanded query and merge results (v3 query expansion)."""
+        return await self._search_multi_query(expanded_queries, request)
 
     @staticmethod
     def _format(results: List, query: str, decomposition: DecompositionInfo = None) -> QueryResponse:

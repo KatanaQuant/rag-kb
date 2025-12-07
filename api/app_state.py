@@ -8,18 +8,42 @@ class CoreServices:
     Holds fundamental services needed throughout the application.
     Focused on storage, processing, and ML models.
 
-    Hybrid Architecture:
-    - vector_store: Sync VectorStore for pipeline workers (background writes)
-    - async_vector_store: Async AsyncVectorStore for API routes (non-blocking reads)
-    Both use same SQLite database with WAL mode for concurrency.
+    Unified Architecture (v2.2.3+):
+    - vector_store: Single sync VectorStore for all operations
+    - async_vector_store: AsyncVectorStoreAdapter wrapping vector_store for non-blocking API
+
+    The adapter pattern eliminates dual-store issues where AsyncVectorStore was
+    read-only to prevent HNSW corruption. Now DELETE works correctly from API.
     """
 
     def __init__(self):
         self.model = None
-        self.vector_store = None  # Sync store for pipeline workers
-        self.async_vector_store = None  # Async store for API routes
+        self.vector_store = None  # Single sync store (thread-safe via RLock)
+        self._async_adapter = None  # Lazy-created adapter for async API access
         self.processor = None
         self.progress_tracker = None
+
+    @property
+    def async_vector_store(self):
+        """Get async adapter for vector store (lazy creation).
+
+        Returns AsyncVectorStoreAdapter wrapping the sync VectorStore.
+        This provides non-blocking async interface for API routes while
+        using the same underlying store for thread-safe operations.
+        """
+        if self._async_adapter is None and self.vector_store is not None:
+            from ingestion.async_adapter import AsyncVectorStoreAdapter
+            self._async_adapter = AsyncVectorStoreAdapter(self.vector_store)
+        return self._async_adapter
+
+    @async_vector_store.setter
+    def async_vector_store(self, value):
+        """Set async vector store (for backward compatibility during transition).
+
+        Note: In unified architecture, this setter is not typically used.
+        The adapter is created lazily from vector_store.
+        """
+        self._async_adapter = value
 
 class QueryServices:
     """Query-related services
@@ -30,6 +54,7 @@ class QueryServices:
     def __init__(self):
         self.cache = None
         self.reranker = None
+        self.query_expander = None  # LLM-based query expansion via Ollama
 
 class IndexingComponents:
     """Indexing queue and worker infrastructure
@@ -98,6 +123,10 @@ class AppState:
         """Get search result reranker"""
         return self.query.reranker
 
+    def get_query_expander(self):
+        """Get LLM-based query expander"""
+        return self.query.query_expander
+
     def get_processor(self):
         """Get document processor"""
         return self.core.processor
@@ -141,11 +170,14 @@ class AppState:
             self.indexing.worker.stop()
 
     async def close_vector_store(self):
-        """Close both sync and async vector store connections"""
+        """Close vector store connection.
+
+        Unified Architecture: Only close the sync store. The async adapter
+        is just a wrapper and doesn't own the connection.
+        """
         if self.core.vector_store:
-            self.core.vector_store.close()  # Sync close
-        if self.core.async_vector_store:
-            await self.core.async_vector_store.close()  # Async close
+            self.core.vector_store.close()  # Only sync store needs closing
+        # Adapter close is a no-op - it doesn't own the connection
 
     def close_progress_tracker(self):
         """Close progress tracker connection"""
@@ -184,9 +216,14 @@ class AppState:
     # === Startup Lifecycle Delegation ===
 
     async def initialize_async_vector_store(self):
-        """Initialize async vector store connection"""
-        if self.core.async_vector_store:
-            await self.core.async_vector_store.initialize()
+        """Initialize async vector store connection.
+
+        Unified Architecture: This is now a no-op since the adapter is
+        lazily created and doesn't need initialization.
+        Kept for backward compatibility with existing startup code.
+        """
+        # No-op in unified architecture - adapter is created lazily
+        pass
 
     def start_worker(self):
         """Start indexing worker"""

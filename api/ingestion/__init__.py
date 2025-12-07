@@ -47,6 +47,9 @@ from .async_database import (
     AsyncVectorStore
 )
 
+# Async adapter for unified architecture
+from .async_adapter import AsyncVectorStoreAdapter
+
 __all__ = [
     # Helpers
     'FileHasher',
@@ -72,4 +75,6 @@ __all__ = [
     'AsyncSchemaManager',
     'AsyncVectorRepository',
     'AsyncVectorStore',
+    # Async adapter for unified architecture
+    'AsyncVectorStoreAdapter',
 ]

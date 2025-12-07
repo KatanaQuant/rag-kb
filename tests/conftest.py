@@ -10,7 +10,11 @@ from pathlib import Path
 from unittest.mock import Mock, AsyncMock
 
 # Add api directory to path for imports
+# Detect if running in Docker (./api:/app mount) vs host (./api exists)
 api_path = Path(__file__).parent.parent / "api"
+if not api_path.exists():
+    # Running in Docker where api contents are at /app directly
+    api_path = Path(__file__).parent.parent
 sys.path.insert(0, str(api_path))
 
 

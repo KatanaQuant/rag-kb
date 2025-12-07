@@ -19,18 +19,27 @@ class SearchRepository:
         results = self._execute_vector_search(blob, top_k)
         return self._format_results(results, threshold)
 
-    def _execute_vector_search(self, blob: bytes, top_k: int):
+    def _execute_vector_search(self, blob: bytes, top_k: int, ef: int = 150):
         """Execute vectorlite knn_search query
 
         vectorlite knn_search returns (rowid, distance) pairs.
         We then JOIN with chunks/documents to get metadata.
+
+        Args:
+            blob: Query embedding as bytes
+            top_k: Number of results to return
+            ef: Search quality parameter (higher = more accurate but slower)
+                ef=10 (default): ~31% recall, ~35µs
+                ef=100: ~88% recall, ~168µs
+                ef=150: ~95% recall, ~310µs
         """
         # First get the k nearest neighbors from vectorlite
+        # ef parameter controls HNSW search quality - default 10 is too low!
         cursor = self.conn.execute("""
             SELECT v.rowid, v.distance
             FROM vec_chunks v
-            WHERE knn_search(v.embedding, knn_param(?, ?))
-        """, (blob, top_k))
+            WHERE knn_search(v.embedding, knn_param(?, ?, ?))
+        """, (blob, top_k, ef))
         vector_results = cursor.fetchall()
 
         if not vector_results:

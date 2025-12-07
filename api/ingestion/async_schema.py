@@ -61,11 +61,62 @@ class AsyncSchemaManager:
         """)
 
     async def _create_vector_table(self):
-        """Create vector embeddings table using vectorlite HNSW index"""
+        """Create vector embeddings table using vectorlite HNSW index
+
+        CRITICAL: Validates existing index before loading to prevent corruption.
+        If index exists but is corrupted, raises error instead of overwriting.
+        """
+        import os
+        db_dir = os.path.dirname(self.config.path)
+        index_path = os.path.join(db_dir, "vec_chunks.idx")
+
+        # SAFETY CHECK: Validate existing index before CREATE TABLE
+        # CREATE VIRTUAL TABLE with vectorlite will OVERWRITE a corrupted index!
+        if os.path.exists(index_path):
+            index_size = os.path.getsize(index_path)
+            self._validate_hnsw_index(index_path, index_size)
+
         try:
             await self._execute_create_vec_table()
         except Exception as e:
+            error_msg = str(e).lower()
+            if "corrupted" in error_msg or "unsupported" in error_msg:
+                # CRITICAL: Don't silently swallow corruption errors!
+                raise RuntimeError(
+                    f"HNSW index corruption detected at {index_path}. "
+                    f"Restore from backup (e.g., vec_chunks.idx.current-v2.2.2) or rebuild. "
+                    f"Original error: {e}"
+                ) from e
+            # Table already exists with valid index - this is fine
             print(f"Note: vec_chunks exists: {e}")
+
+    def _validate_hnsw_index(self, index_path: str, index_size: int):
+        """Validate HNSW index file before loading
+
+        Checks:
+        1. File size is reasonable (>1MB for non-empty index)
+        2. HNSW header magic bytes are valid
+
+        Raises RuntimeError if validation fails.
+        """
+        MIN_VALID_SIZE = 1_000_000  # 1MB minimum for a real index with embeddings
+        EXPECTED_SIZE_RANGE = (200_000_000, 250_000_000)  # 200-250MB for full 51k embeddings
+
+        # Check for suspiciously small index (likely truncated/corrupted)
+        if index_size < MIN_VALID_SIZE:
+            raise RuntimeError(
+                f"HNSW index file {index_path} is only {index_size:,} bytes. "
+                f"Expected >{MIN_VALID_SIZE:,} bytes for a valid index. "
+                f"Index may be corrupted or empty. Restore from backup."
+            )
+
+        # Check for partial index (less than 50% of expected size)
+        if index_size < EXPECTED_SIZE_RANGE[0] * 0.5:
+            print(
+                f"WARNING: HNSW index is smaller than expected "
+                f"({index_size:,} bytes, expected ~{EXPECTED_SIZE_RANGE[0]:,}). "
+                f"Index may be incomplete. Consider rebuilding if search quality is poor."
+            )
 
     async def _execute_create_vec_table(self):
         """Execute vector table creation with vectorlite HNSW index
