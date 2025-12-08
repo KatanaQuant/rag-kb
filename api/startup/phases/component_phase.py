@@ -3,7 +3,8 @@
 Initializes core components: model, stores, processor, cache, reranker.
 """
 from config import default_config
-from ingestion import DocumentProcessor, VectorStore, ProcessingProgressTracker
+from ingestion import DocumentProcessor
+from ingestion.database_factory import DatabaseFactory, get_backend
 from query_cache import QueryCache
 from operations.model_loader import ModelLoader
 
@@ -36,21 +37,25 @@ class ComponentPhase:
         - AsyncVectorStoreAdapter created lazily on first access
         - Eliminates dual-store HNSW corruption issues
         - DELETE operations now work correctly from API
-        """
-        print("Initializing vector store (unified architecture)...")
 
-        # Initialize single sync store (thread-safe via RLock)
-        self.state.core.vector_store = VectorStore()
-        print("Vector store initialized (thread-safe, adapter created lazily)")
+        Backend Selection (v2.3.0+):
+        - Uses DatabaseFactory to auto-detect backend from DATABASE_URL
+        - Supports both PostgreSQL (pgvector) and SQLite (vectorlite)
+        """
+        backend = get_backend()
+        print(f"Initializing vector store (unified architecture, backend: {backend})...")
+
+        # Initialize single sync store using factory (thread-safe via RLock)
+        self.state.core.vector_store = DatabaseFactory.create_vector_store()
+        print(f"Vector store initialized ({backend}, thread-safe, adapter created lazily)")
 
         # Note: async adapter is created lazily via CoreServices.async_vector_store property
 
     def init_progress_tracker(self):
-        """Initialize progress tracker."""
+        """Initialize progress tracker using factory for backend auto-detection."""
         if default_config.processing.enabled:
-            db_path = default_config.database.path
-            self.state.core.progress_tracker = ProcessingProgressTracker(db_path)
-            print("Resumable processing enabled")
+            self.state.core.progress_tracker = DatabaseFactory.create_progress_tracker()
+            print(f"Resumable processing enabled (backend: {get_backend()})")
 
     def init_processor(self):
         """Initialize document processor."""

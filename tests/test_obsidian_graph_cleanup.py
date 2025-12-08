@@ -5,6 +5,9 @@ Tests the critical flow:
 2. Modify note → change hash
 3. Reindex → old nodes cleaned up properly
 4. Verify: No orphan nodes remain
+
+NOTE: These tests require sqlite-vec extension for graph storage.
+They are skipped when the extension is not available.
 """
 
 import pytest
@@ -12,6 +15,27 @@ import sqlite3
 from pathlib import Path
 import tempfile
 import shutil
+
+
+def _has_sqlite_vec():
+    """Check if sqlite-vec extension is available and loadable."""
+    try:
+        import sqlite_vec
+        import sqlite3
+        conn = sqlite3.connect(':memory:')
+        sqlite_vec.load(conn)
+        conn.close()
+        return True
+    except (ImportError, AttributeError, Exception):
+        return False
+
+
+# Skip all tests if sqlite-vec not available
+pytestmark = pytest.mark.skipif(
+    not _has_sqlite_vec(),
+    reason="sqlite-vec extension not available"
+)
+
 from ingestion.graph_repository import GraphRepository
 from ingestion.database import DatabaseConnection, SchemaManager
 
@@ -22,17 +46,15 @@ class TestObsidianGraphCleanup:
     @pytest.fixture
     def db_conn(self):
         """Create in-memory database with schema"""
+        import sqlite_vec
+
         conn = sqlite3.connect(':memory:')
 
         # Enable foreign keys (required for CASCADE DELETE)
         conn.execute("PRAGMA foreign_keys = ON")
 
         # Load sqlite-vec
-        try:
-            import sqlite_vec
-            sqlite_vec.load(conn)
-        except ImportError:
-            pytest.skip("sqlite-vec not available - install with: pip install sqlite-vec")
+        sqlite_vec.load(conn)
 
         # Create schema
         from config import DatabaseConfig
@@ -248,12 +270,10 @@ class TestGraphRepositoryCleanupMethods:
     @pytest.fixture
     def db_conn(self):
         """Create in-memory database"""
+        import sqlite_vec
+
         conn = sqlite3.connect(':memory:')
-        try:
-            import sqlite_vec
-            sqlite_vec.load(conn)
-        except ImportError:
-            pytest.skip("sqlite-vec not available - install with: pip install sqlite-vec")
+        sqlite_vec.load(conn)
 
         from config import DatabaseConfig
         config = DatabaseConfig(path=':memory:', embedding_dim=1024)

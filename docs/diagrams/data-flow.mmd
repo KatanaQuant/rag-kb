@@ -17,10 +17,10 @@ flowchart LR
         sw[StoreWorker]
     end
 
-    subgraph storage["Storage"]
-        db[(SQLite)]
-        vec[(Vector Index)]
-        fts[(FTS Index)]
+    subgraph storage["Storage (PostgreSQL)"]
+        db[(PostgreSQL)]
+        vec[(pgvector HNSW)]
+        fts[(tsvector FTS)]
     end
 
     subgraph query["Query"]

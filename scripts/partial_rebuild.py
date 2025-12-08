@@ -1,4 +1,6 @@
 """
+DEPRECATED: Use POST /api/maintenance/partial-rebuild instead.
+
 Partial rebuild: re-embed only chunks missing from HNSW index.
 
 Use this when some chunks were indexed into a corrupted HNSW index

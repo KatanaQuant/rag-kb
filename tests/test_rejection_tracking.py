@@ -8,42 +8,15 @@ import sqlite3
 from ingestion.progress import ProcessingProgressTracker, ProcessingProgress
 
 
+# temp_db_progress fixture is provided by conftest.py
+
+
 class TestRejectionTracking:
     """Test rejection tracking in ProcessingProgressTracker"""
 
-    @pytest.fixture
-    def temp_db(self):
-        """Create temporary database"""
-        temp_dir = tempfile.mkdtemp()
-        db_path = str(Path(temp_dir) / "test.db")
-
-        # Create schema
-        conn = sqlite3.connect(db_path)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS processing_progress (
-                file_path TEXT PRIMARY KEY,
-                file_hash TEXT NOT NULL,
-                total_chunks INTEGER DEFAULT 0,
-                chunks_processed INTEGER DEFAULT 0,
-                status TEXT DEFAULT 'in_progress',
-                last_chunk_end INTEGER DEFAULT 0,
-                error_message TEXT,
-                started_at TEXT,
-                last_updated TEXT,
-                completed_at TEXT
-            )
-        """)
-        conn.commit()
-        conn.close()
-
-        yield db_path
-
-        # Cleanup
-        shutil.rmtree(temp_dir)
-
-    def test_mark_rejected_creates_new_record(self, temp_db):
+    def test_mark_rejected_creates_new_record(self, temp_db_progress):
         """Test marking a file as rejected creates new record"""
-        tracker = ProcessingProgressTracker(temp_db)
+        tracker = ProcessingProgressTracker(temp_db_progress)
 
         tracker.mark_rejected(
             "/app/knowledge_base/malware.pdf",
@@ -58,9 +31,9 @@ class TestRejectionTracking:
         assert "FileSizeStrategy" in rejected[0].error_message
         assert "File too large" in rejected[0].error_message
 
-    def test_mark_rejected_updates_existing_record(self, temp_db):
+    def test_mark_rejected_updates_existing_record(self, temp_db_progress):
         """Test marking existing file as rejected updates record"""
-        tracker = ProcessingProgressTracker(temp_db)
+        tracker = ProcessingProgressTracker(temp_db_progress)
 
         # Create in_progress record
         tracker.start_processing("/app/knowledge_base/test.pdf", "abc123")
@@ -77,9 +50,9 @@ class TestRejectionTracking:
         assert progress.status == "rejected"
         assert "ArchiveBombStrategy" in progress.error_message
 
-    def test_get_rejected_files_returns_only_rejected(self, temp_db):
+    def test_get_rejected_files_returns_only_rejected(self, temp_db_progress):
         """Test get_rejected_files returns only rejected status"""
-        tracker = ProcessingProgressTracker(temp_db)
+        tracker = ProcessingProgressTracker(temp_db_progress)
 
         # Create various states
         tracker.start_processing("/app/kb/in_progress.pdf", "hash1")
@@ -91,9 +64,9 @@ class TestRejectionTracking:
         assert len(rejected) == 2
         assert all(r.status == "rejected" for r in rejected)
 
-    def test_rejected_files_ordered_by_timestamp(self, temp_db):
+    def test_rejected_files_ordered_by_timestamp(self, temp_db_progress):
         """Test rejected files are ordered by most recent first"""
-        tracker = ProcessingProgressTracker(temp_db)
+        tracker = ProcessingProgressTracker(temp_db_progress)
 
         tracker.mark_rejected("/app/kb/old.pdf", "Reason 1", "Strategy1")
         import time
@@ -105,9 +78,9 @@ class TestRejectionTracking:
         assert rejected[0].file_path == "/app/kb/new.pdf"
         assert rejected[1].file_path == "/app/kb/old.pdf"
 
-    def test_mark_rejected_includes_validation_check(self, temp_db):
+    def test_mark_rejected_includes_validation_check(self, temp_db_progress):
         """Test mark_rejected properly formats error message with check name"""
-        tracker = ProcessingProgressTracker(temp_db)
+        tracker = ProcessingProgressTracker(temp_db_progress)
 
         tracker.mark_rejected(
             "/app/kb/exec.pdf",
@@ -122,9 +95,9 @@ class TestRejectionTracking:
         assert "ExtensionMismatchStrategy" in error_msg
         assert "Executable masquerading as pdf" in error_msg
 
-    def test_mark_rejected_without_check_name(self, temp_db):
+    def test_mark_rejected_without_check_name(self, temp_db_progress):
         """Test mark_rejected works without validation_check parameter"""
-        tracker = ProcessingProgressTracker(temp_db)
+        tracker = ProcessingProgressTracker(temp_db_progress)
 
         tracker.mark_rejected(
             "/app/kb/file.pdf",

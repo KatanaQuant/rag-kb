@@ -4,6 +4,7 @@ Pytest configuration and shared fixtures
 Common fixtures used across multiple test files are defined here.
 Per Kent Beck TDD: Good fixtures reduce test setup duplication.
 """
+import os
 import pytest
 import sys
 from pathlib import Path
@@ -16,6 +17,57 @@ if not api_path.exists():
     # Running in Docker where api contents are at /app directly
     api_path = Path(__file__).parent.parent
 sys.path.insert(0, str(api_path))
+
+
+# =============================================================================
+# Environment Detection Helpers
+# =============================================================================
+
+def is_docker_environment():
+    """Check if running inside Docker container."""
+    return Path('/.dockerenv').exists() or Path('/run/.containerenv').exists()
+
+
+skip_if_not_docker = pytest.mark.skipif(
+    not is_docker_environment(),
+    reason="Test requires Docker environment"
+)
+
+
+def has_sqlite_vec():
+    """Check if sqlite-vec extension is available."""
+    try:
+        import sqlite_vec
+        return True
+    except ImportError:
+        return False
+
+
+skip_if_no_sqlite_vec = pytest.mark.skipif(
+    not has_sqlite_vec(),
+    reason="sqlite-vec extension not available"
+)
+
+
+def _huggingface_cache_accessible():
+    """Check if HuggingFace cache directory is accessible."""
+    cache_dir = os.path.expanduser("~/.cache/huggingface/hub")
+    try:
+        # Check if we can create/write to the cache directory
+        os.makedirs(cache_dir, exist_ok=True)
+        test_file = os.path.join(cache_dir, ".write_test")
+        with open(test_file, "w") as f:
+            f.write("test")
+        os.remove(test_file)
+        return True
+    except (PermissionError, OSError):
+        return False
+
+
+requires_huggingface = pytest.mark.skipif(
+    not _huggingface_cache_accessible(),
+    reason="HuggingFace cache not accessible"
+)
 
 
 # =============================================================================
@@ -37,6 +89,8 @@ def mock_app_state():
     state.core.vector_store = Mock()
     state.core.async_vector_store = Mock()
     state.core.progress_tracker = Mock()
+    # Configure progress_tracker to return empty list for background tasks
+    state.core.progress_tracker.get_incomplete_files = Mock(return_value=[])
     state.core.processor = Mock()
 
     # Query components
@@ -137,6 +191,45 @@ def temp_kb_path(tmp_path):
     return kb_path
 
 
+@pytest.fixture
+def mock_database_factory():
+    """Mock DatabaseFactory for tests that don't need real database.
+
+    Use this fixture when testing components that use DatabaseFactory.
+    All factory methods return pre-configured mocks.
+    """
+    from unittest.mock import patch, MagicMock
+
+    mock_store = MagicMock()
+    mock_store.is_document_indexed.return_value = False
+    mock_store.search.return_value = []
+    mock_store.get_stats.return_value = {'indexed_documents': 0, 'total_chunks': 0}
+    mock_store.delete_document.return_value = {'found': True, 'document_deleted': True}
+    mock_store.close.return_value = None
+
+    mock_conn = MagicMock()
+    mock_conn.connect.return_value = MagicMock()
+    mock_conn.close.return_value = None
+
+    mock_tracker = MagicMock()
+    mock_tracker.get_status.return_value = None
+    mock_tracker.get_incomplete.return_value = []
+    mock_tracker.start_processing.return_value = None
+
+    with patch('ingestion.database_factory.DatabaseFactory') as MockFactory:
+        MockFactory.detect_backend.return_value = 'sqlite'
+        MockFactory.create_vector_store.return_value = mock_store
+        MockFactory.create_connection.return_value = mock_conn
+        MockFactory.create_progress_tracker.return_value = mock_tracker
+
+        yield {
+            'factory': MockFactory,
+            'vector_store': mock_store,
+            'connection': mock_conn,
+            'progress_tracker': mock_tracker,
+        }
+
+
 # =============================================================================
 # Test Data Fixtures
 # =============================================================================
@@ -161,3 +254,168 @@ def sample_document_metadata():
         "indexed_at": "2025-01-01T00:00:00",
         "chunk_count": 5
     }
+
+
+# =============================================================================
+# Maintenance Test Fixtures
+# =============================================================================
+
+@pytest.fixture
+def maintenance_client():
+    """Create test client for maintenance endpoint tests."""
+    from main import app
+    from fastapi.testclient import TestClient
+    client = TestClient(app)
+    yield client
+
+
+@pytest.fixture
+def temp_db_full(tmp_path):
+    """Create temporary SQLite database with full schema (documents + chunks + processing_progress).
+
+    Use this for maintenance tests that need the complete database schema.
+    """
+    import sqlite3
+    import tempfile
+
+    fd, path = tempfile.mkstemp(suffix='.db')
+    conn = sqlite3.connect(path)
+
+    conn.execute('''
+        CREATE TABLE documents (
+            id INTEGER PRIMARY KEY,
+            file_path TEXT,
+            indexed_at TIMESTAMP
+        )
+    ''')
+    conn.execute('''
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY,
+            document_id INTEGER,
+            content TEXT,
+            FOREIGN KEY (document_id) REFERENCES documents(id)
+        )
+    ''')
+    conn.execute('''
+        CREATE TABLE processing_progress (
+            file_path TEXT PRIMARY KEY,
+            status TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+    yield path
+
+    os.close(fd)
+    os.unlink(path)
+
+
+@pytest.fixture
+def temp_db_with_fts(tmp_path):
+    """Create temporary SQLite database with FTS schema.
+
+    Use this for maintenance tests that need FTS5 virtual tables.
+    """
+    import sqlite3
+    import tempfile
+
+    fd, path = tempfile.mkstemp(suffix='.db')
+    conn = sqlite3.connect(path)
+
+    conn.execute('''
+        CREATE TABLE documents (
+            id INTEGER PRIMARY KEY,
+            file_path TEXT UNIQUE,
+            indexed_at TIMESTAMP
+        )
+    ''')
+    conn.execute('''
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY,
+            document_id INTEGER,
+            content TEXT,
+            FOREIGN KEY (document_id) REFERENCES documents(id)
+        )
+    ''')
+    conn.execute('''
+        CREATE VIRTUAL TABLE fts_chunks USING fts5(content, chunk_id UNINDEXED)
+    ''')
+    conn.commit()
+    conn.close()
+
+    yield path
+
+    os.close(fd)
+    os.unlink(path)
+
+
+@pytest.fixture
+def temp_db_progress():
+    """Create temporary SQLite database with full processing_progress schema.
+
+    Use this for resumable processing and rejection tracking tests.
+    """
+    import sqlite3
+    import tempfile
+
+    fd, path = tempfile.mkstemp(suffix='.db')
+    conn = sqlite3.connect(path)
+
+    conn.execute('''
+        CREATE TABLE processing_progress (
+            file_path TEXT PRIMARY KEY,
+            file_hash TEXT,
+            total_chunks INTEGER DEFAULT 0,
+            chunks_processed INTEGER DEFAULT 0,
+            status TEXT DEFAULT 'in_progress',
+            last_chunk_end INTEGER DEFAULT 0,
+            error_message TEXT,
+            started_at TEXT,
+            last_updated TEXT,
+            completed_at TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+    yield path
+
+    os.close(fd)
+    os.unlink(path)
+
+
+@pytest.fixture
+def temp_db_minimal():
+    """Create temporary SQLite database with documents + chunks only.
+
+    Use this for tests that only need document/chunk tables.
+    """
+    import sqlite3
+    import tempfile
+
+    fd, path = tempfile.mkstemp(suffix='.db')
+    conn = sqlite3.connect(path)
+
+    conn.execute('''
+        CREATE TABLE documents (
+            id INTEGER PRIMARY KEY,
+            file_path TEXT UNIQUE,
+            indexed_at TIMESTAMP
+        )
+    ''')
+    conn.execute('''
+        CREATE TABLE chunks (
+            id INTEGER PRIMARY KEY,
+            document_id INTEGER,
+            content TEXT,
+            FOREIGN KEY (document_id) REFERENCES documents(id)
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+    yield path
+
+    os.close(fd)
+    os.unlink(path)

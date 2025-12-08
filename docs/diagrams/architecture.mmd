@@ -10,7 +10,7 @@ flowchart LR
         Ext[Extract Text<br/>Docling]
         Chunk[Chunk<br/>HybridChunker]
         Embed[Embed<br/>Arctic Embed L]
-        DB[(SQLite<br/>+ vec)]
+        DB[(PostgreSQL<br/>+ pgvector)]
     end
 
     subgraph Query["QUERY"]

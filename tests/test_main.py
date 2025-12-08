@@ -84,23 +84,8 @@ class TestFileWalker:
 
         assert len(files) == 2
 
-    def test_is_supported(self, tmp_path):
-        """Test file support checking"""
-        walker = FileWalker(tmp_path, {'.txt', '.md'})
-
-        txt_file = tmp_path / "test.txt"
-        txt_file.write_text("test")
-
-        md_file = tmp_path / "test.md"
-        md_file.write_text("test")
-
-        pdf_file = tmp_path / "test.pdf"
-        pdf_file.write_text("test")
-
-        assert walker._is_supported(txt_file)
-        assert walker._is_supported(md_file)
-        assert not walker._is_supported(pdf_file)
-
+# test_is_supported removed - Metz violation (tests private method)
+# Behavior already covered by test_walk_filters_by_extension via public walk()
 
 # Deprecated classes removed: DocumentIndexer and IndexOrchestrator were refactored
 # out to pipeline architecture in v0.11+. Tests for these classes have been removed
@@ -116,24 +101,23 @@ class TestQueryExecutor:
         vector_store = Mock()
         return model, vector_store
 
-    def test_validate_empty_query(self, mock_components):
-        """Test validation of empty query"""
+    @pytest.mark.asyncio
+    async def test_execute_rejects_empty_query(self, mock_components):
+        """execute() should reject empty queries (Metz: test via public interface)"""
         model, store = mock_components
         executor = QueryExecutor(model, store)
 
+        # Empty string
+        request = QueryRequest(text="", top_k=5)
         with pytest.raises(ValueError, match="cannot be empty"):
-            executor._validate("")
+            await executor.execute(request)
 
+        # Whitespace only
+        request = QueryRequest(text="   ", top_k=5)
         with pytest.raises(ValueError, match="cannot be empty"):
-            executor._validate("   ")
+            await executor.execute(request)
 
-    def test_validate_valid_query(self, mock_components):
-        """Test validation of valid query"""
-        model, store = mock_components
-        executor = QueryExecutor(model, store)
-
-        # Should not raise
-        executor._validate("valid query")
+    # test_validate_valid_query removed - no assertion, behavior covered by test_execute_query
 
     @pytest.mark.asyncio
     async def test_execute_query(self, mock_components):

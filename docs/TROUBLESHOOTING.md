@@ -157,7 +157,9 @@ curl -X POST http://localhost:8000/api/maintenance/cleanup-orphans \
 - `verify-integrity` shows HNSW count mismatch
 - Logs show "HNSW write error"
 
-**Cause**: Container restart during indexing, disk full, or concurrent write conflicts. vectorlite only persists HNSW index when connection closes.
+**Cause**: Container restart during indexing, disk full, or concurrent write conflicts.
+
+> **Note**: This was a common issue with SQLite + vectorlite (pre-v2.3.0). PostgreSQL + pgvector handles this automatically with ACID compliance.
 
 **Fix: Rebuild HNSW Index**
 ```bash
@@ -235,35 +237,58 @@ curl -X POST http://localhost:8000/api/maintenance/reindex-path \
 
 ## Database Issues
 
-### Database Locked
+### Database Issues (PostgreSQL)
 
-**Symptom**: "Database is locked" errors
-
-```bash
-# Stop containers
-docker-compose down
-
-# Remove lock files
-rm data/*.db-*
-
-# Restart
-docker-compose up -d
-```
-
-### Database Corruption
-
-**Symptom**: Corruption errors or inconsistent results
+**Symptom**: Connection refused or database errors
 
 ```bash
-# Stop containers
-docker-compose down
+# Check PostgreSQL status
+docker-compose logs postgres
 
-# Remove and rebuild database
-rm data/rag.db
+# Restart PostgreSQL
+docker-compose restart postgres
+
+# If corrupted, restore from backup
+docker exec -i rag-kb-postgres psql -U ragkb ragkb < ragkb_backup.sql
+```
+
+### Moving to a New Machine (Data Recovery)
+
+**Symptom**: Need to transfer knowledge base to another machine or recover from data loss
+
+**Solution**: Use the backup/restore scripts
+
+```bash
+# On original/source machine:
+./scripts/backup_postgres.sh --compress
+# Creates: data/ragkb_backup.sql.gz
+
+# Transfer the backup file to new machine (via USB, scp, etc.)
+scp data/ragkb_backup.sql.gz user@new-machine:/tmp/
+
+# On new machine after fresh install:
+# 1. Ensure PostgreSQL is running
+docker-compose up -d postgres
+sleep 10
+
+# 2. Restore the backup
+./scripts/restore_postgres.sh --merge
+
+# 3. Start full stack
 docker-compose up -d
 
-# Database will be recreated and files reindexed
+# 4. Verify restore
+curl http://localhost:8000/api/maintenance/verify-integrity | jq
 ```
+
+For detailed multi-machine workflows, see [MAINTENANCE.md - Multi-Machine Workflow](MAINTENANCE.md#multi-machine-workflow).
+
+### Database Issues (SQLite Legacy)
+
+See [SQLITE_LEGACY.md](SQLITE_LEGACY.md) for SQLite-specific troubleshooting including:
+- Database locked errors
+- Lock file removal
+- Database corruption recovery
 
 For database integrity issues (orphans, missing chunks), see [MAINTENANCE.md](MAINTENANCE.md).
 

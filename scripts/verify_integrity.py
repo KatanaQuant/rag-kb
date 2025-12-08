@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """
+DEPRECATED: Use GET /api/maintenance/verify-integrity instead.
+
 Verify database integrity for the RAG knowledge base.
 
 Checks:

@@ -62,13 +62,13 @@ Represents a semantically coherent text segment.
 **Root Entity**: `Chunk`
 
 **Value Objects**:
-- `Embedding` (float[384] vector)
+- `Embedding` (float[1024] vector)
 - `ChunkMetadata` (page, position, source)
 
 **Invariants**:
 - Content must not be empty
 - Must belong to a Document
-- Embedding dimension must match model (384)
+- Embedding dimension must match model (1024)
 
 ---
 
@@ -150,7 +150,7 @@ Tracks document processing state for resumability.
 - `ProcessingStatus` (pending, completed, rejected, failed)
 
 **Invariants**:
-- Status transitions: pending → completed | rejected | failed
+- Status transitions: pending -> completed | rejected | failed
 - completed_at only set when status is completed
 
 ---
@@ -247,13 +247,13 @@ Outcome of processing a single document.
 | Aggregate | Repository | Table(s) |
 |-----------|------------|----------|
 | Document | `DocumentRepository` | `documents` |
-| Chunk | `ChunkRepository` | `chunks`, `vec_chunks`, `chunks_fts` |
+| Chunk | `ChunkRepository` | `chunks`, `vec_chunks`, `fts_chunks` |
 | QueueItem | `IndexingQueue` | (in-memory) |
-| SearchResult | `SearchRepository` | `vec_chunks`, `chunks_fts` |
+| SearchResult | `SearchRepository` | `vec_chunks`, `fts_chunks` |
 | ProcessingProgress | `ProcessingProgressTracker` | `processing_progress` |
 | GraphNode | `NodeRepository` | `graph_nodes` |
 | GraphEdge | `EdgeRepository` | `graph_edges` |
 
 ---
 
-*Last updated: 2025-12-03*
+*Last updated: 2025-12-08*

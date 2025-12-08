@@ -12,7 +12,7 @@ This glossary defines the core terms used throughout the RAG-KB codebase. Using 
 |------|------------|-----------------|
 | **Document** | A file indexed for semantic search (PDF, code, markdown, etc.) | Ingestion |
 | **Chunk** | A segment of document text with page/position metadata | Pipeline |
-| **Embedding** | A dense vector (float[384]) representing chunk semantics | Pipeline |
+| **Embedding** | A dense vector (float[1024]) representing chunk semantics | Pipeline |
 | **Query** | A natural language search request | Query |
 | **Search Result** | A ranked chunk with relevance score and source metadata | Query |
 | **Knowledge Base** | The `kb/` directory containing documents to index | Ingestion |
@@ -54,10 +54,20 @@ This glossary defines the core terms used throughout the RAG-KB codebase. Using 
 | Term | Definition |
 |------|------------|
 | **Vector Store** | Database storing embeddings for similarity search |
-| **FTS Index** | Full-text search index for keyword matching |
+| **FTS Index** | Full-text search index for keyword matching (PostgreSQL tsvector) |
 | **Document Repository** | Persistence layer for document metadata |
 | **Chunk Repository** | Persistence layer for chunk content and vectors |
 | **Graph Repository** | Persistence layer for Obsidian note relationships |
+
+---
+
+## Database Abstraction Terms
+
+| Term | Definition |
+|------|------------|
+| **DatabaseFactory** | Factory class for runtime database backend selection (PostgreSQL or SQLite) |
+| **OperationsFactory** | Factory class for creating backend-agnostic maintenance operations |
+| **HybridSearcher** | ABC interface for combining vector similarity with BM25 keyword search using RRF |
 
 ---
 
@@ -122,4 +132,4 @@ This glossary defines the core terms used throughout the RAG-KB codebase. Using 
 
 ---
 
-*Last updated: 2025-12-03*
+*Last updated: 2025-12-08*

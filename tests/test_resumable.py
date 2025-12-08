@@ -8,50 +8,21 @@ from unittest.mock import Mock, patch
 import tempfile
 import shutil
 
-from ingestion import (
-    ProcessingProgressTracker,
-    ProcessingProgress,
-    DocumentProcessor,
-    FileHasher
-)
+from tests import requires_huggingface
+
+# Import SQLite progress tracker explicitly (not the PostgreSQL alias)
+from ingestion.progress import ProcessingProgressTracker, ProcessingProgress
+from ingestion import DocumentProcessor, FileHasher
 from domain_models import DocumentFile
 
 
-@pytest.fixture
-def temp_db():
-    """Create temporary database"""
-    with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
-        db_path = f.name
-
-    # Initialize schema
-    conn = sqlite3.connect(db_path)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS processing_progress (
-            file_path TEXT PRIMARY KEY,
-            file_hash TEXT,
-            total_chunks INTEGER DEFAULT 0,
-            chunks_processed INTEGER DEFAULT 0,
-            status TEXT DEFAULT 'in_progress',
-            last_chunk_end INTEGER DEFAULT 0,
-            error_message TEXT,
-            started_at TEXT,
-            last_updated TEXT,
-            completed_at TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-    yield db_path
-
-    # Cleanup
-    Path(db_path).unlink(missing_ok=True)
+# temp_db_progress fixture is provided by conftest.py
 
 
 @pytest.fixture
-def tracker(temp_db):
+def tracker(temp_db_progress):
     """Create progress tracker"""
-    return ProcessingProgressTracker(temp_db)
+    return ProcessingProgressTracker(temp_db_progress)
 
 
 class TestProcessingProgressTracker:
@@ -161,6 +132,7 @@ class TestDocumentProcessor:
 
         temp_path.unlink(missing_ok=True)
 
+    @requires_huggingface
     def test_skip_completed_unchanged(self, tracker, temp_file):
         """Test skipping completed files with matching hash"""
         processor = DocumentProcessor(tracker)
@@ -177,6 +149,7 @@ class TestDocumentProcessor:
         assert len(chunks1) > 0
         assert len(chunks2) == 0  # Skipped
 
+    @requires_huggingface
     def test_reprocess_on_hash_change(self, tracker, temp_file):
         """Test reprocessing when file hash changes"""
         processor = DocumentProcessor(tracker)
@@ -198,6 +171,7 @@ class TestDocumentProcessor:
         assert len(chunks1) > 0
         assert len(chunks2) > 0
 
+    @requires_huggingface
     def test_process_without_tracker(self, temp_file):
         """Test legacy processing without tracker"""
         processor = DocumentProcessor(progress_tracker=None)
@@ -218,6 +192,7 @@ class TestDocumentProcessor:
 
         assert len(chunks) == 0
 
+    @requires_huggingface
     def test_resume_interrupted_processing(self, tracker, temp_file):
         """Test resuming interrupted processing"""
         processor = DocumentProcessor(tracker)

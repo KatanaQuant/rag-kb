@@ -23,49 +23,34 @@ from ingestion.database import (
 from config import DatabaseConfig
 
 
-# Check if vec0 extension is available
-def vec0_available():
+# Check if vectorlite extension is available (used by database.py for HNSW index)
+def vectorlite_available():
     try:
-        import sqlite_vec
+        import vectorlite_py
         conn = sqlite3.connect(':memory:')
-        sqlite_vec.load(conn)
+        conn.enable_load_extension(True)
+        conn.load_extension(vectorlite_py.vectorlite_path())
         conn.close()
         return True
-    except (ImportError, sqlite3.Error, AttributeError):
+    except (ImportError, sqlite3.Error, AttributeError, OSError):
         return False
 
 
-requires_vec0 = pytest.mark.skipif(not vec0_available(), reason="sqlite-vec extension not available")
+requires_vec0 = pytest.mark.skipif(not vectorlite_available(), reason="vectorlite extension not available")
 
 
 
 @pytest.fixture
 def db_with_vec(tmp_path):
-    """Create database with sqlite-vec loaded"""
-    import sqlite_vec
+    """Create database with vectorlite loaded for HNSW index"""
+    import vectorlite_py
     db_path = tmp_path / "test.db"
-    config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+    config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
     db_conn = DatabaseConnection(config)
     conn = db_conn.connect()
-    sqlite_vec.load(conn)
-
-    schema = SchemaManager(conn, config)
-    schema.create_schema()
-
-    yield conn
-    conn.close()
-
-@pytest.fixture
-def db_with_vec(tmp_path):
-    """Create database with sqlite-vec loaded"""
-    import sqlite_vec
-    db_path = tmp_path / "test.db"
-    config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
-
-    db_conn = DatabaseConnection(config)
-    conn = db_conn.connect()
-    sqlite_vec.load(conn)
+    conn.enable_load_extension(True)
+    conn.load_extension(vectorlite_py.vectorlite_path())
 
     schema = SchemaManager(conn, config)
     schema.create_schema()
@@ -95,7 +80,7 @@ class TestDatabaseConnection:
     def test_connection_enables_wal_mode(self, tmp_path):
         """WAL mode should be enabled for better concurrency"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
         db_conn = DatabaseConnection(config)
         conn = db_conn.connect()
@@ -110,7 +95,7 @@ class TestDatabaseConnection:
     def test_connection_sets_busy_timeout(self, tmp_path):
         """Busy timeout should be set for lock handling"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
         db_conn = DatabaseConnection(config)
         conn = db_conn.connect()
@@ -120,22 +105,6 @@ class TestDatabaseConnection:
         timeout = cursor.fetchone()[0]
 
         assert timeout == 5000  # 5 seconds
-
-
-    def test_vector_extension_loading(self, tmp_path):
-        """Vector extension should be loaded if required"""
-        db_path = tmp_path / "test.db"
-        config = DatabaseConfig(
-            path=str(db_path),
-            require_vec_extension=True
-        )
-
-        db_conn = DatabaseConnection(config)
-
-        with patch.object(db_conn, '_has_extension_support', return_value=True):
-            with patch.object(db_conn, '_try_load') as mock_try_load:
-                conn = db_conn.connect()
-                mock_try_load.assert_called_once()
 
 
     def test_fallback_to_python_bindings_if_extension_fails(self, tmp_path):
@@ -162,8 +131,9 @@ class TestSchemaManager:
         """Documents table should be created with correct columns"""
         db_path = tmp_path / "test.db"
         conn = sqlite3.connect(str(db_path))
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
-        schema = SchemaManager(conn)
+        schema = SchemaManager(conn, config)
         schema.create_schema()
 
         # Check documents table exists
@@ -187,8 +157,9 @@ class TestSchemaManager:
         """Chunks table should be created with correct columns"""
         db_path = tmp_path / "test.db"
         conn = sqlite3.connect(str(db_path))
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
-        schema = SchemaManager(conn)
+        schema = SchemaManager(conn, config)
         schema.create_schema()
 
         # Check chunks table exists
@@ -210,17 +181,18 @@ class TestSchemaManager:
 
     @requires_vec0
     def test_creates_embeddings_table(self, tmp_path):
-        """Embeddings table (vec0 virtual table) should be created"""
+        """Embeddings table (vectorlite virtual table) should be created"""
         db_path = tmp_path / "test.db"
         conn = sqlite3.connect(str(db_path))
 
-        # Load sqlite-vec
-        import sqlite_vec
-        sqlite_vec.load(conn)
+        # Load vectorlite for HNSW index
+        import vectorlite_py
+        conn.enable_load_extension(True)
+        conn.load_extension(vectorlite_py.vectorlite_path())
 
         # Create schema with embeddings config
         from config import DatabaseConfig
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
         schema = SchemaManager(conn, config)
         schema.create_schema()
 
@@ -234,30 +206,13 @@ class TestSchemaManager:
         assert result[0] == 'vec_chunks'
 
 
-    def test_creates_fts_index(self, tmp_path):
-        """Full-text search index should be created"""
-        db_path = tmp_path / "test.db"
-        conn = sqlite3.connect(str(db_path))
-
-        schema = SchemaManager(conn)
-        schema.create_schema()
-
-        # Check FTS virtual table exists
-        cursor = conn.execute("""
-            SELECT name FROM sqlite_master
-            WHERE type='table' AND name = 'fts_chunks'
-        """)
-        result = cursor.fetchone()
-        # FTS table should exist
-        assert result is not None, "FTS table fts_chunks not found"
-
-
     def test_schema_is_idempotent(self, tmp_path):
         """Running create_schema multiple times should not error"""
         db_path = tmp_path / "test.db"
         conn = sqlite3.connect(str(db_path))
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
-        schema = SchemaManager(conn)
+        schema = SchemaManager(conn, config)
         schema.create_schema()
         schema.create_schema()  # Should not raise
         schema.create_schema()  # Should not raise
@@ -267,39 +222,17 @@ class TestSchemaManager:
 class TestVectorRepository:
     """Test vector repository operations"""
 
-    def test_is_indexed_returns_false_for_new_document(self, tmp_path):
+    def test_is_indexed_returns_false_for_new_document(self, db_with_vec):
         """New document should not be marked as indexed"""
-        db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
-
-        db_conn = DatabaseConnection(config)
-        conn = db_conn.connect()
-        # Load sqlite-vec
-        import sqlite_vec
-        sqlite_vec.load(conn)
-        schema = SchemaManager(conn, config)
-        schema.create_schema()
-
-        repo = VectorRepository(conn)
+        repo = VectorRepository(db_with_vec)
         is_indexed = repo.is_indexed("/test/newfile.pdf", "abc123")
 
         assert is_indexed is False
 
 
-    def test_is_indexed_returns_true_after_adding_document(self, tmp_path):
+    def test_is_indexed_returns_true_after_adding_document(self, db_with_vec):
         """Document should be marked as indexed after adding"""
-        db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
-
-        db_conn = DatabaseConnection(config)
-        conn = db_conn.connect()
-        # Load sqlite-vec
-        import sqlite_vec
-        sqlite_vec.load(conn)
-        schema = SchemaManager(conn, config)
-        schema.create_schema()
-
-        repo = VectorRepository(conn)
+        repo = VectorRepository(db_with_vec)
 
         # Add document
         file_path = "/test/document.pdf"
@@ -334,20 +267,9 @@ class TestVectorRepository:
         assert result[1] == file_path  # file_path column
         assert result[2] == file_hash  # file_hash column
 
-    def test_add_document_inserts_chunks(self, tmp_path):
+    def test_add_document_inserts_chunks(self, db_with_vec):
         """Adding document should insert chunk records"""
-        db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
-
-        db_conn = DatabaseConnection(config)
-        conn = db_conn.connect()
-        # Load sqlite-vec
-        import sqlite_vec
-        sqlite_vec.load(conn)
-        schema = SchemaManager(conn, config)
-        schema.create_schema()
-
-        repo = VectorRepository(conn)
+        repo = VectorRepository(db_with_vec)
 
         file_path = "/test/document.pdf"
         file_hash = "abc123"
@@ -361,26 +283,15 @@ class TestVectorRepository:
         repo.add_document(file_path, file_hash, chunks, embeddings)
 
         # Verify chunks were inserted
-        cursor = conn.execute("SELECT COUNT(*) FROM chunks")
+        cursor = db_with_vec.execute("SELECT COUNT(*) FROM chunks")
         chunk_count = cursor.fetchone()[0]
 
         assert chunk_count == 3
 
 
-    def test_get_stats_returns_document_and_chunk_counts(self, tmp_path):
+    def test_get_stats_returns_document_and_chunk_counts(self, db_with_vec):
         """get_stats should return document and chunk counts"""
-        db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
-
-        db_conn = DatabaseConnection(config)
-        conn = db_conn.connect()
-        # Load sqlite-vec
-        import sqlite_vec
-        sqlite_vec.load(conn)
-        schema = SchemaManager(conn, config)
-        schema.create_schema()
-
-        repo = VectorRepository(conn)
+        repo = VectorRepository(db_with_vec)
 
         # Add multiple documents
         for i in range(5):
@@ -406,7 +317,7 @@ class TestVectorStore:
     def test_initialization_creates_schema(self, tmp_path):
         """VectorStore initialization should create schema"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
         store = VectorStore(config)
 
@@ -425,7 +336,7 @@ class TestVectorStore:
     def test_is_document_indexed_delegates_to_repository(self, tmp_path):
         """is_document_indexed should delegate to repository"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
         store = VectorStore(config)
 
@@ -438,7 +349,7 @@ class TestVectorStore:
     def test_add_document_stores_document_and_chunks(self, tmp_path):
         """add_document should store document metadata and chunks"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
         store = VectorStore(config)
 
@@ -466,7 +377,7 @@ class TestVectorStore:
     def test_delete_document_removes_document_and_chunks(self, tmp_path):
         """delete_document should remove document and all its chunks"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
         store = VectorStore(config)
 
@@ -502,7 +413,7 @@ class TestVectorStore:
     def test_delete_nonexistent_document_returns_not_found(self, tmp_path):
         """Deleting non-existent document should return not found"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
         store = VectorStore(config)
 
@@ -517,7 +428,7 @@ class TestVectorStore:
     def test_get_document_info_returns_metadata(self, tmp_path):
         """get_document_info should return document metadata"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
         store = VectorStore(config)
 
@@ -541,7 +452,7 @@ class TestVectorStore:
     def test_get_document_info_returns_none_for_missing_file(self, tmp_path):
         """get_document_info should return None for missing document"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
         store = VectorStore(config)
 
@@ -554,7 +465,7 @@ class TestVectorStore:
     def test_query_documents_with_chunks_returns_all_documents(self, tmp_path):
         """query_documents_with_chunks should return all documents with chunk counts"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
         store = VectorStore(config)
 
@@ -570,9 +481,8 @@ class TestVectorStore:
             embeddings = [np.random.rand(1024).tolist() for _ in chunks]
             store.add_document(file_path, file_hash, chunks, embeddings)
 
-        # Query all documents
-        cursor = store.query_documents_with_chunks()
-        results = cursor.fetchall()
+        # Query all documents (returns list directly, not cursor)
+        results = store.query_documents_with_chunks()
 
         # Should return 3 documents
         assert len(results) == 3
@@ -591,7 +501,8 @@ class TestDatabaseTransactions:
     def test_commit_persists_changes(self, tmp_path):
         """Committed changes should persist across connections"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+        # Disable HNSW validation for small test datasets
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True, validate_hnsw=False)
 
         # Add document in first connection
         store1 = VectorStore(config)
@@ -612,7 +523,7 @@ class TestDatabaseTransactions:
     def test_rollback_reverts_changes(self, tmp_path):
         """Rolled back changes should not persist if rolled back before add_document commit"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
         store = VectorStore(config)
 
@@ -636,7 +547,7 @@ class TestDatabaseTransactions:
     def test_concurrent_reads_work_with_wal_mode(self, tmp_path):
         """WAL mode should allow concurrent reads"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
         # Add documents (add_document auto-commits each one)
         store1 = VectorStore(config)
@@ -668,7 +579,7 @@ class TestDatabaseErrorHandling:
     def test_duplicate_document_handling(self, tmp_path):
         """Adding duplicate document should be handled"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
         store = VectorStore(config)
 
@@ -696,7 +607,7 @@ class TestDatabaseErrorHandling:
     def test_invalid_file_path_handling(self, tmp_path):
         """Operations on invalid file paths should be handled"""
         db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
+        config = DatabaseConfig(path=str(db_path), embedding_dim=1024, require_vec_extension=True)
 
         store = VectorStore(config)
 

@@ -13,7 +13,8 @@ import threading
 
 from sentence_transformers import SentenceTransformer
 from config import default_config
-from ingestion import DocumentProcessor, VectorStore, ProcessingProgressTracker
+from ingestion import DocumentProcessor
+from ingestion.database_factory import DatabaseFactory, get_backend
 from watcher import FileWatcherService
 from query_cache import QueryCache
 from value_objects import IndexingStats
@@ -24,7 +25,7 @@ from operations.document_indexer import DocumentIndexer
 from operations.index_orchestrator import IndexOrchestrator
 from operations.orphan_detector import OrphanDetector
 from startup.config_validator import ConfigValidator
-from startup.self_healing import SelfHealingService
+from startup.postgres_self_healing import SelfHealingService
 
 # Phase classes for focused responsibilities (Phase 2.1 refactoring)
 from startup.phases import (
@@ -96,24 +97,28 @@ class StartupManager:
         - Eliminates dual-store HNSW corruption issues
         - DELETE operations now work correctly from API
 
+        Backend Selection (v2.3.0+):
+        - Uses DatabaseFactory to auto-detect backend from DATABASE_URL
+        - Supports both PostgreSQL (pgvector) and SQLite (vectorlite)
+
         The adapter wraps the sync store using asyncio.to_thread() for
         non-blocking API operations while maintaining thread safety.
         """
-        print("Initializing vector store (unified architecture)...")
+        backend = get_backend()
+        print(f"Initializing vector store (unified architecture, backend: {backend})...")
 
-        # Initialize single sync store (thread-safe via RLock)
-        self.state.core.vector_store = VectorStore()
-        print("Vector store initialized (thread-safe, adapter created lazily)")
+        # Initialize single sync store using factory (thread-safe via RLock)
+        self.state.core.vector_store = DatabaseFactory.create_vector_store()
+        print(f"Vector store initialized ({backend}, thread-safe, adapter created lazily)")
 
         # Note: async adapter is created lazily via CoreServices.async_vector_store property
         # No explicit initialization needed - just access state.core.async_vector_store
 
     def _init_progress_tracker(self):
-        """Initialize progress tracker"""
+        """Initialize progress tracker using factory for backend auto-detection."""
         if default_config.processing.enabled:
-            db_path = default_config.database.path
-            self.state.core.progress_tracker = ProcessingProgressTracker(db_path)
-            print("Resumable processing enabled")
+            self.state.core.progress_tracker = DatabaseFactory.create_progress_tracker()
+            print(f"Resumable processing enabled (backend: {get_backend()})")
 
     def _init_processor(self):
         """Initialize processor"""

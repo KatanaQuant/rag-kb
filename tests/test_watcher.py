@@ -5,6 +5,8 @@ import time
 import pytest
 from pathlib import Path
 from unittest.mock import Mock, MagicMock
+
+from tests import requires_huggingface
 from watcher import (
     DebounceTimer,
     FileChangeCollector,
@@ -197,10 +199,9 @@ class TestDocumentEventHandler:
         assert collector.count() == 0
         timer.trigger.assert_not_called()
 
+    @requires_huggingface
     def test_moved_already_indexed_file_skips_reindex(self):
         """Test that moving an already-indexed file doesn't trigger reindexing"""
-        from value_objects import ProcessingResult
-
         # Setup: File watcher detects a moved file
         collector = FileChangeCollector()
         timer = Mock()

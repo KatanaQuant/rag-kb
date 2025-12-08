@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """
+DEPRECATED: Use POST /api/maintenance/cleanup-orphans instead.
+
 Cleanup orphan data from the RAG database.
 
 This script removes:

@@ -6,17 +6,21 @@ import tempfile
 from pathlib import Path
 import sqlite3
 
+from tests import requires_huggingface
 from ingestion import (
     FileHasher,
     MarkdownExtractor,
     ExtractionRouter,
     DocumentProcessor,
+)
+# Import SQLite database classes explicitly (not PostgreSQL aliases)
+from ingestion.database import (
     DatabaseConnection,
     SchemaManager,
     VectorRepository,
-    VectorStore
+    VectorStore,
+    DOCLING_AVAILABLE,
 )
-from ingestion.database import DOCLING_AVAILABLE
 from config import ChunkConfig, DatabaseConfig
 from domain_models import DocumentFile, ExtractionResult, ChunkData
 
@@ -162,6 +166,7 @@ class TestMarkdownExtractor:
     """Tests for MarkdownExtractor"""
 
     @pytest.mark.skipif(not DOCLING_AVAILABLE, reason="Docling not available")
+    @requires_huggingface
     def test_extract_markdown(self, tmp_path):
         """Test markdown extraction using Docling"""
         file_path = tmp_path / "test.md"
@@ -195,6 +200,7 @@ class TestExtractionRouter:
         with pytest.raises(ValueError, match="Unsupported"):
             extractor._validate_extension('.xyz')
 
+    @requires_huggingface
     def test_extract_text_file(self, tmp_path):
         """Test extracting markdown file"""
         extractor = ExtractionRouter()
@@ -290,6 +296,7 @@ class TestDocumentProcessor:
         hash_val = processor.get_file_hash(file_path)
         assert len(hash_val) == 64
 
+    @requires_huggingface
     def test_process_text_file(self, tmp_path):
         """Test processing markdown file"""
         processor = DocumentProcessor()
@@ -316,156 +323,7 @@ class TestDocumentProcessor:
         assert chunks == []
 
 
-class TestDatabaseConnection:
-    """Tests for DatabaseConnection"""
-
-    def test_connect(self, tmp_path):
-        """Test database connection"""
-        db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), require_vec_extension=False)
-        db_conn = DatabaseConnection(config)
-
-        conn = db_conn.connect()
-        assert conn is not None
-        assert isinstance(conn, sqlite3.Connection)
-
-        db_conn.close()
-
-    def test_close(self, tmp_path):
-        """Test closing connection"""
-        db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), require_vec_extension=False)
-        db_conn = DatabaseConnection(config)
-
-        db_conn.connect()
-        db_conn.close()
-        # Should not error
-
-
-class TestSchemaManager:
-    """Tests for SchemaManager"""
-
-    def test_create_schema(self, tmp_path):
-        """Test schema creation"""
-        db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path))
-        conn = sqlite3.connect(str(db_path))
-
-        manager = SchemaManager(conn, config)
-        manager.create_schema()
-
-        # Check tables exist
-        cursor = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table'"
-        )
-        tables = {row[0] for row in cursor.fetchall()}
-
-        assert 'documents' in tables
-        assert 'chunks' in tables
-
-        conn.close()
-
-
-class TestVectorRepository:
-    """Tests for VectorRepository"""
-
-    @pytest.fixture
-    def setup_db(self, tmp_path):
-        """Setup test database"""
-        db_path = tmp_path / "test.db"
-        conn = sqlite3.connect(str(db_path))
-
-        # Create tables
-        conn.execute("""
-            CREATE TABLE documents (
-                id INTEGER PRIMARY KEY,
-                file_path TEXT UNIQUE,
-                file_hash TEXT
-            )
-        """)
-        conn.execute("""
-            CREATE TABLE chunks (
-                id INTEGER PRIMARY KEY,
-                document_id INTEGER,
-                content TEXT,
-                page INTEGER,
-                chunk_index INTEGER
-            )
-        """)
-        conn.commit()
-
-        return conn
-
-    def test_is_indexed(self, setup_db):
-        """Test checking if document is indexed"""
-        repo = VectorRepository(setup_db)
-
-        # Not indexed
-        assert not repo.is_indexed("/path/file.txt", "hash123")
-
-        # Add document
-        setup_db.execute(
-            "INSERT INTO documents (file_path, file_hash) VALUES (?, ?)",
-            ("/path/file.txt", "hash123")
-        )
-        setup_db.commit()
-
-        # Now indexed
-        assert repo.is_indexed("/path/file.txt", "hash123")
-
-        # Different hash
-        assert not repo.is_indexed("/path/file.txt", "hash456")
-
-    def test_get_stats(self, setup_db):
-        """Test getting statistics"""
-        repo = VectorRepository(setup_db)
-
-        stats = repo.get_stats()
-        assert stats['indexed_documents'] == 0
-        assert stats['total_chunks'] == 0
-
-        # Add data
-        setup_db.execute(
-            "INSERT INTO documents (file_path, file_hash) VALUES (?, ?)",
-            ("/path/file.txt", "hash123")
-        )
-        setup_db.execute(
-            "INSERT INTO chunks (document_id, content, page, chunk_index) VALUES (?, ?, ?, ?)",
-            (1, "content", None, 0)
-        )
-        setup_db.commit()
-
-        stats = repo.get_stats()
-        assert stats['indexed_documents'] == 1
-        assert stats['total_chunks'] == 1
-
-
-class TestVectorStore:
-    """Integration tests for VectorStore"""
-
-    def test_init(self, tmp_path):
-        """Test store initialization"""
-        db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), require_vec_extension=False)
-
-        store = VectorStore(config)
-        assert store.conn is not None
-        assert store.repo is not None
-
-        store.close()
-
-    def test_get_stats(self, tmp_path):
-        """Test getting stats"""
-        db_path = tmp_path / "test.db"
-        config = DatabaseConfig(path=str(db_path), require_vec_extension=False)
-
-        store = VectorStore(config)
-        stats = store.get_stats()
-
-        assert 'indexed_documents' in stats
-        assert 'total_chunks' in stats
-
-        store.close()
+# Database tests moved to test_database.py (canonical source)
 
 
 class TestDoclingExtractorHelpers:

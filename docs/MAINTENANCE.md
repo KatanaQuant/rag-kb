@@ -35,6 +35,100 @@ d = json.load(sys.stdin)
 print(f'Total: {d[\"total_documents\"]} | Complete: {d[\"complete\"]} | Incomplete: {d[\"incomplete\"]}')"
 ```
 
+---
+
+## Backup & Restore
+
+PostgreSQL makes it easy to backup your knowledge base and restore it on another machine or after a fresh install.
+
+### Backup Your Knowledge Base
+
+Export the entire PostgreSQL database to a SQL file:
+
+```bash
+# Standard backup (uncompressed, faster)
+./scripts/backup_postgres.sh
+# Output: data/ragkb_backup.sql
+
+# Compressed backup (recommended for transfer or long-term storage)
+./scripts/backup_postgres.sh --compress
+# Output: data/ragkb_backup.sql.gz
+```
+
+The backup script exports:
+- All documents and chunks
+- All embeddings (vector data)
+- Full-text search indexes
+- Processing progress and metadata
+- Security scan cache
+
+**Size estimates:**
+- Uncompressed: ~200MB per 50k chunks (varies by content)
+- Compressed: ~15-20MB per 50k chunks (80-90% compression)
+
+### Restore on Another Machine
+
+Restore the database on a new machine or after a fresh install:
+
+```bash
+# For fresh install (empty database)
+./scripts/restore_postgres.sh
+
+# For incremental sync (into existing database)
+./scripts/restore_postgres.sh --merge
+```
+
+The restore script works for both scenarios:
+- **Fresh installs**: Creates tables and imports all data
+- **Incremental updates**: Merges data from backup into existing database (skips duplicates)
+
+### Multi-Machine Workflow
+
+Sync knowledge bases across machines:
+
+**Machine A (source):**
+```bash
+# Backup changes
+./scripts/backup_postgres.sh --compress
+
+# Transfer to Machine B (via USB, S3, scp, etc.)
+scp data/ragkb_backup.sql.gz user@machine-b:/tmp/
+```
+
+**Machine B (destination):**
+```bash
+# Restore and merge
+./scripts/restore_postgres.sh --merge
+```
+
+### Backup Best Practices
+
+1. **Schedule regular backups**:
+   ```bash
+   # Add to cron (daily backup at 2 AM)
+   0 2 * * * cd /path/to/rag-kb && ./scripts/backup_postgres.sh --compress
+   ```
+
+2. **Keep multiple versions**:
+   ```bash
+   # Backup with timestamp
+   ./scripts/backup_postgres.sh --compress --output data/ragkb_backup_$(date +%Y%m%d_%H%M%S).sql.gz
+   ```
+
+3. **Monitor backup size**:
+   ```bash
+   # Check backup file size
+   du -h data/ragkb_backup.sql.gz
+   ```
+
+4. **Test restore periodically**:
+   ```bash
+   # Verify backup is valid (on test machine)
+   ./scripts/restore_postgres.sh < data/ragkb_backup.sql
+   ```
+
+---
+
 ## Understanding Issue Types
 
 ### 1. `chunk_count_mismatch`
@@ -97,18 +191,15 @@ curl -X POST "http://localhost:8000/index"
 
 **How to diagnose:**
 ```bash
-# Check processing_progress table
-docker-compose exec rag-api python3 -c "
-import sqlite3
-conn = sqlite3.connect('/app/data/rag.db')
-cur = conn.execute('''
-    SELECT file_path, status, error_message
-    FROM processing_progress
-    WHERE status != \"completed\"
-''')
-for row in cur.fetchall():
-    print(f'{row[0].split(\"/\")[-1]}: {row[1]} - {row[2] or \"no error\"}')"
+# Check processing_progress table (PostgreSQL)
+docker exec rag-kb-postgres psql -U ragkb -d ragkb -c "
+SELECT file_path, status, error_message
+FROM processing_progress
+WHERE status != 'completed'
+LIMIT 20;"
 ```
+
+> **SQLite users**: See [SQLITE_LEGACY.md](SQLITE_LEGACY.md) for SQLite-specific commands.
 
 **How to fix:**
 ```bash
@@ -172,28 +263,21 @@ for issue in data['issues']:
 
 ### Clean Up Orphan Records
 
-```python
-# Run inside container
-import sqlite3
+Use the REST API (works with both PostgreSQL and SQLite):
 
-conn = sqlite3.connect('/app/data/rag.db')
+```bash
+# Preview orphans
+curl -X POST http://localhost:8000/api/maintenance/cleanup-orphans \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": true}'
 
-# Find orphan document records (no chunks)
-orphans = conn.execute('''
-    SELECT d.id, d.file_path
-    FROM documents d
-    WHERE NOT EXISTS (SELECT 1 FROM chunks c WHERE c.document_id = d.id)
-''').fetchall()
-
-print(f'Found {len(orphans)} orphan documents')
-
-# Delete orphan records
-for doc_id, file_path in orphans:
-    conn.execute('DELETE FROM documents WHERE id = ?', (doc_id,))
-    conn.execute('DELETE FROM processing_progress WHERE file_path = ?', (file_path,))
-
-conn.commit()
+# Execute cleanup
+curl -X POST http://localhost:8000/api/maintenance/cleanup-orphans \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false}'
 ```
+
+> **SQLite users**: See [SQLITE_LEGACY.md](SQLITE_LEGACY.md) for direct database access examples.
 
 ## Maintenance REST API
 

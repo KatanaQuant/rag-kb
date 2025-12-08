@@ -2,9 +2,13 @@
 
 **Date Range**: December 4-7, 2025
 **Severity**: Critical (data loss + accuracy regression + index corruption)
-**Status**: RESOLVED - All issues fixed in v2.2.4-beta
+**Status**: RESOLVED - All issues fixed in v2.2.4-beta, **permanently eliminated by PostgreSQL migration**
 **Final Result**: 92.3% accuracy (EXCEEDS v1.9.1 baseline of 84.6%)
 **Reproducibility**: Verified 2025-12-07 - concurrent operations stable, graceful shutdown persists
+
+> **Update (2025-12-08):** The project migrated entirely to PostgreSQL + pgvector, eliminating all vectorlite-related issues permanently. This postmortem documents the journey and lessons learned. See [Release Notes](RELEASES/v2.3.0-beta.md).
+>
+> **Related:** [Query Accuracy Investigation](postmortem-query-accuracy-investigation.md) - detailed analysis of the accuracy investigation phase (Bug 4)
 
 ---
 
@@ -480,22 +484,29 @@ Would need better code/notebook chunking or contextual embeddings.
 
 ## Future Recommendations
 
-### Short-term (v2.2.x)
-- Monitor periodic flush logs for any issues
-- Keep backup of known-good HNSW index (`data/vec_chunks.idx.current-v2.2.2`)
-- If crash occurs, use `rebuild_hnsw` script for recovery
+### ~~Short-term (v2.2.x)~~ Superseded by v2.3.0
+- ~~Monitor periodic flush logs for any issues~~
+- ~~Keep backup of known-good HNSW index~~
+- ~~If crash occurs, use `rebuild_hnsw` script for recovery~~
 
-### Medium-term (v2.3.0)
-**Migrate to pgvector** for proper ACID compliance:
+### ~~Medium-term (v2.3.0)~~ [x] COMPLETED
+**Migrated to pgvector** for proper ACID compliance:
 
-| Feature | vectorlite | pgvector |
-|---------|-----------|----------|
+| Feature | vectorlite | pgvector (v2.3.0) |
+|---------|-----------|-------------------|
 | ACID compliance | No | Full PostgreSQL |
 | WAL/durability | No | Yes |
 | Crash recovery | Manual rebuild | Automatic |
-| Migration effort | - | Low (SQL similar) |
+| Migration effort | - | **DONE** |
 
-See [ROADMAP.md](ROADMAP.md) for the planned migration to pgvector.
+**v2.3.0 migration completed 2025-12-07:**
+- 1634 documents migrated
+- 51542 chunks migrated
+- 51361 vectors migrated
+- 51542 FTS entries rebuilt
+- 92.3% accuracy verified
+
+See [v2.3.0 Release Notes](RELEASES/v2.3.0-beta.md) for migration guide.
 
 ---
 

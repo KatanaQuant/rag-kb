@@ -223,18 +223,20 @@ Access via: `http://YOUR_LOCAL_IP:8000`
 
 **Automated backups (cron):**
 ```bash
-# Add to crontab
-0 2 * * * tar -czf ~/backups/rag-$(date +\%Y\%m\%d).tar.gz /path/to/rag-kb/data/ /path/to/rag-kb/kb/
+# Add to crontab (PostgreSQL)
+0 2 * * * docker exec rag-kb-postgres pg_dump -U ragkb ragkb | gzip > ~/backups/rag-$(date +\%Y\%m\%d).sql.gz
 ```
 
 **Manual backup:**
 ```bash
-# Full backup
-tar -czf rag-backup-$(date +%Y%m%d).tar.gz data/ kb/
+# PostgreSQL backup
+docker exec rag-kb-postgres pg_dump -U ragkb ragkb > ragkb_backup.sql
 
-# Database only
-cp data/rag.db ~/backups/kb-$(date +%Y%m%d).db
+# Compress for transfer
+gzip ragkb_backup.sql
 ```
+
+> **SQLite users**: See [SQLITE_LEGACY.md](SQLITE_LEGACY.md) for SQLite backup commands.
 
 ### Migration Between Machines
 
@@ -306,7 +308,8 @@ CPU-only processing is slow by design. Options:
 1. **Use faster model** (English-only):
    ```bash
    echo "MODEL_NAME=sentence-transformers/static-retrieval-mrl-en-v1" > .env
-   docker-compose down && rm data/rag.db && docker-compose up --build -d
+   docker-compose down -v && docker-compose up --build -d
+   # Warning: -v deletes all data. Only use for fresh start.
    ```
 
 2. **Reduce batch size** (less memory, slower):

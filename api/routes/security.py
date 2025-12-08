@@ -10,9 +10,9 @@ from datetime import datetime
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from ingestion.progress import ProcessingProgressTracker
+from ingestion.database_factory import DatabaseFactory
 from pipeline.quarantine_manager import QuarantineManager
-from pipeline.security_scan_cache import get_security_cache
+from pipeline.postgres_security_cache import get_security_cache
 from pipeline.security_scanner import SecurityScanner
 from config import default_config
 
@@ -140,7 +140,7 @@ async def list_rejected_files():
         ]
     """
     try:
-        tracker = ProcessingProgressTracker(default_config.database.path)
+        tracker = DatabaseFactory.create_progress_tracker()
         rejected = tracker.get_rejected_files()
 
         return [

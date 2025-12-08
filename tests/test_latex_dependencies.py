@@ -5,9 +5,25 @@ These tests verify that all necessary LaTeX packages are available
 in the Docker environment for Pandoc EPUB→PDF conversion.
 
 Written using TDD approach to fix regression from Docker rebuild.
+
+NOTE: These tests require Docker environment with texlive packages.
+They are skipped when running locally.
 """
 import subprocess
 import pytest
+from pathlib import Path
+
+
+def _is_docker_environment():
+    """Check if running inside Docker container."""
+    return Path('/.dockerenv').exists() or Path('/run/.containerenv').exists()
+
+
+# Skip all tests in this module if not running in Docker
+pytestmark = pytest.mark.skipif(
+    not _is_docker_environment(),
+    reason="LaTeX tests require Docker environment with texlive packages"
+)
 
 
 class TestLaTeXPackages:

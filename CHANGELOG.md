@@ -7,6 +7,48 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.3.0] - 2025-12-07
+
+**Major release: PostgreSQL + pgvector migration**
+
+This release migrates the entire database layer from SQLite + vectorlite to PostgreSQL + pgvector,
+providing full ACID compliance and eliminating all index file management complexity.
+
+See [Release Notes](docs/RELEASES/v2.3.0-beta.md) for full details and migration guide.
+
+### Highlights
+- **Full ACID compliance** with PostgreSQL WAL
+- **Automatic crash recovery** - no more manual rebuild-hnsw
+- **Linux ARM64 support** for Mac Docker users
+- **~300 lines deleted** - no periodic flush, no index file management
+
+### Added
+- PostgreSQL + pgvector backend (replaces SQLite + vectorlite)
+- PostgreSQL tsvector full-text search (replaces FTS5)
+- Async PostgreSQL support via asyncpg
+- `scripts/migrate_to_postgres.py` - Migration script from v2.2.x
+
+### Changed
+- Docker Compose now includes PostgreSQL service (`rag-kb-postgres`)
+- All data stored in PostgreSQL volume (`rag_kb_postgres_data`)
+- `DATABASE_URL` environment variable for connection string
+
+### Removed
+- vectorlite dependency
+- Periodic HNSW flush timer
+- Index file management (`vec_chunks.idx`)
+- Connection cycling for persistence
+
+### Migration from v2.2.x
+```bash
+docker-compose up -d postgres
+sleep 10
+python scripts/migrate_to_postgres.py
+docker-compose up -d
+```
+
+---
+
 ## [2.2.4-beta] - 2025-12-07
 
 **This release fixes all critical issues from the v2.2.0-beta vectorlite migration.**

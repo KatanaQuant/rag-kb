@@ -89,7 +89,7 @@ export RERANKING_ENABLED=false
 
 ### CPU-Only Build (Default)
 
-For machines without GPU. Uses vectorlite HNSW index for fast queries.
+For machines without GPU. Uses PostgreSQL pgvector HNSW index for fast queries.
 
 ```yaml
 # config/pipeline.yaml (default)
@@ -103,7 +103,7 @@ RERANKING_ENABLED=false  # Default
 ```
 
 **Performance** (benchmarked on 16-core/30GB, 59K vectors):
-- Startup: ~1s (vectorlite HNSW index)
+- Startup: ~2-3s (PostgreSQL + pgvector HNSW index)
 - Query latency: **~10-200ms** (depends on embedding model cold start)
 - Retrieval quality: Good (vector similarity + query decomposition)
 - Suitable for: Development, single-user, production without GPU
@@ -128,7 +128,7 @@ RERANKING_ENABLED=true
 ```
 
 **Performance** (with GPU acceleration):
-- Startup: ~3s (vectorlite HNSW + reranker model)
+- Startup: ~5s (PostgreSQL + pgvector HNSW + reranker model)
 - Query latency: **~1-2 seconds** (GPU-accelerated reranking)
 - Retrieval quality: Excellent (+20-30% vs CPU-only)
 - Suitable for: Production, multi-agent, high-volume

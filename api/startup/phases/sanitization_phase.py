@@ -114,57 +114,33 @@ class SanitizationPhase:
         print("Orphans queued for reindexing")
 
     def _check_hnsw_health(self):
-        """Check HNSW index for orphan embeddings.
+        """Check HNSW index for orphan embeddings (PostgreSQL version).
 
-        HNSW orphans are embeddings in vec_chunks with no matching chunk.
-        These cause query pollution - HNSW finds orphan embeddings but
-        the JOIN to chunks returns nothing or wrong content.
-
-        This is a DETECTION-ONLY check. Full rebuild required to remove
-        orphans (vectorlite limitation - no efficient deletion).
-
-        Run rebuild with:
-            docker exec rag-api python /app/scripts/rebuild_hnsw_index.py /app/data/rag.db
+        PostgreSQL + pgvector uses referential integrity and CASCADE deletes,
+        so orphan embeddings are prevented at the database level.
+        This check simply verifies vec_chunks count matches chunks count.
         """
         if not self._is_hnsw_check_enabled():
             return
 
-        import sqlite3
-        import vectorlite_py
-
         try:
-            db_path = self.state.core.vector_store.config.path
-            conn = sqlite3.connect(db_path)
-            conn.enable_load_extension(True)
-            conn.load_extension(vectorlite_py.vectorlite_path())
+            from operations.postgres_maintenance import PostgresIntegrityChecker
 
-            # Get valid chunk IDs
-            valid_ids = set(row[0] for row in conn.execute('SELECT id FROM chunks').fetchall())
-            total_chunks = len(valid_ids)
+            checker = PostgresIntegrityChecker()
+            checker.connect()
+            result = checker.check_vector_count_mismatch()
+            checker.close()
 
-            # Vectorlite doesn't support COUNT(*) - use knn_search to enumerate
-            # Use zero vector with high top_k to get all rowids
-            embedding_dim = 1024
-            zero_vec = b'\x00' * (embedding_dim * 4)
+            chunk_count = result.get('chunk_count', 0)
+            vector_count = result.get('vector_count', 0)
 
-            all_rowids = conn.execute('''
-                SELECT v.rowid FROM vec_chunks v
-                WHERE knn_search(v.embedding, knn_param(?, 200000))
-            ''', (zero_vec,)).fetchall()
-            all_rowids = set(row[0] for row in all_rowids)
-
-            total_vec = len(all_rowids)
-            orphan_count = len(all_rowids - valid_ids)
-
-            conn.close()
-
-            if orphan_count > 0:
-                pct = (orphan_count / total_vec * 100) if total_vec > 0 else 0
-                print(f"[HNSW Health] WARNING: {orphan_count:,} orphan embeddings ({pct:.1f}%)")
-                print(f"[HNSW Health] vec_chunks: {total_vec:,}, chunks: {total_chunks:,}")
-                print("[HNSW Health] Fix: docker exec rag-api python /app/scripts/rebuild_hnsw_index.py /app/data/rag.db")
+            if result.get('ok', True):
+                print(f"[HNSW Health] OK - {vector_count:,} embeddings, {chunk_count:,} chunks")
             else:
-                print(f"[HNSW Health] OK - {total_vec:,} embeddings, 0 orphans")
+                diff = chunk_count - vector_count
+                print(f"[HNSW Health] WARNING: {diff:,} chunks missing embeddings")
+                print(f"[HNSW Health] vec_chunks: {vector_count:,}, chunks: {chunk_count:,}")
+                print("[HNSW Health] Fix: POST /api/maintenance/rebuild-embeddings")
 
         except Exception as e:
             print(f"[HNSW Health] Check failed: {e}")

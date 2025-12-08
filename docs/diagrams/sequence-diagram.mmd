@@ -4,7 +4,7 @@ sequenceDiagram
     participant Client
     participant QueryExecutor
     participant Embedder as EmbedderInterface
-    participant VectorStore as ChromaDB
+    participant VectorStore as PostgreSQL
     participant Reranker as RerankerInterface
 
     Client->>QueryExecutor: query("How does pipeline work?", top_k=5)

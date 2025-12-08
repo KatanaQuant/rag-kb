@@ -13,7 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from sentence_transformers import SentenceTransformer
 
 # Models now imported in route modules
-from ingestion import DocumentProcessor, VectorStore, ProcessingProgressTracker, FileHasher
+from ingestion import DocumentProcessor, FileHasher
+from ingestion.database_factory import DatabaseFactory, get_backend
 from ingestion.file_filter import FileFilterPolicy
 from domain_models import DocumentFile
 from config import default_config

@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 from unittest.mock import Mock, MagicMock, patch
 
+from tests import requires_huggingface
 from ingestion.obsidian_extractor import ObsidianExtractor, ObsidianVaultExtractor
 from ingestion.obsidian_graph import ObsidianGraphBuilder
 from domain_models import ExtractionResult
@@ -32,6 +33,7 @@ class TestObsidianExtractorBasics:
         """Create ObsidianExtractor instance"""
         return ObsidianExtractor(graph_builder=graph_builder)
 
+    @requires_huggingface
     def test_extract_note_basic(self, vault_path, graph_builder):
         """Test: Extract simple Obsidian note"""
         note_path = vault_path / "Note1.md"
@@ -43,6 +45,7 @@ class TestObsidianExtractorBasics:
         assert result.page_count > 0
         assert result.method == 'obsidian_graph_rag'
 
+    @requires_huggingface
     def test_extract_note_includes_filepath(self, extractor, vault_path):
         """Test: Chunks include filepath metadata"""
         note_path = vault_path / "Note1.md"
@@ -56,6 +59,7 @@ class TestObsidianExtractorBasics:
         assert result.success
         assert result.page_count > 0
 
+    @requires_huggingface
     def test_extract_note_with_wikilinks(self, extractor, vault_path):
         """Test: Extract note with [[wikilinks]]"""
         note_path = vault_path / "Note1.md"
@@ -68,6 +72,7 @@ class TestObsidianExtractorBasics:
         assert isinstance(result, ExtractionResult)
         assert result.success
 
+    @requires_huggingface
     def test_extract_note_with_tags(self, extractor, vault_path):
         """Test: Extract note with #hashtags"""
         note_path = vault_path / "Note1.md"
@@ -166,6 +171,7 @@ class TestVaultLevelExtraction:
         assert not vault_extractor._should_skip(Path("Note1.md"))
         assert not vault_extractor._should_skip(Path("Folder/Note.md"))
 
+    @requires_huggingface
     def test_extract_vault_builds_graph(self, vault_extractor, vault_path):
         """Test: Graph built from vault structure"""
         # Extract entire vault
@@ -177,6 +183,7 @@ class TestVaultLevelExtraction:
         if len(results) == 0:
             pytest.skip(f"No fixture notes found in vault: {vault_extractor.vault_path}")
 
+    @requires_huggingface
     def test_vault_extractor_get_graph_stats(self, vault_extractor):
         """Test: Can retrieve graph statistics"""
         vault_extractor.extract_vault()
@@ -247,6 +254,7 @@ class TestEdgeCases:
         graph_builder = ObsidianGraphBuilder()
         return ObsidianExtractor(graph_builder=graph_builder)
 
+    @requires_huggingface
     def test_extract_empty_note(self, extractor):
         """Test: Handle empty note file"""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
@@ -260,6 +268,7 @@ class TestEdgeCases:
         finally:
             Path(temp_path).unlink()
 
+    @requires_huggingface
     def test_extract_note_only_frontmatter(self, extractor):
         """Test: Note with only frontmatter, no content"""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
@@ -272,6 +281,7 @@ class TestEdgeCases:
         finally:
             Path(temp_path).unlink()
 
+    @requires_huggingface
     def test_extract_very_long_note(self, extractor):
         """Test: Handle very long note (>10k chars)"""
         long_content = "# Title\n\n" + ("Lorem ipsum " * 1000)
@@ -303,6 +313,7 @@ class TestOversizedChunkPrevention:
         graph_builder = ObsidianGraphBuilder()
         return ObsidianExtractor(graph_builder=graph_builder)
 
+    @requires_huggingface
     def test_long_single_line_gets_chunked(self, extractor):
         """Test: Files with very long lines (no newlines) are properly chunked
 
@@ -329,6 +340,7 @@ class TestOversizedChunkPrevention:
         finally:
             Path(temp_path).unlink()
 
+    @requires_huggingface
     def test_chunks_under_token_limit(self, extractor):
         """Test: All chunks should be under the embedding model's token limit"""
         # Create content that would previously create oversized chunks

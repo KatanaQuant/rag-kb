@@ -1,4 +1,6 @@
 """
+DEPRECATED: Use POST /api/maintenance/rebuild-embeddings instead.
+
 Rebuild vector embeddings from existing chunks.
 
 Use this when the vectorlite HNSW index file is corrupted/missing

@@ -6,55 +6,27 @@ Orphan files created *during* initial indexing aren't caught by startup sanitiza
 because sanitization runs BEFORE indexing begins.
 
 Fix: Add orphan detection AFTER indexing completes.
+
+NOTE: These tests verify internal implementation details of StartupManager's
+background task flow. They're intentionally testing private methods to ensure
+the orphan detection feature works correctly. This is a pragmatic trade-off
+for testing async background behavior that can't be easily observed via
+public interface.
 """
 import pytest
 from unittest.mock import Mock, MagicMock, patch
 
 
 class TestPostIndexingOrphanCheck:
-    """Test that orphan detection runs after initial indexing completes"""
+    """Test that orphan detection runs after initial indexing completes
 
-    @patch('startup.manager.OrphanDetector')
-    @patch('startup.manager.SelfHealingService')
-    def test_background_task_checks_orphans_after_indexing(
-        self, mock_healer_class, mock_detector_class
-    ):
-        """After _index_docs completes, orphan detection should run again
+    Implementation tests for background task flow - tests private methods
+    because the behavior happens asynchronously in daemon threads.
+    """
 
-        This catches orphans created during initial indexing that were
-        missed by the pre-indexing sanitization stage.
-        """
-        from startup.manager import StartupManager
-        from app_state import AppState
-
-        # Setup mocks
-        mock_detector = Mock()
-        mock_detector.detect_orphans.return_value = []  # No orphans
-        mock_detector_class.return_value = mock_detector
-
-        mock_healer = Mock()
-        mock_healer_class.return_value = mock_healer
-
-        # Create manager with mocked state
-        state = AppState()
-        state.core.progress_tracker = Mock()
-        state.core.vector_store = Mock()
-        state.indexing.queue = Mock()
-
-        manager = StartupManager(state)
-
-        # Mock internal methods to isolate test
-        manager._start_watcher = Mock()
-        manager._sanitize_before_indexing = Mock()
-        manager._index_docs = Mock()
-
-        # Run background task
-        manager._background_indexing_task()
-
-        # Verify: _check_post_indexing_orphans should be called
-        # This is the NEW method we need to implement
-        assert hasattr(manager, '_check_post_indexing_orphans'), \
-            "StartupManager should have _check_post_indexing_orphans method"
+    # test_background_task_checks_orphans_after_indexing removed
+    # - Was a hasattr check (reward hacking pattern)
+    # - Behavior verified by TestBackgroundIndexingTaskFlow.test_background_task_calls_post_indexing_orphan_check
 
     def test_post_indexing_orphan_check_queues_found_orphans(self):
         """If orphans are found after indexing, they should be queued for repair"""

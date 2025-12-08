@@ -172,12 +172,12 @@ class IndexOrchestrator:
 
     def _save_graph(self, graph_export):
         """Save graph to database"""
-        from ingestion.graph_repository import GraphRepository
-        from ingestion.database import DatabaseConnection
+        from ingestion.database_factory import DatabaseFactory
+        from ingestion.postgres_repositories import PostgresGraphRepository
 
-        db = DatabaseConnection()
+        db = DatabaseFactory.create_connection()
         conn = db.connect()
-        graph_repo = GraphRepository(conn)
+        graph_repo = PostgresGraphRepository(conn)
         graph_repo.persist_graph(graph_export)
         graph_repo.commit()
         db.close()

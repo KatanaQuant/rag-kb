@@ -9,21 +9,32 @@ class OrphanDetector:
         self.store = vector_store
 
     def detect_orphans(self):
-        """Detect orphaned files"""
+        """Detect orphaned files (PostgreSQL version)
+
+        Finds files marked as 'completed' in processing_progress but with
+        no matching record in documents table.
+        """
         if not self.tracker:
             return []
 
-        import sqlite3
-        conn = sqlite3.connect(self.tracker.get_db_path())
-        cursor = conn.execute('''
-            SELECT pp.file_path, pp.chunks_processed, pp.last_updated
-            FROM processing_progress pp
-            LEFT JOIN documents d ON pp.file_path = d.file_path
-            WHERE pp.status = 'completed' AND d.id IS NULL
-            ORDER BY pp.last_updated DESC
-        ''')
-        orphans = [{'path': row[0], 'chunks': row[1], 'updated': row[2]} for row in cursor.fetchall()]
-        conn.close()
+        from ingestion.database_factory import DatabaseFactory
+        from config import default_config
+
+        db = DatabaseFactory.create_connection(default_config.database)
+        conn = db.connect()
+
+        with conn.cursor() as cur:
+            cur.execute('''
+                SELECT pp.file_path, pp.chunks_processed, pp.last_updated
+                FROM processing_progress pp
+                LEFT JOIN documents d ON pp.file_path = d.file_path
+                WHERE pp.status = 'completed' AND d.id IS NULL
+                ORDER BY pp.last_updated DESC
+            ''')
+            rows = cur.fetchall()
+
+        orphans = [{'path': row[0], 'chunks': row[1], 'updated': row[2]} for row in rows]
+        db.close()
         return orphans
 
     def repair_orphans(self, queue):

@@ -177,6 +177,35 @@ docker images | grep rag-api
 
 ---
 
+## Backup & Restore
+
+Easily backup your knowledge base and restore it on another machine or after a fresh install.
+
+### Backup Your Knowledge Base
+
+```bash
+# Backup to data/ragkb_backup.sql
+./scripts/backup_postgres.sh
+
+# Backup with compression (recommended for transfer)
+./scripts/backup_postgres.sh --compress
+```
+
+### Restore on Another Machine
+
+```bash
+# Restore from backup (works for fresh install or incremental updates)
+./scripts/restore_postgres.sh
+```
+
+The restore script works for both:
+- **Fresh installs**: Imports all data into empty database
+- **Incremental updates**: Syncs changes from backup into existing database
+
+See [MAINTENANCE.md](MAINTENANCE.md#backup--restore) for more details.
+
+---
+
 ## Next Steps
 
 - **MCP Integration**: See [MCP.md](MCP.md)

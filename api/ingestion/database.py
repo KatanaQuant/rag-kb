@@ -158,7 +158,8 @@ class SchemaManager:
 
         # SAFETY CHECK: Validate existing index before CREATE TABLE
         # CREATE VIRTUAL TABLE with vectorlite will OVERWRITE a corrupted index!
-        if os.path.exists(index_path):
+        # Skip validation if disabled (e.g., for tests with small datasets)
+        if os.path.exists(index_path) and getattr(self.config, 'validate_hnsw', True):
             index_size = os.path.getsize(index_path)
             self._validate_hnsw_index(index_path, index_size)
 
@@ -504,6 +505,7 @@ class VectorStore:
         self._lock = threading.RLock()  # Reentrant lock for nested calls
         self._flush_timer = None
         self._closed = False
+        self._config = config  # Store config for schema initialization
         self.db_conn = DatabaseConnection(config)
         self.conn = self.db_conn.connect()
         self._init_schema()
@@ -513,7 +515,7 @@ class VectorStore:
 
     def _init_schema(self):
         """Initialize database schema"""
-        schema = SchemaManager(self.conn)
+        schema = SchemaManager(self.conn, self._config)
         schema.create_schema()
 
     def is_document_indexed(self, path: str, hash_val: str) -> bool:

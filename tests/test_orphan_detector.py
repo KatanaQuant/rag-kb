@@ -13,6 +13,8 @@ from unittest.mock import Mock, MagicMock
 import tempfile
 import sqlite3
 
+from tests import requires_huggingface
+
 
 class TestOrphanDetector:
     """Test suite for OrphanDetector EPUB handling"""
@@ -147,6 +149,7 @@ class TestOrphanDetector:
         # Should NOT be detected as converted (not an EPUB)
         assert orphan_detector._is_converted_epub(pdf) is False
 
+    @requires_huggingface
     def test_repair_orphans_cleans_converted_epub(self, temp_dir, mock_tracker, orphan_detector):
         """Converted EPUBs should be cleaned from progress tracker, not queued"""
         # Setup: EPUB in original/ with sibling PDF
@@ -162,6 +165,12 @@ class TestOrphanDetector:
 
         # Create mock queue
         mock_queue = Mock()
+
+        # Patch detect_orphans to return test data (avoid hitting production DB)
+        # Note: detect_orphans() creates its own DB connection, bypassing mock_tracker
+        orphan_detector.detect_orphans = Mock(return_value=[
+            {'path': str(epub), 'chunks': 10, 'updated': '2024-01-01'}
+        ])
 
         # Run repair
         orphan_detector.repair_orphans(mock_queue)

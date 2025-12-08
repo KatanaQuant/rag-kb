@@ -9,7 +9,7 @@ Tests for:
 """
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 import tempfile
 import sqlite3
 import os
@@ -23,40 +23,13 @@ def client():
     yield client
 
 
-@pytest.fixture
-def temp_db():
-    """Create temporary database with schema"""
-    fd, path = tempfile.mkstemp(suffix='.db')
-    conn = sqlite3.connect(path)
-
-    conn.execute('''
-        CREATE TABLE documents (
-            id INTEGER PRIMARY KEY,
-            file_path TEXT UNIQUE,
-            indexed_at TIMESTAMP
-        )
-    ''')
-    conn.execute('''
-        CREATE TABLE chunks (
-            id INTEGER PRIMARY KEY,
-            document_id INTEGER,
-            content TEXT,
-            FOREIGN KEY (document_id) REFERENCES documents(id)
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-    yield path
-
-    os.close(fd)
-    os.unlink(path)
+# temp_db_minimal fixture is provided by conftest.py
 
 
 class TestRebuildEmbeddingsEndpoint:
     """Test POST /api/maintenance/rebuild-embeddings endpoint"""
 
-    def test_rebuild_embeddings_dry_run_shows_stats(self, client, temp_db):
+    def test_rebuild_embeddings_dry_run_shows_stats(self, client, temp_db_minimal):
         """Rebuild embeddings dry run should show statistics without modifying"""
         from dataclasses import dataclass
         from typing import Optional, List
@@ -79,9 +52,11 @@ class TestRebuildEmbeddingsEndpoint:
                 if self.errors is None:
                     self.errors = []
 
-        with patch('operations.embedding_rebuilder.EmbeddingRebuilder') as MockRebuilder:
-            mock_instance = MockRebuilder.return_value
-            mock_instance.rebuild.return_value = MockResult()
+        mock_rebuilder = MagicMock()
+        mock_rebuilder.rebuild.return_value = MockResult()
+
+        with patch('operations.operations_factory.OperationsFactory') as MockFactory:
+            MockFactory.create_embedding_rebuilder.return_value = mock_rebuilder
 
             response = client.post(
                 "/api/maintenance/rebuild-embeddings",
@@ -97,7 +72,7 @@ class TestRebuildEmbeddingsEndpoint:
             assert data['chunks_embedded'] == 0
             assert 'Would rebuild' in data['message']
 
-    def test_rebuild_embeddings_response_structure(self, client, temp_db):
+    def test_rebuild_embeddings_response_structure(self, client, temp_db_minimal):
         """Rebuild embeddings response should have correct structure"""
         from dataclasses import dataclass
         from typing import List, Optional
@@ -120,9 +95,11 @@ class TestRebuildEmbeddingsEndpoint:
                 if self.errors is None:
                     self.errors = []
 
-        with patch('operations.embedding_rebuilder.EmbeddingRebuilder') as MockRebuilder:
-            mock_instance = MockRebuilder.return_value
-            mock_instance.rebuild.return_value = MockResult()
+        mock_rebuilder = MagicMock()
+        mock_rebuilder.rebuild.return_value = MockResult()
+
+        with patch('operations.operations_factory.OperationsFactory') as MockFactory:
+            MockFactory.create_embedding_rebuilder.return_value = mock_rebuilder
 
             response = client.post(
                 "/api/maintenance/rebuild-embeddings",
@@ -147,7 +124,7 @@ class TestRebuildEmbeddingsEndpoint:
 class TestPartialRebuildEndpoint:
     """Test POST /api/maintenance/partial-rebuild endpoint"""
 
-    def test_partial_rebuild_dry_run_shows_range_stats(self, client, temp_db):
+    def test_partial_rebuild_dry_run_shows_range_stats(self, client, temp_db_minimal):
         """Partial rebuild dry run should show stats for specified range"""
         from dataclasses import dataclass
         from typing import List, Optional
@@ -168,9 +145,11 @@ class TestPartialRebuildEndpoint:
                 if self.errors is None:
                     self.errors = []
 
-        with patch('operations.partial_rebuilder.PartialRebuilder') as MockRebuilder:
-            mock_instance = MockRebuilder.return_value
-            mock_instance.rebuild.return_value = MockResult()
+        mock_rebuilder = MagicMock()
+        mock_rebuilder.rebuild.return_value = MockResult()
+
+        with patch('operations.operations_factory.OperationsFactory') as MockFactory:
+            MockFactory.create_partial_rebuilder.return_value = mock_rebuilder
 
             response = client.post(
                 "/api/maintenance/partial-rebuild",
@@ -187,7 +166,7 @@ class TestPartialRebuildEndpoint:
             assert data['chunks_embedded'] == 0
             assert 'Would embed' in data['message']
 
-    def test_partial_rebuild_response_structure(self, client, temp_db):
+    def test_partial_rebuild_response_structure(self, client, temp_db_minimal):
         """Partial rebuild response should have correct structure"""
         from dataclasses import dataclass
         from typing import List, Optional
@@ -208,9 +187,11 @@ class TestPartialRebuildEndpoint:
                 if self.errors is None:
                     self.errors = []
 
-        with patch('operations.partial_rebuilder.PartialRebuilder') as MockRebuilder:
-            mock_instance = MockRebuilder.return_value
-            mock_instance.rebuild.return_value = MockResult()
+        mock_rebuilder = MagicMock()
+        mock_rebuilder.rebuild.return_value = MockResult()
+
+        with patch('operations.operations_factory.OperationsFactory') as MockFactory:
+            MockFactory.create_partial_rebuilder.return_value = mock_rebuilder
 
             response = client.post(
                 "/api/maintenance/partial-rebuild",

@@ -1,24 +1,50 @@
 version: '3.8'
 
 services:
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
-    ports:
-      - "11434:11434"
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: rag-kb-postgres
+    environment:
+      POSTGRES_USER: ragkb
+      POSTGRES_PASSWORD: ragkb
+      POSTGRES_DB: ragkb
     volumes:
-      - ./.cache/ollama:/root/.ollama  # Persist models
+      - rag_kb_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD-SHELL", "pg_isready -U ragkb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     deploy:
       resources:
         limits:
           cpus: '2.0'
           memory: 4G
+
+  # Ollama service for query expansion (OPTIONAL - disabled by default)
+  # To enable: 1) Uncomment this block  2) Set QUERY_EXPANSION_ENABLED=true in .env
+  #            3) Add 'ollama: condition: service_started' to rag-api depends_on
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ./.cache/ollama:/root/.ollama  # Persist models
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '2.0'
+  #         memory: 4G
 
   rag-api:
     build:
@@ -62,7 +88,7 @@ services:
       - MKL_NUM_THREADS=${MKL_NUM_THREADS:-2}  # MKL threads
       - OPENBLAS_NUM_THREADS=${OMP_NUM_THREADS:-2}  # OpenBLAS threads (follows OMP)
       - NUMEXPR_NUM_THREADS=${OMP_NUM_THREADS:-2}  # NumExpr threads (follows OMP)
-      # Reranking (⚠️ REQUIRES GPU - disabled by default for CPU builds)
+      # Reranking (WARNING: REQUIRES GPU - disabled by default for CPU builds)
       - RERANKING_ENABLED=${RERANKING_ENABLED:-false}  # Enable only with GPU (100x slower on CPU)
       # LLM Query Expansion via Ollama
       - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
@@ -72,8 +98,11 @@ services:
       - HNSW_EF_SEARCH=${HNSW_EF_SEARCH:-150}
       - HYBRID_SEARCH_ENABLED=${HYBRID_SEARCH_ENABLED:-true}
       - TITLE_BOOST_ENABLED=${TITLE_BOOST_ENABLED:-true}
+      # PostgreSQL connection
+      - DATABASE_URL=postgresql://ragkb:ragkb@postgres:5432/ragkb
     depends_on:
-      - ollama
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -85,3 +114,6 @@ services:
         limits:
           cpus: '${MAX_CPUS:-4.0}'
           memory: ${MAX_MEMORY:-8G}
+
+volumes:
+  rag_kb_postgres_data:

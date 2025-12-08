@@ -61,10 +61,16 @@ RAG-KB is organized into six bounded contexts that collaborate to provide semant
 
 **Location**: `api/ingestion/` (repositories)
 
+**Technology**: PostgreSQL + pgvector for vector storage and similarity search
+
 **Key Aggregates**:
 - `VectorStore` / `AsyncVectorStore` - Vector persistence
 - `DocumentRepository` - Document metadata
 - `ChunkRepository` - Chunk content and vectors
+
+**Abstraction Layer**:
+- `DatabaseFactory` - Runtime backend selection (PostgreSQL or SQLite)
+- ABC interfaces in `interfaces.py` define contracts for all repositories
 
 **Upstream**: Pipeline Context
 **Downstream**: Query Context
@@ -79,7 +85,7 @@ RAG-KB is organized into six bounded contexts that collaborate to provide semant
 
 **Key Aggregates**:
 - `QueryExecutor` - Search orchestrator
-- `HybridSearcher` - Vector + FTS search
+- `HybridSearcher` - Vector + FTS search (ABC with backend implementations)
 - `QueryCache` - Result caching
 
 **Upstream**: Storage Context (reads)
@@ -97,6 +103,9 @@ RAG-KB is organized into six bounded contexts that collaborate to provide semant
 - `IndexingQueue` - Priority queue
 - `OrphanDetector` - Find incomplete documents
 - `FileWatcherService` - Monitor file changes
+
+**Abstraction Layer**:
+- `OperationsFactory` - Creates backend-agnostic maintenance operations
 
 **Upstream**: File system events
 **Downstream**: Pipeline Context
@@ -133,8 +142,8 @@ Security ──(Conformist)──> Ingestion
 
 | Pattern | Description | Usage in RAG-KB |
 |---------|-------------|-----------------|
-| **Customer-Supplier** | Upstream provides what downstream needs | Ingestion → Pipeline → Storage |
-| **Shared Kernel** | Shared code/models between contexts | Storage ↔ Query (same DB, repositories) |
+| **Customer-Supplier** | Upstream provides what downstream needs | Ingestion -> Pipeline -> Storage |
+| **Shared Kernel** | Shared code/models between contexts | Storage <-> Query (same DB, repositories) |
 | **Conformist** | Downstream conforms to upstream model | Security validates what Ingestion accepts |
 
 ---
@@ -159,28 +168,29 @@ File System
     v
 ┌─────────────────────────────────────────────────────────┐
 │                    INGESTION CONTEXT                     │
-│  FileWatcher → FileFilter → SecurityScanner → Extractor │
+│  FileWatcher -> FileFilter -> SecurityScanner -> Extractor │
 └─────────────────────────────────────────────────────────┘
     │
     │ ExtractedDocument
     v
 ┌─────────────────────────────────────────────────────────┐
 │                    PIPELINE CONTEXT                      │
-│  ChunkWorker → EmbedWorkerPool → StoreWorker            │
+│  ChunkWorker -> EmbedWorkerPool -> StoreWorker            │
 └─────────────────────────────────────────────────────────┘
     │
     │ EmbeddedDocument
     v
 ┌─────────────────────────────────────────────────────────┐
 │                    STORAGE CONTEXT                       │
-│  DocumentRepository → ChunkRepository → VectorStore     │
+│  DocumentRepository -> ChunkRepository -> VectorStore     │
+│  (PostgreSQL + pgvector, abstracted via DatabaseFactory) │
 └─────────────────────────────────────────────────────────┘
     │
     │ (reads)
     v
 ┌─────────────────────────────────────────────────────────┐
 │                     QUERY CONTEXT                        │
-│  QueryExecutor → HybridSearcher → Reranker → Cache      │
+│  QueryExecutor -> HybridSearcher -> Reranker -> Cache      │
 └─────────────────────────────────────────────────────────┘
     │
     v
@@ -197,6 +207,8 @@ API Response
 | `QueueItem` | Abstracts queue implementation from consumers |
 | `SearchResult` | Transforms DB rows to domain model |
 | `PipelineFactory` | Isolates YAML config from runtime components |
+| `DatabaseFactory` | Isolates database backend from application code |
+| `OperationsFactory` | Isolates maintenance operations from backend specifics |
 
 ---
 
@@ -212,4 +224,4 @@ API Response
 
 ---
 
-*Last updated: 2025-12-03*
+*Last updated: 2025-12-08*

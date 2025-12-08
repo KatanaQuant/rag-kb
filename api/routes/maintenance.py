@@ -7,9 +7,9 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from typing import List, Optional
 from pathlib import Path
-import sqlite3
 
 from config import default_config
+from ingestion.database_factory import DatabaseFactory
 from pipeline.indexing_queue import Priority
 from routes.deps import get_app_state
 
@@ -333,28 +333,31 @@ async def delete_empty_documents(request: DeleteOrphansRequest = None):
 
 def _process_empty_documents(dry_run: bool) -> tuple:
     """Find and optionally delete empty documents"""
-    conn = sqlite3.connect(default_config.database.path)
+    db = DatabaseFactory.create_connection()
+    conn = db.connect()
     orphans = _find_orphan_documents(conn)
     deleted_count = 0 if dry_run else _delete_orphans(conn, orphans)
-    conn.close()
+    db.close()
     return orphans, deleted_count
 
 
 def _find_orphan_documents(conn) -> list:
     """Find documents with no chunks"""
-    cursor = conn.execute('''
-        SELECT d.id, d.file_path
-        FROM documents d
-        WHERE NOT EXISTS (SELECT 1 FROM chunks c WHERE c.document_id = d.id)
-    ''')
-    return cursor.fetchall()
+    with conn.cursor() as cur:
+        cur.execute('''
+            SELECT d.id, d.file_path
+            FROM documents d
+            WHERE NOT EXISTS (SELECT 1 FROM chunks c WHERE c.document_id = d.id)
+        ''')
+        return cur.fetchall()
 
 
 def _delete_orphans(conn, orphans: list) -> int:
     """Delete orphan documents and their progress records"""
-    for doc_id, file_path in orphans:
-        conn.execute('DELETE FROM documents WHERE id = ?', (doc_id,))
-        conn.execute('DELETE FROM processing_progress WHERE file_path = ?', (file_path,))
+    with conn.cursor() as cur:
+        for doc_id, file_path in orphans:
+            cur.execute('DELETE FROM documents WHERE id = %s', (doc_id,))
+            cur.execute('DELETE FROM processing_progress WHERE file_path = %s', (file_path,))
     conn.commit()
     return len(orphans)
 
@@ -462,22 +465,36 @@ async def verify_integrity():
         table_counts: Row counts for relevant tables
     """
     try:
-        from operations.integrity_checker import IntegrityChecker
+        from operations.operations_factory import OperationsFactory
 
-        checker = IntegrityChecker(db_path=default_config.database.path)
-        result = checker.check()
+        checker = OperationsFactory.create_integrity_checker()
+        checker.connect()
+        result = checker.check_all()
+        checker.close()
+
+        # Convert result to response format
+        issues = []
+        checks = []
+        table_counts = {}
+
+        for check_name, check_result in result.items():
+            if check_name == 'all_passed':
+                continue
+            passed = check_result.get('ok', True)
+            details = {k: v for k, v in check_result.items() if k != 'ok'}
+            checks.append(IntegrityCheckDetail(
+                name=check_name,
+                passed=passed,
+                details=str(details)
+            ))
+            if not passed:
+                issues.append(f"{check_name}: {details}")
 
         return VerifyIntegrityResponse(
-            healthy=result.healthy,
-            issues=result.issues,
-            checks=[
-                IntegrityCheckDetail(
-                    name=c['name'],
-                    passed=c['passed'],
-                    details=c['details']
-                ) for c in result.checks
-            ],
-            table_counts=result.table_counts
+            healthy=result.get('all_passed', True),
+            issues=issues,
+            checks=checks,
+            table_counts=table_counts
         )
 
     except Exception as e:
@@ -517,18 +534,23 @@ async def cleanup_orphans(request: CleanupOrphansRequest = None):
         request = CleanupOrphansRequest()
 
     try:
-        from operations.orphan_cleaner import OrphanCleaner
+        from operations.operations_factory import OperationsFactory
 
-        cleaner = OrphanCleaner(db_path=default_config.database.path)
-        result = cleaner.clean(dry_run=request.dry_run)
+        cleaner = OperationsFactory.create_orphan_cleaner()
+        cleaner.connect()
+        result = cleaner.clean_all(dry_run=request.dry_run)
+        cleaner.close()
+
+        # Calculate totals from result
+        total_found = sum(r.get('deleted', 0) for r in result.values() if isinstance(r, dict))
 
         return CleanupOrphansResponse(
-            dry_run=result.dry_run,
-            orphan_chunks_found=result.orphan_chunks_found,
-            orphan_chunks_deleted=result.orphan_chunks_deleted,
-            orphan_vec_chunks_estimate=result.orphan_vec_chunks_estimate,
-            orphan_fts_chunks_estimate=result.orphan_fts_chunks_estimate,
-            message=result.message
+            dry_run=result.get('dry_run', request.dry_run),
+            orphan_chunks_found=total_found,
+            orphan_chunks_deleted=0 if request.dry_run else total_found,
+            orphan_vec_chunks_estimate=result.get('orphan_vectors', {}).get('deleted', 0),
+            orphan_fts_chunks_estimate=result.get('orphan_fts', {}).get('deleted', 0),
+            message=f"{'Would clean' if request.dry_run else 'Cleaned'} {total_found} orphan records"
         )
 
     except Exception as e:
@@ -589,40 +611,32 @@ async def rebuild_hnsw(request: RebuildHnswRequest = None):
         request = RebuildHnswRequest()
 
     try:
-        from operations.hnsw_rebuilder import HnswRebuilder
+        # PostgreSQL + pgvector manages HNSW index automatically
+        # No manual rebuild needed - return current stats
+        from operations.operations_factory import OperationsFactory
 
-        rebuilder = HnswRebuilder(db_path=default_config.database.path)
-        result = rebuilder.rebuild(dry_run=request.dry_run)
+        stats = OperationsFactory.create_stats_collector()
+        stats.connect()
+        result = stats.get_stats()
+        stats.close()
 
-        # Build message based on result
-        if result.error:
-            message = f"Error: {result.error}"
-        elif result.orphan_embeddings == 0:
-            message = "HNSW index is clean - no orphan embeddings found"
-        elif request.dry_run:
-            message = f"Would remove {result.orphan_embeddings} orphan embeddings"
-        else:
-            message = f"Removed {result.orphan_embeddings} orphan embeddings"
-
-        # Calculate orphans_removed (0 if dry_run or error)
-        orphans_removed = 0
-        if not request.dry_run and not result.error and result.orphan_embeddings > 0:
-            orphans_removed = result.total_embeddings - result.final_embeddings
+        vector_count = result.get('vectors', {}).get('total', 0)
+        chunk_count = result.get('chunks', {}).get('total', 0)
 
         return RebuildHnswResponse(
-            embeddings_before=result.total_embeddings,
-            embeddings_after=result.final_embeddings,
-            valid_embeddings=result.valid_embeddings,
-            orphans_found=result.orphan_embeddings,
-            orphans_removed=orphans_removed,
-            dry_run=result.dry_run,
-            elapsed_time=result.elapsed_time,
-            message=message,
-            error=result.error
+            embeddings_before=vector_count,
+            embeddings_after=vector_count,
+            valid_embeddings=vector_count,
+            orphans_found=0,
+            orphans_removed=0,
+            dry_run=request.dry_run,
+            elapsed_time=0.0,
+            message="PostgreSQL + pgvector manages HNSW index automatically. No manual rebuild needed.",
+            error=None
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"HNSW rebuild failed: {e}")
+        raise HTTPException(status_code=500, detail=f"HNSW status check failed: {e}")
 
 
 # ============================================================================
@@ -672,20 +686,27 @@ async def rebuild_fts(request: RebuildFtsRequest = None):
         request = RebuildFtsRequest()
 
     try:
-        from operations.fts_rebuilder import FtsRebuilder
+        # PostgreSQL tsvector is automatically maintained via GENERATED column
+        # No manual rebuild needed - return current stats
+        from operations.operations_factory import OperationsFactory
 
-        rebuilder = FtsRebuilder(db_path=default_config.database.path)
-        result = rebuilder.rebuild(dry_run=request.dry_run)
+        stats = OperationsFactory.create_stats_collector()
+        stats.connect()
+        result = stats.get_stats()
+        stats.close()
+
+        chunk_count = result.get('chunks', {}).get('total', 0)
+        fts_count = result.get('fts', {}).get('total', 0)
 
         return RebuildFtsResponse(
-            chunks_found=result.chunks_found,
-            chunks_indexed=result.chunks_indexed,
-            fts_entries_before=result.fts_entries_before,
-            fts_entries_after=result.fts_entries_after,
-            dry_run=result.dry_run,
-            time_taken=result.time_taken,
-            message=result.message,
-            errors=result.errors
+            chunks_found=chunk_count,
+            chunks_indexed=fts_count,
+            fts_entries_before=fts_count,
+            fts_entries_after=fts_count,
+            dry_run=request.dry_run,
+            time_taken=0.0,
+            message="PostgreSQL tsvector is maintained automatically via GENERATED column. No manual rebuild needed.",
+            errors=None
         )
 
     except Exception as e:
@@ -738,43 +759,44 @@ async def repair_indexes(request: RepairIndexesRequest = None):
         request = RepairIndexesRequest()
 
     try:
-        from operations.index_repairer import IndexRepairer
+        # PostgreSQL manages indexes automatically - return current stats
+        from operations.operations_factory import OperationsFactory
 
-        repairer = IndexRepairer(db_path=default_config.database.path)
-        result = repairer.repair(dry_run=request.dry_run)
+        stats = OperationsFactory.create_stats_collector()
+        stats.connect()
+        result = stats.get_stats()
+        stats.close()
 
-        # Calculate orphans_removed for HNSW
-        hnsw = result.hnsw_result
-        orphans_removed = 0
-        if not request.dry_run and not hnsw.error and hnsw.orphan_embeddings > 0:
-            orphans_removed = hnsw.total_embeddings - hnsw.final_embeddings
+        vector_count = result.get('vectors', {}).get('total', 0)
+        chunk_count = result.get('chunks', {}).get('total', 0)
+        fts_count = result.get('fts', {}).get('total', 0)
 
         return RepairIndexesResponse(
-            dry_run=result.dry_run,
-            total_time=result.total_time,
+            dry_run=request.dry_run,
+            total_time=0.0,
             hnsw=HnswStats(
-                embeddings_before=hnsw.total_embeddings,
-                embeddings_after=hnsw.final_embeddings,
-                valid_embeddings=hnsw.valid_embeddings,
-                orphans_found=hnsw.orphan_embeddings,
-                orphans_removed=orphans_removed,
-                elapsed_time=hnsw.elapsed_time,
-                error=hnsw.error
+                embeddings_before=vector_count,
+                embeddings_after=vector_count,
+                valid_embeddings=vector_count,
+                orphans_found=0,
+                orphans_removed=0,
+                elapsed_time=0.0,
+                error=None
             ),
             fts=FtsStats(
-                chunks_found=result.fts_result.chunks_found,
-                chunks_indexed=result.fts_result.chunks_indexed,
-                fts_entries_before=result.fts_result.fts_entries_before,
-                fts_entries_after=result.fts_result.fts_entries_after,
-                time_taken=result.fts_result.time_taken,
-                errors=result.fts_result.errors
+                chunks_found=chunk_count,
+                chunks_indexed=fts_count,
+                fts_entries_before=fts_count,
+                fts_entries_after=fts_count,
+                time_taken=0.0,
+                errors=None
             ),
-            message=result.message,
-            error=result.error
+            message="PostgreSQL manages indexes automatically via ACID compliance. No manual repair needed.",
+            error=None
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Index repair failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Index status check failed: {e}")
 
 
 # ============================================================================
@@ -928,9 +950,9 @@ async def rebuild_embeddings(request: RebuildEmbeddingsRequest = None):
         request = RebuildEmbeddingsRequest()
 
     try:
-        from operations.embedding_rebuilder import EmbeddingRebuilder
+        from operations.operations_factory import OperationsFactory
 
-        rebuilder = EmbeddingRebuilder(db_path=default_config.database.path)
+        rebuilder = OperationsFactory.create_embedding_rebuilder()
         result = rebuilder.rebuild(dry_run=request.dry_run)
 
         return RebuildEmbeddingsResponse(
@@ -1002,9 +1024,9 @@ async def partial_rebuild(request: PartialRebuildRequest = None):
         request = PartialRebuildRequest()
 
     try:
-        from operations.partial_rebuilder import PartialRebuilder
+        from operations.operations_factory import OperationsFactory
 
-        rebuilder = PartialRebuilder(db_path=default_config.database.path)
+        rebuilder = OperationsFactory.create_partial_rebuilder()
         result = rebuilder.rebuild(
             start_id=request.start_id,
             end_id=request.end_id,

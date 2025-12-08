@@ -304,14 +304,14 @@ class TestRejectedFilesEndpoint:
 
     def test_list_rejected_returns_list(self, client):
         """Rejected endpoint should return list"""
-        with patch('routes.security.ProcessingProgressTracker') as mock_tracker_cls, \
+        with patch('routes.security.DatabaseFactory') as mock_factory, \
              patch('routes.security.default_config') as mock_config:
             mock_config.database.path = ':memory:'
 
             # Mock tracker to return empty list
             mock_tracker = Mock()
             mock_tracker.get_rejected_files.return_value = []
-            mock_tracker_cls.return_value = mock_tracker
+            mock_factory.create_progress_tracker.return_value = mock_tracker
 
             response = client.get("/api/security/rejected")
 
@@ -320,7 +320,7 @@ class TestRejectedFilesEndpoint:
 
     def test_list_rejected_with_files(self, client):
         """Rejected endpoint should return file details"""
-        with patch('routes.security.ProcessingProgressTracker') as mock_tracker_cls, \
+        with patch('routes.security.DatabaseFactory') as mock_factory, \
              patch('routes.security.default_config') as mock_config:
             mock_config.database.path = ':memory:'
 
@@ -333,7 +333,7 @@ class TestRejectedFilesEndpoint:
 
             mock_tracker = Mock()
             mock_tracker.get_rejected_files.return_value = [mock_rejected]
-            mock_tracker_cls.return_value = mock_tracker
+            mock_factory.create_progress_tracker.return_value = mock_tracker
 
             response = client.get("/api/security/rejected")
 

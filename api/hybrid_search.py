@@ -256,3 +256,129 @@ class HybridSearcher:
             return fused[:top_k]
         except Exception:
             return vector_results
+
+
+class PostgresBM25Searcher:
+    """
+    BM25 keyword search for PostgreSQL.
+
+    Same algorithm as BM25Searcher but reads from PostgreSQL instead of SQLite.
+    Uses psycopg2 cursor interface.
+    """
+
+    def __init__(self, conn):
+        """Initialize with PostgreSQL connection (psycopg2)."""
+        self.conn = conn
+        self._corpus: List[List[str]] = []
+        self._chunk_data: List[Tuple] = []
+        self._bm25: Optional[BM25Okapi] = None
+        self._build_index()
+
+    def _tokenize(self, text: str) -> List[str]:
+        """Simple word tokenization with lowercasing."""
+        tokens = re.split(r'\W+', text.lower())
+        return [t for t in tokens if t]
+
+    def _build_index(self) -> None:
+        """Load all chunks from PostgreSQL and build BM25 index."""
+        with self.conn.cursor() as cur:
+            cur.execute("""
+                SELECT c.id, c.content, d.file_path, c.page
+                FROM chunks c
+                JOIN documents d ON c.document_id = d.id
+                ORDER BY c.id
+            """)
+
+            self._corpus = []
+            self._chunk_data = []
+
+            for row in cur.fetchall():
+                chunk_id, content, file_path, page = row
+                self._chunk_data.append((chunk_id, content, file_path, page))
+                self._corpus.append(self._tokenize(content))
+
+        if self._corpus:
+            self._bm25 = BM25Okapi(self._corpus)
+        else:
+            self._bm25 = None
+
+    def refresh(self) -> None:
+        """Rebuild the BM25 index from database."""
+        self._build_index()
+
+    def _get_title_boost(self, file_path: str, query_tokens: List[str]) -> float:
+        """Calculate title boost multiplier based on query-title overlap."""
+        import os
+        if os.getenv("TITLE_BOOST_ENABLED", "true").lower() != "true":
+            return 1.0
+
+        if not file_path or not query_tokens:
+            return 1.0
+
+        from pathlib import Path
+        filename = Path(file_path).stem.lower()
+        filename_tokens = set(self._tokenize(filename))
+        query_token_set = set(query_tokens)
+        overlap = len(filename_tokens & query_token_set)
+
+        if overlap == 0:
+            return 1.0
+        if overlap >= 3:
+            return 3.0
+        elif overlap >= 2:
+            return 2.0
+        else:
+            return 1.5
+
+    def search(self, query: str, top_k: int) -> List[Tuple]:
+        """Search using BM25 scoring with title boosting."""
+        if not self._bm25 or not self._corpus:
+            return []
+
+        query_tokens = self._tokenize(query)
+        if not query_tokens:
+            return []
+
+        scores = self._bm25.get_scores(query_tokens)
+
+        for idx in range(len(scores)):
+            if scores[idx] > 0:
+                file_path = self._chunk_data[idx][2]
+                boost = self._get_title_boost(file_path, query_tokens)
+                scores[idx] *= boost
+
+        top_indices = scores.argsort()[::-1][:top_k]
+
+        results = []
+        for idx in top_indices:
+            score = scores[idx]
+            if score <= 0:
+                continue
+            chunk_id, content, file_path, page = self._chunk_data[idx]
+            results.append((chunk_id, content, file_path, page, score))
+
+        return results
+
+
+class PostgresHybridSearcher:
+    """Hybrid search for PostgreSQL using BM25 for keyword scoring."""
+
+    def __init__(self, conn):
+        """Initialize with PostgreSQL connection (psycopg2)."""
+        self.conn = conn
+        self.keyword = PostgresBM25Searcher(conn)
+        self.fusion = RankFusion()
+
+    def refresh_keyword_index(self) -> None:
+        """Refresh BM25 index after documents are added/removed."""
+        self.keyword.refresh()
+
+    def search(self, query: str, vector_results: List[Dict],
+               top_k: int) -> List[Dict]:
+        """Execute hybrid search"""
+        try:
+            keyword_results = self.keyword.search(query, top_k * 4)
+            fused = self.fusion.fuse(vector_results, keyword_results)
+            return fused[:top_k]
+        except Exception:
+            return vector_results

@@ -1,4 +1,6 @@
 """
+DEPRECATED: Use POST /api/maintenance/rebuild-hnsw instead.
+
 Rebuild HNSW index from EXISTING embeddings (no re-embedding).
 
 Use this to remove orphan embeddings from vec_chunks without

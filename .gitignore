@@ -54,5 +54,5 @@ core.*
 *.log
 up-next
 
-# Benchmark results (keep run_benchmark.py tracked)
-benchmarks/*.json
+# Benchmarks (dev-only)
+benchmarks/

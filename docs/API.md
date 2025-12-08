@@ -2,8 +2,6 @@
 
 Complete guide to managing and monitoring your RAG-KB instance via API endpoints.
 
-**Version**: v2.2.4-dev
-
 ---
 
 ## Table of Contents
@@ -1212,7 +1210,7 @@ When `decompose=true` (default), the API automatically detects compound queries 
 
 For compound queries, each sub-query is searched independently and results are merged/deduplicated. This improves recall for multi-topic queries by ~2-6% (benchmark: +5.6% top score improvement).
 
-**Performance**: Decomposition adds ~80% latency overhead (e.g., ~100ms → ~180ms) due to 2x embedding + 2x search operations. This is acceptable with vectorlite's ~10ms search times.
+**Performance**: Decomposition adds ~80% latency overhead (e.g., ~100ms → ~180ms) due to 2x embedding + 2x search operations. This is acceptable with PostgreSQL pgvector's fast HNSW search times.
 
 Set `decompose=false` to treat the query as a single unit (useful when "and"/"or" are part of the search term itself).
 

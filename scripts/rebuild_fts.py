@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """
+DEPRECATED: Use POST /api/maintenance/rebuild-fts instead.
+
 Rebuild FTS (Full-Text Search) index from existing chunks.
 
 Use this when fts_chunks has orphan entries or is out of sync with chunks table.

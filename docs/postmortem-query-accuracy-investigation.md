@@ -3,19 +3,22 @@
 **Investigation Period:** December 5-6, 2025
 **Status:** CLOSED - Target exceeded
 **Final Result:** 92.3% usable accuracy (vs 84.6% v1.9.1 baseline)
-**Related:** [Postmortem: Vectorlite HNSW Migration](postmortem-vectorlite-hnsw-complete.md)
+
+> **Note:** This document covers the accuracy investigation phase only. For the complete postmortem including all 5 HNSW bugs, fixes, and lessons learned, see [Postmortem: Vectorlite HNSW Complete](postmortem-vectorlite-hnsw-complete.md).
+>
+> **Update (2025-12-08):** The project migrated to PostgreSQL + pgvector, eliminating all vectorlite-related issues permanently. The accuracy fixes (title boosting, proper HNSW ef parameter) are preserved in the pgvector implementation.
 
 ---
 
 ## Executive Summary
 
-| Metric | v1.9.1 (baseline) | v2.2.2 (before) | v2.2.4-beta (final) |
-|--------|-------------------|-----------------|---------------------|
-| Usable | 84.6% (22/26) | 73.1% (19/26) | **92.3%** (24/26) |
-| Correct | 65.4% (17/26) | 53.8% (14/26) | **73.1%** (19/26) |
-| Acceptable | 19.2% (5/26) | 19.2% (5/26) | 19.2% (5/26) |
-| Wrong | 15.4% (4/26) | 26.9% (7/26) | **7.7%** (2/26) |
-| Latency | 60,932ms | ~500ms | **553ms** |
+| Metric | v1.9.1 (baseline) | v2.2.2 (before) | v2.2.4-beta (final) | pgvector |
+|--------|-------------------|-----------------|---------------------|-------------------|
+| Usable | 84.6% (22/26) | 73.1% (19/26) | **92.3%** (24/26) | **92.3%** (24/26) |
+| Correct | 65.4% (17/26) | 53.8% (14/26) | **73.1%** (19/26) | **73.1%** (19/26) |
+| Acceptable | 19.2% (5/26) | 19.2% (5/26) | 19.2% (5/26) | 19.2% (5/26) |
+| Wrong | 15.4% (4/26) | 26.9% (7/26) | **7.7%** (2/26) | **7.7%** (2/26) |
+| Latency | 60,932ms | ~500ms | **553ms** | **515ms** |
 
 **Resolution:** Two key fixes:
 1. **Title boosting** in BM25 improved accuracy from 73.1% to 80.8%

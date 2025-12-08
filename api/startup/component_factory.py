@@ -2,7 +2,7 @@
 
 import os
 from config import default_config
-from ingestion import ProcessingProgressTracker
+from ingestion.database_factory import DatabaseFactory
 from query_cache import QueryCache
 
 class ComponentFactory:
@@ -18,11 +18,10 @@ class ComponentFactory:
         self.state = state
 
     def create_progress_tracker(self):
-        """Create progress tracker if enabled"""
+        """Create progress tracker if enabled, using factory for backend detection."""
         if not default_config.processing.enabled:
             return None
-        db_path = default_config.database.path
-        return ProcessingProgressTracker(db_path)
+        return DatabaseFactory.create_progress_tracker()
 
     def create_query_cache(self):
         """Create query cache if enabled"""

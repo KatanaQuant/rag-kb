@@ -27,11 +27,65 @@ class ChunkConfig:
 
 @dataclass
 class DatabaseConfig:
-    """Database configuration"""
-    path: str = "/app/data/rag.db"
+    """Database configuration supporting PostgreSQL + pgvector (default) and SQLite + vectorlite.
+
+    PostgreSQL fields: database_url, host, port, user, password, database
+    SQLite fields (backward compatible): path, check_same_thread, require_vec_extension
+
+    Use DatabaseFactory for runtime backend selection based on database_url prefix.
+    """
+    # PostgreSQL connection (default)
+    database_url: str = "postgresql://ragkb:ragkb@localhost:5432/ragkb"
+    # Parsed components (set from database_url)
+    host: str = "localhost"
+    port: int = 5432
+    user: str = "ragkb"
+    password: str = "ragkb"
+    database: str = "ragkb"
+    # Embedding configuration
     embedding_dim: int = 384
-    check_same_thread: bool = False
-    require_vec_extension: bool = True
+    # Legacy SQLite path (for migration only)
+    sqlite_path: str = "/app/data/rag.db"
+
+    # ============================================================
+    # SQLite backward compatibility (deprecated, for tests/migration)
+    # ============================================================
+    path: str = "/app/data/rag.db"  # SQLite database file path
+    check_same_thread: bool = False  # SQLite threading mode
+    require_vec_extension: bool = False  # Whether vectorlite extension is required
+    validate_hnsw: bool = True  # Whether to validate HNSW index size (disable for tests)
+
+    @classmethod
+    def from_url(cls, url: str, embedding_dim: int = 384) -> 'DatabaseConfig':
+        """Parse DATABASE_URL and create config.
+
+        Supports:
+        - postgresql://user:pass@host:port/dbname
+        - sqlite:///path/to/db.sqlite
+        """
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+
+        if url.startswith('sqlite'):
+            # SQLite URL: sqlite:///path/to/db.sqlite
+            sqlite_path = parsed.path or "/app/data/rag.db"
+            return cls(
+                database_url=url,
+                sqlite_path=sqlite_path,
+                path=sqlite_path,  # backward compat
+                embedding_dim=embedding_dim,
+            )
+        else:
+            # PostgreSQL URL
+            return cls(
+                database_url=url,
+                host=parsed.hostname or "localhost",
+                port=parsed.port or 5432,
+                user=parsed.username or "ragkb",
+                password=parsed.password or "ragkb",
+                database=parsed.path.lstrip('/') or "ragkb",
+                embedding_dim=embedding_dim,
+            )
 
 @dataclass
 class ModelConfig:

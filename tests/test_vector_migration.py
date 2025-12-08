@@ -2,6 +2,9 @@
 
 These tests verify that the migration script correctly converts databases
 and that the API layer works with migrated databases.
+
+NOTE: These tests require both sqlite-vec and vectorlite extensions.
+They are skipped when extensions are not available.
 """
 
 import sqlite3
@@ -9,6 +12,40 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+
+
+def _has_sqlite_vec():
+    """Check if sqlite-vec is available and loadable."""
+    try:
+        import sqlite_vec
+        import sqlite3
+        conn = sqlite3.connect(':memory:')
+        sqlite_vec.load(conn)
+        conn.close()
+        return True
+    except (ImportError, AttributeError, Exception):
+        return False
+
+
+def _has_vectorlite():
+    """Check if vectorlite is available and loadable."""
+    try:
+        import vectorlite_py
+        import sqlite3
+        conn = sqlite3.connect(':memory:')
+        conn.enable_load_extension(True)
+        conn.load_extension(vectorlite_py.vectorlite_path())
+        conn.close()
+        return True
+    except (ImportError, AttributeError, Exception):
+        return False
+
+
+# Skip all tests if required extensions are not available
+pytestmark = pytest.mark.skipif(
+    not (_has_sqlite_vec() and _has_vectorlite()),
+    reason="sqlite-vec and/or vectorlite extensions not available"
+)
 
 from ingestion.vector_migration import migrate_to_vectorlite, verify_migration
 

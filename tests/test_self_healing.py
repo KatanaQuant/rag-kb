@@ -15,41 +15,7 @@ import sqlite3
 import os
 
 
-@pytest.fixture
-def temp_db():
-    """Create temporary database with schema"""
-    fd, path = tempfile.mkstemp(suffix='.db')
-    conn = sqlite3.connect(path)
-
-    # Create minimal schema
-    conn.execute('''
-        CREATE TABLE documents (
-            id INTEGER PRIMARY KEY,
-            file_path TEXT,
-            indexed_at TIMESTAMP
-        )
-    ''')
-    conn.execute('''
-        CREATE TABLE chunks (
-            id INTEGER PRIMARY KEY,
-            document_id INTEGER,
-            content TEXT,
-            FOREIGN KEY (document_id) REFERENCES documents(id)
-        )
-    ''')
-    conn.execute('''
-        CREATE TABLE processing_progress (
-            file_path TEXT PRIMARY KEY,
-            status TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-    yield path
-
-    os.close(fd)
-    os.unlink(path)
+# temp_db_full fixture is provided by conftest.py
 
 
 class TestSelfHealingService:
@@ -86,76 +52,76 @@ class TestSelfHealingService:
 class TestDeleteEmptyDocuments:
     """Test empty document deletion"""
 
-    def test_deletes_documents_with_no_chunks(self, temp_db):
+    def test_deletes_documents_with_no_chunks(self, temp_db_full):
         """Should delete document records that have no chunks"""
         from startup.self_healing import SelfHealingService
 
         # Add orphan document (no chunks)
-        conn = sqlite3.connect(temp_db)
+        conn = sqlite3.connect(temp_db_full)
         conn.execute('INSERT INTO documents (id, file_path) VALUES (1, "/test/orphan.pdf")')
         conn.execute('INSERT INTO processing_progress (file_path, status) VALUES ("/test/orphan.pdf", "completed")')
         conn.commit()
         conn.close()
 
-        healer = SelfHealingService(db_path=temp_db)
+        healer = SelfHealingService(db_path=temp_db_full)
         result = healer.run()
 
         assert result['empty_documents']['found'] == 1
         assert result['empty_documents']['deleted'] == 1
 
         # Verify deletion
-        conn = sqlite3.connect(temp_db)
+        conn = sqlite3.connect(temp_db_full)
         cursor = conn.execute('SELECT COUNT(*) FROM documents')
         assert cursor.fetchone()[0] == 0
         cursor = conn.execute('SELECT COUNT(*) FROM processing_progress')
         assert cursor.fetchone()[0] == 0
         conn.close()
 
-    def test_keeps_documents_with_chunks(self, temp_db):
+    def test_keeps_documents_with_chunks(self, temp_db_full):
         """Should not delete documents that have chunks"""
         from startup.self_healing import SelfHealingService
 
         # Add document WITH chunks
-        conn = sqlite3.connect(temp_db)
+        conn = sqlite3.connect(temp_db_full)
         conn.execute('INSERT INTO documents (id, file_path) VALUES (1, "/test/complete.pdf")')
         conn.execute('INSERT INTO chunks (document_id, content) VALUES (1, "chunk content")')
         conn.commit()
         conn.close()
 
-        healer = SelfHealingService(db_path=temp_db)
+        healer = SelfHealingService(db_path=temp_db_full)
         result = healer.run()
 
         assert result['empty_documents']['found'] == 0
         assert result['empty_documents']['deleted'] == 0
 
         # Verify NOT deleted
-        conn = sqlite3.connect(temp_db)
+        conn = sqlite3.connect(temp_db_full)
         cursor = conn.execute('SELECT COUNT(*) FROM documents')
         assert cursor.fetchone()[0] == 1
         conn.close()
 
-    def test_handles_multiple_empty_documents(self, temp_db):
+    def test_handles_multiple_empty_documents(self, temp_db_full):
         """Should delete multiple empty documents"""
         from startup.self_healing import SelfHealingService
 
-        conn = sqlite3.connect(temp_db)
+        conn = sqlite3.connect(temp_db_full)
         conn.execute('INSERT INTO documents (id, file_path) VALUES (1, "/test/empty1.pdf")')
         conn.execute('INSERT INTO documents (id, file_path) VALUES (2, "/test/empty2.pdf")')
         conn.execute('INSERT INTO documents (id, file_path) VALUES (3, "/test/empty3.pdf")')
         conn.commit()
         conn.close()
 
-        healer = SelfHealingService(db_path=temp_db)
+        healer = SelfHealingService(db_path=temp_db_full)
         result = healer.run()
 
         assert result['empty_documents']['found'] == 3
         assert result['empty_documents']['deleted'] == 3
 
-    def test_handles_mix_of_empty_and_complete(self, temp_db):
+    def test_handles_mix_of_empty_and_complete(self, temp_db_full):
         """Should only delete empty documents, keep complete ones"""
         from startup.self_healing import SelfHealingService
 
-        conn = sqlite3.connect(temp_db)
+        conn = sqlite3.connect(temp_db_full)
         # Empty document
         conn.execute('INSERT INTO documents (id, file_path) VALUES (1, "/test/empty.pdf")')
         # Complete document
@@ -164,14 +130,14 @@ class TestDeleteEmptyDocuments:
         conn.commit()
         conn.close()
 
-        healer = SelfHealingService(db_path=temp_db)
+        healer = SelfHealingService(db_path=temp_db_full)
         result = healer.run()
 
         assert result['empty_documents']['found'] == 1
         assert result['empty_documents']['deleted'] == 1
 
         # Verify correct document remains
-        conn = sqlite3.connect(temp_db)
+        conn = sqlite3.connect(temp_db_full)
         cursor = conn.execute('SELECT file_path FROM documents')
         remaining = cursor.fetchone()
         assert remaining[0] == '/test/complete.pdf'
@@ -181,7 +147,7 @@ class TestDeleteEmptyDocuments:
 class TestBackfillChunkCounts:
     """Test chunk count backfilling"""
 
-    def test_backfill_when_migration_available(self, temp_db):
+    def test_backfill_when_migration_available(self, temp_db_full):
         """Should call backfill migration when available"""
         from startup.self_healing import SelfHealingService
 
@@ -192,19 +158,19 @@ class TestBackfillChunkCounts:
         })
 
         with patch.dict('sys.modules', {'migrations.backfill_chunk_counts': mock_module}):
-            healer = SelfHealingService(db_path=temp_db)
+            healer = SelfHealingService(db_path=temp_db_full)
             result = healer.run()
 
             assert result['chunk_counts']['checked'] == 100
             assert result['chunk_counts']['updated'] == 5
 
-    def test_backfill_skipped_when_migration_not_available(self, temp_db):
+    def test_backfill_skipped_when_migration_not_available(self, temp_db_full):
         """Should skip gracefully when migration module not available"""
         from startup.self_healing import SelfHealingService
 
         # Ensure migration module is not available
         with patch.dict('sys.modules', {'migrations.backfill_chunk_counts': None}):
-            healer = SelfHealingService(db_path=temp_db)
+            healer = SelfHealingService(db_path=temp_db_full)
             # This should not raise
             result = healer.run()
 
@@ -215,28 +181,28 @@ class TestBackfillChunkCounts:
 class TestSelfHealingIntegration:
     """Integration tests for self-healing"""
 
-    def test_full_run_returns_results(self, temp_db):
+    def test_full_run_returns_results(self, temp_db_full):
         """Full run should return comprehensive results"""
         from startup.self_healing import SelfHealingService
 
-        healer = SelfHealingService(db_path=temp_db)
+        healer = SelfHealingService(db_path=temp_db_full)
         result = healer.run()
 
         assert 'empty_documents' in result
         assert 'chunk_counts' in result
 
-    def test_healthy_database_needs_no_repairs(self, temp_db):
+    def test_healthy_database_needs_no_repairs(self, temp_db_full):
         """Healthy database should need no repairs"""
         from startup.self_healing import SelfHealingService
 
         # Add healthy document
-        conn = sqlite3.connect(temp_db)
+        conn = sqlite3.connect(temp_db_full)
         conn.execute('INSERT INTO documents (id, file_path) VALUES (1, "/test/healthy.pdf")')
         conn.execute('INSERT INTO chunks (document_id, content) VALUES (1, "chunk")')
         conn.commit()
         conn.close()
 
-        healer = SelfHealingService(db_path=temp_db)
+        healer = SelfHealingService(db_path=temp_db_full)
         result = healer.run()
 
         assert result['empty_documents']['deleted'] == 0

@@ -98,7 +98,11 @@ class EnvironmentConfigLoader:
     def _load_database_config(self, embedding_dim: int):
         """Load database configuration from environment"""
         from config import DatabaseConfig
-        return DatabaseConfig(embedding_dim=embedding_dim)
+        database_url = self._get_optional(
+            "DATABASE_URL",
+            "postgresql://ragkb:ragkb@localhost:5432/ragkb"
+        )
+        return DatabaseConfig.from_url(database_url, embedding_dim)
 
     def _load_path_config(self) -> PathConfig:
         """Load path configuration from environment"""

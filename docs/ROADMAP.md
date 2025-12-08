@@ -2,8 +2,8 @@
 
 ## Current State
 
-**Latest Version**: v2.2.4-beta
-**Status**: Production-ready
+**Latest Version**: v2.3.0-beta
+**Status**: Production-ready (migration verified 2025-12-08)
 
 ### What's Working
 
@@ -11,8 +11,10 @@
 - Modular 4-stage pipeline: Extract, Chunk, Embed, Rerank
 - MCP integration for AI coding assistants
 - Security scanning (ClamAV, YARA)
-- 92.3% search accuracy with 120x faster queries
+- 88.5% search accuracy with PostgreSQL + pgvector
 - Self-healing database with maintenance API
+- Full ACID compliance with PostgreSQL + pgvector
+- Database abstraction layer (swap backends via DATABASE_URL)
 
 ### Current Stack
 
@@ -21,7 +23,8 @@
 | Extraction | Docling |
 | Chunking | HybridChunker |
 | Embedding | Snowflake Arctic Embed L v2.0 |
-| Vector Index | Vectorlite HNSW (ef=150) |
+| Vector Index | pgvector HNSW (PostgreSQL) |
+| Full-Text Search | PostgreSQL tsvector + GIN |
 | Reranking | BGE-Reranker-Large (GPU recommended) |
 | Query Features | Decomposition, Suggestions, Confidence Scores |
 
@@ -31,6 +34,7 @@
 
 | Version | Highlights |
 |---------|-----------|
+| **v2.3.0-beta** | PostgreSQL + pgvector, database abstraction layer, ARM64 support |
 | **v2.2.4-beta** | All HNSW bugs fixed, 92.3% accuracy, maintenance API |
 | **v2.2.0-beta** | Vectorlite HNSW (deprecated - critical bugs) |
 | **v2.1.5-beta** | Breaking changes: kb/ rename, MCP stdio removed |
@@ -42,7 +46,20 @@
 
 ---
 
-## Current Release (v2.2.4-beta)
+## Current Release (v2.3.0-beta)
+
+| Feature | Description | Benefit |
+|---------|-------------|---------|
+| PostgreSQL + pgvector | Full database migration | ACID compliance, crash recovery |
+| pgvector HNSW | Native PostgreSQL vector index | No external index files |
+| PostgreSQL tsvector | Native full-text search | Replaces FTS5 |
+| Database abstraction | DatabaseFactory + OperationsFactory + ABCs | Swap backends via DATABASE_URL |
+| HybridSearcher ABC | Search abstraction interface | Backend-agnostic hybrid search |
+| ARM64 support | Linux ARM64 compatibility | Mac Docker users |
+| Async PostgreSQL | asyncpg for concurrent operations | Better connection handling |
+| Simplified architecture | ~300 lines deleted | No periodic flush, no index file management |
+
+### Previous Release (v2.2.4-beta)
 
 | Feature | Description | Benchmark |
 |---------|-------------|-----------|
@@ -55,22 +72,9 @@
 
 ---
 
-## Next Release: v2.3.0
+## Next Release: v2.4.0
 
-**Status**: Planning, awaiting GPU hardware
-
-### pgvector Migration
-
-Migrate from vectorlite to pgvector for production-grade durability:
-
-| Feature | vectorlite | pgvector |
-|---------|-----------|----------|
-| ACID compliance | None | Full PostgreSQL |
-| WAL/durability | None | Yes |
-| Crash recovery | Manual rebuild | Automatic |
-| Migration effort | - | Low (SQL similar) |
-
-Current limitation: vectorlite lacks WAL, up to 5 min data loss on crash.
+**Status**: Planning
 
 ### GPU Acceleration (when hardware available)
 
@@ -98,6 +102,7 @@ Per [Anthropic research](https://www.anthropic.com/news/contextual-retrieval), p
 ### v1.10.x Backport
 
 Backport v2.2.4-beta improvements to v1.9.x for users who can't migrate:
+- `numpy>=1.26.4,<2.0.0` pinning (critical performance fix)
 - rank_bm25 (probabilistic keyword scoring)
 - Title boosting
 - RRF k=20 tuning
