@@ -31,30 +31,13 @@ def vec0_available():
         sqlite_vec.load(conn)
         conn.close()
         return True
-    except:
+    except (ImportError, AttributeError, OSError):
         return False
 
 
 requires_vec0 = pytest.mark.skipif(not vec0_available(), reason="sqlite-vec extension not available")
 
 
-
-@pytest.fixture
-def db_with_vec(tmp_path):
-    """Create database with sqlite-vec loaded"""
-    import sqlite_vec
-    db_path = tmp_path / "test.db"
-    config = DatabaseConfig(path=str(db_path), embedding_dim=1024)
-
-    db_conn = DatabaseConnection(config)
-    conn = db_conn.connect()
-    sqlite_vec.load(conn)
-
-    schema = SchemaManager(conn, config)
-    schema.create_schema()
-
-    yield conn
-    conn.close()
 
 @pytest.fixture
 def db_with_vec(tmp_path):
