@@ -16,6 +16,9 @@ transformers>=4.30.0
 sqlite-vec==0.1.1
 aiosqlite>=0.20.0
 
+# BM25 keyword search (probabilistic scoring, replaces FTS5 boolean matching)
+rank_bm25>=0.2.2
+
 # Document processing
 python-docx>=1.1.2
 markdown==3.5.2

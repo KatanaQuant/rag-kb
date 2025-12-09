@@ -1,0 +1,63 @@
+# Isolated testing for v1.9.2 backport
+# Run with: docker-compose -f docker-compose.v192-test.yml up --build
+#
+# This does NOT conflict with the running v2.3.0 instance:
+# - Uses port 8001 (v2 uses 8000)
+# - Reuses existing ./data/ (SQLite DB with ~50k vectors)
+# - Uses ./kb-empty/ (empty dir, nothing to index)
+# - Container: rag-api-v192-test
+#
+# TESTING WORKFLOW:
+# 1. mkdir -p kb-empty  # Empty dir so nothing gets indexed
+# 2. docker-compose -f docker-compose.v192-test.yml up --build
+# 3. Wait for health, then immediately: curl -X POST http://localhost:8001/indexing/pause
+# 4. Test search: curl -X POST http://localhost:8001/query ...
+# 5. docker-compose -f docker-compose.v192-test.yml down
+
+version: '3.8'
+
+services:
+  rag-api-v192-test:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    image: rag-api-v192-test:latest
+    container_name: rag-api-v192-test
+    ports:
+      - "8001:8000"
+    volumes:
+      # Empty KB dir - nothing to index
+      - ./kb-empty:/app/knowledge_base
+      # Use sqlite-vec compatible database (pre-vectorlite backup)
+      - ./data-v192-test:/app/data
+      - ./tests:/app/tests
+      - ./config:/app/yara_config
+      # Share model caches (read-only)
+      - ./.cache/deepsearch_glm:/app/.cache/deepsearch_glm:ro
+      - ./.cache/docling:/home/appuser/.cache/docling:ro
+      - ./.cache/huggingface:/home/appuser/.cache/huggingface:ro
+      - ./.cache/easyocr:/home/appuser/.EasyOCR:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - MODEL_NAME=Snowflake/snowflake-arctic-embed-l-v2.0
+      - BATCH_SIZE=5
+      - BATCH_DELAY=0.5
+      - USE_DOCLING=false  # Don't need docling, not indexing
+      - SEMANTIC_CHUNKING=false
+      - AUTO_REPAIR_ORPHANS=false  # Don't repair orphans
+      - CHUNK_WORKERS=1
+      - EMBEDDING_WORKERS=1
+      - OMP_NUM_THREADS=1
+      - MKL_NUM_THREADS=1
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    cpu_shares: 256
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 3G

@@ -16,6 +16,7 @@ package-lock.json
 
 # Data
 data/
+data-*/
 *.db
 *.db-journal
 *.db-wal
@@ -27,6 +28,8 @@ data/
 # Knowledge base (contains personal/copyrighted content)
 internal_planning/
 knowledge_base/
+kb/
+kb-*/
 
 # Agent session files
 .agent/

@@ -18,7 +18,7 @@ from hybrid_search import HybridSearcher
 from domain_models import ChunkData, DocumentFile, ExtractionResult
 from ingestion.document_repository import DocumentRepository
 from ingestion.chunk_repository import ChunkRepository, VectorChunkRepository, FTSChunkRepository
-from ingestion.search_repository import SearchRepository
+from ingestion.search_repository import SearchRepository, NumpyVectorSearch
 
 # Centralized logging configuration - import triggers suppression
 import ingestion.logging_config  # noqa: F401
@@ -309,6 +309,8 @@ class VectorRepository:
         self.vectors = VectorChunkRepository(conn)
         self.fts = FTSChunkRepository(conn)
         self.search_repo = SearchRepository(conn)
+        # NumPy in-memory search: trades startup time (~42s) for fast queries (~2s)
+        self.numpy_search = NumpyVectorSearch(conn)
 
     def is_indexed(self, path: str, hash_val: str) -> bool:
         """Check if document indexed by hash (allows file moves without reindex)"""
@@ -392,6 +394,8 @@ class VectorRepository:
         doc_id = self.documents.add(path, hash_val, extraction_method)
         self._insert_chunks_delegated(doc_id, chunks, embeddings)
         self.conn.commit()
+        # Refresh in-memory search index to include new vectors
+        self.refresh_search_index()
         return doc_id
 
     def _delete_old(self, path: str):
@@ -410,8 +414,12 @@ class VectorRepository:
 
     def search(self, embedding: List, top_k: int,
               threshold: float = None) -> List[Dict]:
-        """Search for similar vectors - delegates to SearchRepository"""
-        return self.search_repo.vector_search(embedding, top_k, threshold)
+        """Search for similar vectors - uses NumpyVectorSearch for fast queries"""
+        return self.numpy_search.search(embedding, top_k, threshold)
+
+    def refresh_search_index(self):
+        """Refresh in-memory search index after documents are added/removed"""
+        self.numpy_search.refresh()
 
     def get_stats(self) -> Dict:
         """Get database statistics - delegates to repositories"""
@@ -443,6 +451,9 @@ class VectorStore:
                     chunks: List[Dict], embeddings: List):
         """Add document to store"""
         self.repo.add_document(file_path, file_hash, chunks, embeddings)
+        # Note: repo.add_document already refreshes numpy search index
+        # Also refresh BM25 index for hybrid search
+        self.hybrid.refresh_keyword_index()
 
     def search(self, query_embedding: List, top_k: int = 5,
               threshold: float = None, query_text: Optional[str] = None,
@@ -453,6 +464,11 @@ class VectorStore:
         if use_hybrid and query_text:
             return self.hybrid.search(query_text, vector_results, top_k)
         return vector_results
+
+    def refresh_search_index(self):
+        """Refresh in-memory search index after documents are added/removed"""
+        self.repo.refresh_search_index()
+        self.hybrid.refresh_keyword_index()
 
     def get_stats(self) -> Dict:
         """Get statistics"""

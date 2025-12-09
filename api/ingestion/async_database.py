@@ -9,6 +9,8 @@ Architecture:
 """
 
 import aiosqlite
+import asyncio
+import sqlite3
 from pathlib import Path
 from typing import List, Dict, Optional
 import numpy as np
@@ -18,9 +20,12 @@ from config import default_config
 from domain_models import ChunkData, DocumentFile, ExtractionResult
 from .async_connection import AsyncDatabaseConnection
 from .async_schema import AsyncSchemaManager
+from .search_repository import NumpyVectorSearch
 
 # Centralized logging configuration - import triggers suppression
 from . import logging_config  # noqa: F401
+
+logger = logging.getLogger(__name__)
 
 
 class AsyncVectorRepository:
@@ -30,7 +35,7 @@ class AsyncVectorRepository:
     Maintains same interface for compatibility.
     """
 
-    def __init__(self, conn: aiosqlite.Connection):
+    def __init__(self, conn: aiosqlite.Connection, config=default_config.database):
         from ingestion.async_repositories import (
             AsyncDocumentRepository,
             AsyncChunkRepository,
@@ -40,11 +45,33 @@ class AsyncVectorRepository:
         )
 
         self.conn = conn
+        self.config = config
         self.documents = AsyncDocumentRepository(conn)
         self.chunks = AsyncChunkRepository(conn)
         self.vectors = AsyncVectorChunkRepository(conn)
         self.fts = AsyncFTSChunkRepository(conn)
         self.search_repo = AsyncSearchRepository(conn)
+
+        # NumPy in-memory search for fast queries (needs sync connection)
+        # Creates separate sync connection since NumpyVectorSearch uses sqlite3
+        self._sync_conn = self._create_sync_connection()
+        self._load_vec_extension(self._sync_conn)
+        self.numpy_search = NumpyVectorSearch(self._sync_conn)
+
+    def _create_sync_connection(self) -> sqlite3.Connection:
+        """Create sync SQLite connection for NumpyVectorSearch."""
+        return sqlite3.connect(
+            self.config.path,
+            check_same_thread=False  # Allow access from async executor
+        )
+
+    def _load_vec_extension(self, conn: sqlite3.Connection):
+        """Load sqlite-vec extension on sync connection."""
+        try:
+            import sqlite_vec
+            sqlite_vec.load(conn)
+        except Exception as e:
+            logger.warning(f"Could not load sqlite-vec: {e}")
 
     async def is_indexed(self, path: str, hash_val: str) -> bool:
         """Check if document indexed by hash (allows file moves without reindex)"""
@@ -140,8 +167,14 @@ class AsyncVectorRepository:
 
     async def search(self, embedding: List, top_k: int,
                     threshold: float = None) -> List[Dict]:
-        """Search for similar vectors - delegates to SearchRepository"""
-        return await self.search_repo.vector_search(embedding, top_k, threshold)
+        """Search for similar vectors - uses NumpyVectorSearch for fast queries.
+
+        NumpyVectorSearch is sync but fast (~0.05s), so we run it in executor
+        to avoid blocking the event loop.
+        """
+        return await asyncio.to_thread(
+            self.numpy_search.search, embedding, top_k, threshold
+        )
 
     async def get_stats(self) -> Dict:
         """Get database statistics - delegates to repositories"""
@@ -173,7 +206,7 @@ class AsyncVectorStore:
         self.db_conn = AsyncDatabaseConnection(self.config)
         self.conn = await self.db_conn.connect()
         await self._init_schema()
-        self.repo = AsyncVectorRepository(self.conn)
+        self.repo = AsyncVectorRepository(self.conn, self.config)
         # Note: HybridSearcher needs async version too
         # self.hybrid = AsyncHybridSearcher(self.conn)
 
