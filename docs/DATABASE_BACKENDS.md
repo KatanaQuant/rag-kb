@@ -209,13 +209,18 @@ def detect_backend(config) -> BackendType:
 ```python
 @dataclass
 class DatabaseConfig:
-    database_url: str = "postgresql://ragkb:ragkb@localhost:5432/ragkb"
+    database_url: str = ""  # Required: set via DATABASE_URL env var
     host: str = "localhost"
     port: int = 5432
-    user: str = "ragkb"
-    password: str = "ragkb"
-    database: str = "ragkb"
+    user: str = ""  # Parsed from DATABASE_URL
+    password: str = ""  # Parsed from DATABASE_URL
+    database: str = ""  # Parsed from DATABASE_URL
     embedding_dim: int = 384
+```
+
+**Required environment variable:**
+```bash
+export DATABASE_URL=postgresql://user:password@host:5432/dbname
 ```
 
 ### SQLite Configuration (Legacy)

@@ -6,17 +6,17 @@
 
 **Personal knowledge base with semantic search.** Index books, code, and notes—query with natural language. 100% local.
 
-**Current Version**: v2.3.0-beta ([Changelog](docs/RELEASES/)) | **Latest Stable**: [v1.9.1](https://github.com/KatanaQuant/rag-kb/releases/tag/v1.9.1)
+**Current Version**: v2.3.2-beta ([Changelog](docs/RELEASES/)) | **Latest Stable**: [v1.9.1](https://github.com/KatanaQuant/rag-kb/releases/tag/v1.9.1)
 
 > **MIGRATION GUIDE**
 >
 > | From | To | Action |
 > |------|----|--------|
-> | **v1.x** | v2.3.0-beta | Fresh install recommended. Directory: `knowledge_base/` → `kb/` |
-> | **v2.1.5, v2.2.0-2.2.2** | v2.3.0-beta | Upgrade directly (skip v2.2.4). These versions have known bugs. |
-> | **v2.2.4-beta** | v2.3.0-beta | Standard upgrade. |
+> | **v1.x** | v2.3.2-beta | Fresh install recommended. Directory: `knowledge_base/` → `kb/` |
+> | **v2.1.5, v2.2.0-2.2.2** | v2.3.2-beta | Upgrade directly (skip v2.2.4). These versions have known bugs. |
+> | **v2.2.4-beta, v2.3.0, v2.3.1** | v2.3.2-beta | Standard upgrade. Ensure `DATABASE_URL` env var is set. |
 >
-> See [v2.3.0 Release Notes](docs/RELEASES/v2.3.0-beta.md) for details.
+> See [v2.3.2 Release Notes](docs/RELEASES/v2.3.2-beta.md) for details.
 
 ---
 
@@ -37,7 +37,7 @@
 ```bash
 # Clone and start
 git clone https://github.com/KatanaQuant/rag-kb.git
-cd rag-kb && git checkout v2.3.0-beta
+cd rag-kb && git checkout v2.3.2-beta
 
 # Add your content
 cp ~/Documents/*.pdf kb/books/
@@ -112,7 +112,7 @@ See [docs/USAGE.md](docs/USAGE.md) for all query methods and [docs/API.md](docs/
 
 ```bash
 docker-compose down
-git fetch --tags && git checkout v2.3.0-beta
+git fetch --tags && git checkout v2.3.2-beta
 docker-compose build --no-cache
 docker-compose up -d
 ```

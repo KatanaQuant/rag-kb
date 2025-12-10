@@ -3,6 +3,7 @@
 Coordinates the flow of documents through extraction, chunking, embedding, and storage stages.
 """
 
+import gc
 import logging
 import os
 from pathlib import Path
@@ -238,6 +239,7 @@ class PipelineCoordinator:
         and never reach this method.
         """
         import time
+        import gc
         try:
             doc_file = DocumentFile.from_path(item.path)
 
@@ -262,11 +264,18 @@ class PipelineCoordinator:
                 return None
 
             self.progress_logger.log_complete("Chunk", item.path.name, len(chunks), start_time)
-            return self._create_chunked_document(item, doc_file, chunks)
+            result = self._create_chunked_document(item, doc_file, chunks)
+
+            # Release memory after chunking - critical for Mac Docker memory limits
+            del chunks
+            gc.collect()
+
+            return result
 
         except Exception as e:
             print(f"[Chunk] Error processing {item.path}: {e}")
             self._mark_file_complete(item.path)  # Mark complete on error
+            gc.collect()  # Clean up on error too
             return None
 
     def _handle_epub_conversion(self, item: QueueItem):
@@ -358,6 +367,9 @@ class PipelineCoordinator:
 
             self.progress_logger.log_complete("Store", doc.path.name, len(doc.chunks))
             self._mark_file_complete(doc.path)
+
+            # Free memory after document completion to prevent OOM during long runs
+            gc.collect()
 
         except Exception as e:
             print(f"[Store] Error storing {doc.path}: {e}")

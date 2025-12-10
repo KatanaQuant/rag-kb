@@ -120,14 +120,25 @@ class ProgressLogger:
 
     def _heartbeat_worker(self, stage: str, document: str, interval: int, stop_flag: threading.Event):
         """Worker function for heartbeat thread"""
-        key = self._make_key(stage, document)
+        try:
+            key = self._make_key(stage, document)
 
-        while not stop_flag.wait(interval):
-            # Check again after wait to avoid race condition
-            if stop_flag.is_set():
-                break
-            elapsed = self._elapsed(key)
-            print(f"[{stage}] {document} - processing... {elapsed:.0f}s elapsed")
+            while not stop_flag.wait(interval):
+                try:
+                    # Check again after wait to avoid race condition
+                    if stop_flag.is_set():
+                        break
+                    elapsed = self._elapsed(key)
+                    print(f"[{stage}] {document} - processing... {elapsed:.0f}s elapsed")
+                except Exception as e:
+                    import traceback
+                    print(f"[ProgressLogger] Error in heartbeat worker: {e}")
+                    traceback.print_exc()
+                    # Continue running unless fatal
+        except Exception as e:
+            import traceback
+            print(f"[ProgressLogger] FATAL: Heartbeat thread exiting due to: {e}")
+            traceback.print_exc()
 
     def _stop_heartbeat(self, key: str):
         """Stop heartbeat thread for given key"""

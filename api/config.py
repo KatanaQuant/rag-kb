@@ -34,14 +34,14 @@ class DatabaseConfig:
 
     Use DatabaseFactory for runtime backend selection based on database_url prefix.
     """
-    # PostgreSQL connection (default)
-    database_url: str = "postgresql://ragkb:ragkb@localhost:5432/ragkb"
+    # PostgreSQL connection (from DATABASE_URL env var)
+    database_url: str = ""
     # Parsed components (set from database_url)
     host: str = "localhost"
     port: int = 5432
-    user: str = "ragkb"
-    password: str = "ragkb"
-    database: str = "ragkb"
+    user: str = ""
+    password: str = ""
+    database: str = ""
     # Embedding configuration
     embedding_dim: int = 384
     # Legacy SQLite path (for migration only)
@@ -81,9 +81,9 @@ class DatabaseConfig:
                 database_url=url,
                 host=parsed.hostname or "localhost",
                 port=parsed.port or 5432,
-                user=parsed.username or "ragkb",
-                password=parsed.password or "ragkb",
-                database=parsed.path.lstrip('/') or "ragkb",
+                user=parsed.username or "",
+                password=parsed.password or "",
+                database=parsed.path.lstrip('/') or "",
                 embedding_dim=embedding_dim,
             )
 

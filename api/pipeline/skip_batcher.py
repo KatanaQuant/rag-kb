@@ -76,8 +76,19 @@ class SkipBatcher:
 
     def _summary_worker(self):
         """Worker thread that prints periodic summaries"""
-        while not self._stop_flag.wait(self.interval):
-            self._print_summary_if_needed()
+        try:
+            while not self._stop_flag.wait(self.interval):
+                try:
+                    self._print_summary_if_needed()
+                except Exception as e:
+                    import traceback
+                    print(f"[SkipBatcher] Error in summary worker: {e}")
+                    traceback.print_exc()
+                    # Continue running unless fatal
+        except Exception as e:
+            import traceback
+            print(f"[SkipBatcher] FATAL: Thread exiting due to: {e}")
+            traceback.print_exc()
 
     def _print_summary_if_needed(self):
         """Print summary if there are new skips since last print"""

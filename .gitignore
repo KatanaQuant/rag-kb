@@ -33,9 +33,11 @@ up-next/
 # Agent session files
 .agent/
 .claude/
+.beads/
 
 # Docker
 .env
+.gitattributes
 
 # IDE
 .vscode/

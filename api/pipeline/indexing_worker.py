@@ -43,13 +43,24 @@ class IndexingWorker:
 
     def _work_loop(self):
         """Main work loop - processes items from queue"""
-        while self.running:
-            item = self.queue.get(timeout=1.0)
-            if item:
-                self._process_item(item)
-            else:
-                # Queue empty or paused, sleep briefly
-                time.sleep(0.1)
+        try:
+            while self.running:
+                try:
+                    item = self.queue.get(timeout=1.0)
+                    if item:
+                        self._process_item(item)
+                    else:
+                        # Queue empty or paused, sleep briefly
+                        time.sleep(0.1)
+                except Exception as e:
+                    import traceback
+                    print(f"[IndexingWorker] Error in work loop: {e}")
+                    traceback.print_exc()
+                    # Continue running unless fatal
+        except Exception as e:
+            import traceback
+            print(f"[IndexingWorker] FATAL: Thread exiting due to: {e}")
+            traceback.print_exc()
 
     def _process_item(self, item):
         """Route a single queue item to the pipeline"""

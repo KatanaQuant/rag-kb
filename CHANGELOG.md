@@ -7,6 +7,24 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.3.2-beta] - 2025-12-10
+
+**Patch release: Security and stability improvements**
+
+### Security
+- Remove hardcoded database credentials from source code
+- `DATABASE_URL` environment variable now strictly required (no defaults)
+
+### Fixed
+- Add aggressive memory cleanup for Mac Docker OOM issues
+- Prevent silent container restarts during long document processing (~780s)
+
+### Migration Notes
+If upgrading from v2.3.0 or v2.3.1, ensure `DATABASE_URL` is set in your environment.
+Docker Compose users: already handled via `.env` file or compose environment.
+
+---
+
 ## [2.3.1-beta] - 2025-12-10
 
 **Patch release: Model loading robustness for all caches**

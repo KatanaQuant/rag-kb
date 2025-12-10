@@ -1,10 +1,25 @@
 """Health and info routes."""
+import os
+
 from fastapi import APIRouter, Request
 from models import HealthResponse
 from config import default_config
 from routes.deps import get_app_state
 
 router = APIRouter()
+
+
+def _get_memory_mb() -> float:
+    """Get current process memory usage in MB (portable)."""
+    try:
+        import psutil
+        return psutil.Process(os.getpid()).memory_info().rss / 1024 / 1024
+    except ImportError:
+        try:
+            with open(f'/proc/{os.getpid()}/statm') as f:
+                return int(f.read().split()[1]) * 4096 / 1024 / 1024
+        except Exception:
+            return 0.0
 
 
 @router.get("/", include_in_schema=False)
@@ -32,5 +47,6 @@ async def health(request: Request):
         indexed_documents=stats['indexed_documents'],
         total_chunks=stats['total_chunks'],
         model=default_config.model.name,
-        indexing_in_progress=app_state.is_indexing_in_progress()
+        indexing_in_progress=app_state.is_indexing_in_progress(),
+        memory_mb=round(_get_memory_mb(), 1)
     )

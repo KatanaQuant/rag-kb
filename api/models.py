@@ -35,6 +35,7 @@ class HealthResponse(BaseModel):
     total_chunks: int
     model: str
     indexing_in_progress: bool
+    memory_mb: float = Field(default=0.0, description="Process memory usage in MB")
 
 class IndexRequest(BaseModel):
     force_reindex: bool = Field(default=False, description="Force reindexing of all documents")

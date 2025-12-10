@@ -1,11 +1,34 @@
 """Embedding service for managing concurrent embedding operations."""
 
+import gc
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor, Future
 from typing import List, Dict, Any
 from pathlib import Path
 
 from pipeline.batch_encoder import BatchEncoder
+
+
+def _get_memory_mb() -> float:
+    """Get current process memory usage in MB.
+
+    Uses psutil if available, otherwise falls back to /proc on Linux.
+    Returns 0.0 if memory cannot be determined.
+    """
+    try:
+        import psutil
+        process = psutil.Process(os.getpid())
+        return process.memory_info().rss / 1024 / 1024
+    except ImportError:
+        # Fallback for Linux without psutil
+        try:
+            with open(f'/proc/{os.getpid()}/statm', 'r') as f:
+                # First value is total program size in pages
+                pages = int(f.read().split()[1])  # RSS is second value
+                return pages * os.sysconf('SC_PAGE_SIZE') / 1024 / 1024
+        except Exception:
+            return 0.0
 
 
 class EmbeddingService:
@@ -46,6 +69,8 @@ class EmbeddingService:
             except Exception:
                 failed += 1
         self.pending.clear()
+        # Free memory after batch completion
+        gc.collect()
         self._report_completion(completed, failed)
 
     def _cleanup_completed(self):
@@ -59,7 +84,11 @@ class EmbeddingService:
             while len(self.pending) >= self.max_pending:
                 self.pending = [f for f in self.pending if not f.done()]
                 time.sleep(0.5)
-            print(f"Throttling released: {len(self.pending)} pending")
+            # Free memory from completed futures
+            gc.collect()
+            mem_mb = _get_memory_mb()
+            mem_info = f" [Memory: {mem_mb:.0f}MB]" if mem_mb > 0 else ""
+            print(f"Throttling released: {len(self.pending)} pending{mem_info}")
 
     def _embed_and_store(self, identity, chunks):
         """Embed and store chunks with timing and error handling."""
@@ -155,6 +184,11 @@ class EmbeddingService:
         # Mark as failed in progress tracker if available
         if self.processor and hasattr(self.processor, 'tracker') and self.processor.tracker:
             self.processor.tracker.mark_failed(str(identity.path), str(error))
+
+        # Prevent unbounded memory growth from failed list
+        # Keep only last 100 failures to avoid memory accumulation during long runs
+        if len(self.failed) > 100:
+            self.failed = self.failed[-100:]
 
     def _report_completion(self, completed: int, failed: int):
         """Report completion statistics."""

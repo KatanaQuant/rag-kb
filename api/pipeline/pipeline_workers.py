@@ -48,15 +48,24 @@ class StageWorker:
             self._thread.join(timeout=5.0)
 
     def _work_loop(self):
-        """Main work loop"""
-        while self.running:
-            try:
-                item = self.input_queue.get(timeout=1.0)
-                self._process_item(item)
-            except Empty:
-                self._handle_empty_queue()
-            except Exception as e:
-                self._handle_processing_error(e)
+        """Main work loop with exception guard"""
+        try:
+            while self.running:
+                try:
+                    item = self.input_queue.get(timeout=1.0)
+                    self._process_item(item)
+                except Empty:
+                    self._handle_empty_queue()
+                except Exception as e:
+                    import traceback
+                    print(f"[{self.name}] Error in work loop: {e}")
+                    traceback.print_exc()
+                    self._handle_processing_error(e)
+                    # Continue running unless fatal
+        except Exception as e:
+            import traceback
+            print(f"[{self.name}] FATAL: Thread exiting due to: {e}")
+            traceback.print_exc()
 
     def _process_item(self, item):
         """Process a single work item"""

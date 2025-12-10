@@ -104,6 +104,8 @@ class DoclingExtractor(ExtractorInterface):
     @staticmethod
     def _convert_with_docling(path: Path) -> ExtractionResult:
         """Convert document using Docling"""
+        import gc
+
         converter = DoclingExtractor.get_converter()
         result = converter.convert(str(path))
 
@@ -111,6 +113,13 @@ class DoclingExtractor(ExtractorInterface):
 
         document = result.document
         pages = DoclingExtractor._extract_hybrid_chunks(document)
+
+        # Explicitly release large objects to reduce memory pressure
+        # Critical for Mac Docker where memory limits are tight
+        del document
+        del result
+        gc.collect()
+
         return ExtractionResult(pages=pages, method='docling')
 
     @staticmethod

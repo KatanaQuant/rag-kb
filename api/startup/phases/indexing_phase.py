@@ -44,22 +44,27 @@ class IndexingPhase:
         3. Index new files
         4. Post-indexing orphan check: catch orphans created during indexing
         """
-        # Start watcher first so system is responsive immediately
-        self.start_watcher()
-
-        # Sanitization stage: repair before new indexing
-        if self.sanitization_phase:
-            self.sanitization_phase.execute()
-
-        # Then do indexing in background
-        self.state.runtime.indexing_in_progress = True
         try:
-            self.index_docs()
-        finally:
-            self.state.runtime.indexing_in_progress = False
+            # Start watcher first so system is responsive immediately
+            self.start_watcher()
 
-        # Post-indexing orphan check (catches orphans created during indexing)
-        self.check_post_indexing_orphans()
+            # Sanitization stage: repair before new indexing
+            if self.sanitization_phase:
+                self.sanitization_phase.execute()
+
+            # Then do indexing in background
+            self.state.runtime.indexing_in_progress = True
+            try:
+                self.index_docs()
+            finally:
+                self.state.runtime.indexing_in_progress = False
+
+            # Post-indexing orphan check (catches orphans created during indexing)
+            self.check_post_indexing_orphans()
+        except Exception as e:
+            import traceback
+            print(f"[IndexingPhase] FATAL: Background task exiting due to: {e}")
+            traceback.print_exc()
 
     def index_docs(self):
         """Index documents."""

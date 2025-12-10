@@ -1,4 +1,5 @@
 import os
+import signal
 import time
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -22,6 +23,16 @@ from watcher import FileWatcherService
 from query_cache import QueryCache
 from value_objects import IndexingStats, ProcessingResult, DocumentIdentity
 from app_state import AppState
+
+# Signal handlers for debugging silent restarts
+def _handle_signal(signum, frame):
+    """Log signal receipt for debugging silent restarts."""
+    sig_name = signal.Signals(signum).name
+    print(f"[Shutdown] Received {sig_name} (signal {signum})")
+
+# Register handlers - these run in addition to uvicorn's handlers
+signal.signal(signal.SIGTERM, _handle_signal)
+signal.signal(signal.SIGINT, _handle_signal)
 
 # Global state
 state = AppState()

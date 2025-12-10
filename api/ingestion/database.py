@@ -552,22 +552,29 @@ class VectorStore:
         import threading
 
         def flush_and_reschedule():
-            if self._closed:
-                return
             try:
-                self._flush_hnsw_index()
-                print(f"[VectorStore] Periodic HNSW flush completed")
+                if self._closed:
+                    return
+                try:
+                    self._flush_hnsw_index()
+                    print(f"[VectorStore] Periodic HNSW flush completed")
+                except Exception as e:
+                    import traceback
+                    print(f"[VectorStore] Periodic flush failed: {e}")
+                    traceback.print_exc()
+                finally:
+                    # Reschedule if not closed
+                    if not self._closed:
+                        self._flush_timer = threading.Timer(
+                            self.FLUSH_INTERVAL_SECONDS,
+                            flush_and_reschedule
+                        )
+                        self._flush_timer.daemon = True
+                        self._flush_timer.start()
             except Exception as e:
-                print(f"[VectorStore] Periodic flush failed: {e}")
-            finally:
-                # Reschedule if not closed
-                if not self._closed:
-                    self._flush_timer = threading.Timer(
-                        self.FLUSH_INTERVAL_SECONDS,
-                        flush_and_reschedule
-                    )
-                    self._flush_timer.daemon = True
-                    self._flush_timer.start()
+                import traceback
+                print(f"[VectorStore] FATAL: Flush timer thread exiting due to: {e}")
+                traceback.print_exc()
 
         self._flush_timer = threading.Timer(
             self.FLUSH_INTERVAL_SECONDS,
