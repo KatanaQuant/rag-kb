@@ -7,6 +7,31 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.3.1-beta] - 2025-12-10
+
+**Patch release: Model loading robustness for all caches**
+
+### Fixed
+- Add retry logic with exponential backoff to ModelLoader (3 retries, 5/10/20s delays)
+- Clean stale lock files on container startup for ALL model caches:
+  - HuggingFace (embedding models)
+  - Docling (PDF processing models)
+  - EasyOCR (text detection models)
+  - DeepSearch GLM (graph language models)
+- Create cache directories in entrypoint to prevent permission errors
+
+### Added
+- `setup-cache.sh` script for first-time setup (also cleans stale locks)
+- Updated QUICK_START.md with first-time setup instructions
+
+### Why This Matters
+Fixes container restart loops caused by:
+- DNS/network errors during model download
+- Stale lock files from interrupted downloads (any model cache)
+- Permission errors on fresh deployments
+
+---
+
 ## [2.3.0] - 2025-12-07
 
 **Major release: PostgreSQL + pgvector migration**

@@ -1,6 +1,23 @@
 #!/bin/bash
 set -e
 
+# Ensure cache directories exist with correct permissions
+# These are bind-mounted from host - create if missing and fix any stale locks
+mkdir -p /home/appuser/.cache/huggingface/hub
+mkdir -p /home/appuser/.cache/docling
+mkdir -p /home/appuser/.EasyOCR
+mkdir -p /app/.cache/deepsearch_glm
+
+# Clean stale lock files from all model caches (>5 min old = likely abandoned)
+# HuggingFace: embedding models (SentenceTransformer)
+find /home/appuser/.cache/huggingface -name "*.lock" -mmin +5 -delete 2>/dev/null || true
+# Docling: PDF processing models
+find /home/appuser/.cache/docling -name "*.lock" -mmin +5 -delete 2>/dev/null || true
+# EasyOCR: text detection models
+find /home/appuser/.EasyOCR -name "*.lock" -mmin +5 -delete 2>/dev/null || true
+# DeepSearch GLM: graph language models
+find /app/.cache/deepsearch_glm -name "*.lock" -mmin +5 -delete 2>/dev/null || true
+
 # Start ClamAV daemon in background if enabled
 if [ "${CLAMAV_ENABLED:-true}" = "true" ]; then
     echo "Starting ClamAV daemon..."

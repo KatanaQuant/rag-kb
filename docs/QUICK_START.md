@@ -68,6 +68,15 @@ The service automatically indexes all supported files when it starts.
 
 ## Step 2: Start the Service
 
+### First-Time Setup
+
+```bash
+# Create cache directories (required on first run)
+./scripts/setup-cache.sh
+```
+
+This creates cache directories with correct permissions for model downloads.
+
 ### Recommended: Enable BuildKit for Faster Builds (v0.13.0+)
 
 ```bash
