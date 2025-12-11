@@ -75,7 +75,10 @@ class EnvironmentConfigLoader:
     def _load_docling_config(self) -> DoclingConfig:
         """Load Docling PDF configuration from environment"""
         return DoclingConfig(
-            enabled=self._get_bool("USE_DOCLING", True)
+            enabled=self._get_bool("USE_DOCLING", True),
+            generate_page_images=self._get_bool("DOCLING_GENERATE_PAGE_IMAGES", True),
+            generate_picture_images=self._get_bool("DOCLING_GENERATE_PICTURE_IMAGES", True),
+            pdf_backend=self._get_optional("DOCLING_PDF_BACKEND", "dlparse_v4")
         )
 
     def _load_processing_config(self) -> ProcessingConfig:

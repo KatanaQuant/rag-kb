@@ -34,10 +34,15 @@ class DoclingExtractor(ExtractorInterface):
     def get_converter(cls):
         """Lazy load converter (singleton pattern)
 
-        Uses default Docling configuration with EasyOCR enabled:
-        - Supports text-based PDFs (direct text extraction)
-        - Supports scanned/image-only PDFs (full OCR)
-        - Supports hybrid PDFs with images containing text (text + OCR)
+        Uses Docling configuration from default_config.docling:
+        - generate_page_images: Whether to generate page images (memory intensive)
+        - generate_picture_images: Whether to generate picture images (memory intensive)
+        - pdf_backend: PDF backend to use (dlparse_v4 or pypdfium2)
+
+        Supports:
+        - Text-based PDFs (direct text extraction)
+        - Scanned/image-only PDFs (full OCR)
+        - Hybrid PDFs with images containing text (text + OCR)
         - EasyOCR backend: Slow but accurate (default)
         - Table structure detection enabled (default)
 
@@ -45,9 +50,33 @@ class DoclingExtractor(ExtractorInterface):
         normal when OCR checks images/pages and finds no text.
         """
         if cls._converter is None and DOCLING_AVAILABLE:
-            from docling.document_converter import DocumentConverter
-            # Use default settings - comprehensive OCR support for all PDF types
-            cls._converter = DocumentConverter()
+            from docling.document_converter import DocumentConverter, PdfFormatOption
+            from docling.datamodel.base_models import InputFormat
+            from docling.datamodel.pipeline_options import PdfPipelineOptions
+
+            # Configure PDF pipeline options from config
+            pipeline_options = PdfPipelineOptions(
+                generate_page_images=default_config.docling.generate_page_images,
+                generate_picture_images=default_config.docling.generate_picture_images,
+            )
+
+            # Select PDF backend based on config
+            if default_config.docling.pdf_backend == "pypdfium2":
+                from docling.backend.pypdfium2_backend import PyPdfiumDocumentBackend
+                pdf_backend = PyPdfiumDocumentBackend
+            else:
+                # Default to dlparse_v4
+                from docling.backend.docling_parse_v4_backend import DoclingParseV4DocumentBackend
+                pdf_backend = DoclingParseV4DocumentBackend
+
+            cls._converter = DocumentConverter(
+                format_options={
+                    InputFormat.PDF: PdfFormatOption(
+                        pipeline_options=pipeline_options,
+                        backend=pdf_backend
+                    )
+                }
+            )
         return cls._converter
 
     @classmethod

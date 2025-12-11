@@ -126,6 +126,9 @@ class BatchConfig:
 class DoclingConfig:
     """Docling PDF extraction configuration"""
     enabled: bool = True  # Default to advanced PDF extraction
+    generate_page_images: bool = True  # Generate page images (set False for ~20-30% memory savings)
+    generate_picture_images: bool = True  # Generate picture images (set False for ~10-20% memory savings)
+    pdf_backend: str = "dlparse_v4"  # PDF backend: dlparse_v4 (default) or pypdfium2 (~80% less memory)
 
 @dataclass
 class ProcessingConfig:

@@ -179,7 +179,7 @@ curl -X POST http://localhost:8000/api/maintenance/rebuild-hnsw \
 - Don't kill containers during active indexing
 - Monitor disk space
 
-For detailed HNSW postmortem, see [postmortem-hnsw-index-not-persisting.md](postmortem-hnsw-index-not-persisting.md).
+For detailed HNSW postmortem, see [postmortem-vectorlite-hnsw-complete.md](postmortem-vectorlite-hnsw-complete.md).
 
 ### FTS/Keyword Search Not Working
 

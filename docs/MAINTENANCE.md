@@ -434,7 +434,7 @@ curl http://localhost:8000/api/maintenance/verify-integrity | jq '.healthy'
 - Monitor disk space
 - Use `docker-compose stop` (graceful) instead of `docker-compose kill`
 
-For the full postmortem on the HNSW persistence issue, see [postmortem-hnsw-index-not-persisting.md](postmortem-hnsw-index-not-persisting.md).
+For the full postmortem on the HNSW persistence issue, see [postmortem-vectorlite-hnsw-complete.md](postmortem-vectorlite-hnsw-complete.md).
 
 ---
 

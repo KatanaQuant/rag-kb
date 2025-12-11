@@ -6,17 +6,17 @@
 
 **Personal knowledge base with semantic search.** Index books, code, and notes—query with natural language. 100% local.
 
-**Current Version**: v2.3.2-beta ([Changelog](docs/RELEASES/)) | **Latest Stable**: [v1.9.1](https://github.com/KatanaQuant/rag-kb/releases/tag/v1.9.1)
+**Current Version**: v2.3.3-beta ([Changelog](docs/RELEASES/)) | **Latest Stable**: [v1.9.1](https://github.com/KatanaQuant/rag-kb/releases/tag/v1.9.1)
 
 > **MIGRATION GUIDE**
 >
 > | From | To | Action |
 > |------|----|--------|
-> | **v1.x** | v2.3.2-beta | Fresh install recommended. Directory: `knowledge_base/` → `kb/` |
-> | **v2.1.5, v2.2.0-2.2.2** | v2.3.2-beta | Upgrade directly (skip v2.2.4). These versions have known bugs. |
-> | **v2.2.4-beta, v2.3.0, v2.3.1** | v2.3.2-beta | Standard upgrade. Ensure `DATABASE_URL` env var is set. |
+> | **v1.x** | v2.3.3-beta | Fresh install recommended. Directory: `knowledge_base/` → `kb/` |
+> | **v2.1.5, v2.2.0-2.2.2** | v2.3.3-beta | Upgrade directly (skip v2.2.4). These versions have known bugs. |
+> | **v2.2.4-beta, v2.3.x** | v2.3.3-beta | Standard upgrade. Ensure `DATABASE_URL` env var is set. |
 >
-> See [v2.3.2 Release Notes](docs/RELEASES/v2.3.2-beta.md) for details.
+> See [v2.3.3 Release Notes](docs/RELEASES/v2.3.3-beta.md) for details.
 
 ---
 

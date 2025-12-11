@@ -7,6 +7,21 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
 
+## [2.3.3-beta] - 2025-12-11
+
+**Patch release: Configurable Docling options for memory optimization**
+
+### Added
+- Environment variables for Docling PDF processing:
+  - `DOCLING_GENERATE_PAGE_IMAGES` (default: true) - ~20-30% memory savings if false
+  - `DOCLING_GENERATE_PICTURE_IMAGES` (default: true) - ~10-20% memory savings if false
+  - `DOCLING_PDF_BACKEND` (default: dlparse_v4) - use "pypdfium2" for ~80% less memory
+
+### Fixed
+- Broken postmortem links in MAINTENANCE.md and TROUBLESHOOTING.md
+
+---
+
 ## [2.3.2-beta] - 2025-12-10
 
 **Patch release: Security and stability improvements**
